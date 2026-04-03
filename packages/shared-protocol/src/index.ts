@@ -110,6 +110,24 @@ export interface LogsSubscribePayload {
   source?: LogSource;
 }
 
+export type ListenerCommandAction = 'listener.subscribe' | 'listener.unsubscribe';
+
+export interface ListenerSubscribeCommandPayload {
+  listener: string;
+  options?: Record<string, unknown>;
+}
+
+export interface ListenerUnsubscribeCommandPayload {
+  targetRequestId: string;
+}
+
+export interface ListenerUpdateEventPayload {
+  type: 'listener_update';
+  data: unknown;
+  updateType?: string;
+  emittedAt?: string;
+}
+
 export interface ExtensionLogEntry {
   level: LogLevel;
   type: string;

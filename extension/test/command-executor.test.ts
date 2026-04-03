@@ -416,3 +416,40 @@ test('concurrent primitive.tab.open calls initialize automation group once', asy
   assert.ok(dataB.tabSessionId);
   assert.equal(getGroupCreateCount(), 1);
 });
+
+test('listener.subscribe returns deterministic subscribed payload', async () => {
+  const { chromeApi } = createChromeMock();
+
+  const result = await executeCommand(chromeApi, buildCommand('listener.subscribe', {
+    listener: 'reddit.chat.messages',
+    options: {
+      pollIntervalMs: 15000,
+      includeUnreadOnly: true,
+    },
+  }));
+
+  assert.deepEqual(result.data, {
+    listener: 'reddit.chat.messages',
+    subscribed: true,
+    options: {
+      pollIntervalMs: 15000,
+      includeUnreadOnly: true,
+    },
+  });
+});
+
+test('listener.unsubscribe requires targetRequestId', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.unsubscribe', {})),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'missing_listener_target_request');
+      assert.equal(commandErr.stage, 'validation');
+      assert.equal(commandErr.retryable, false);
+      return true;
+    },
+  );
+});

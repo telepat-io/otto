@@ -153,6 +153,41 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
         data: { tabSessionId, ...payload },
       };
     }
+    case 'listener.subscribe': {
+      const listener = String(command.payload.listener ?? '').trim();
+      if (!listener) {
+        throw new CommandExecutionError('listener is required', 'missing_listener_name', 'validation', false);
+      }
+
+      const options = (command.payload.options ?? {}) as Record<string, unknown>;
+      return {
+        durationMs: Date.now() - start,
+        data: {
+          listener,
+          subscribed: true,
+          options,
+        },
+      };
+    }
+    case 'listener.unsubscribe': {
+      const targetRequestId = String(command.payload.targetRequestId ?? '').trim();
+      if (!targetRequestId) {
+        throw new CommandExecutionError(
+          'targetRequestId is required',
+          'missing_listener_target_request',
+          'validation',
+          false,
+        );
+      }
+
+      return {
+        durationMs: Date.now() - start,
+        data: {
+          targetRequestId,
+          unsubscribed: true,
+        },
+      };
+    }
     default:
       throw new CommandExecutionError(`Unsupported action: ${command.action}`, 'unsupported_action', 'validation', false);
   }

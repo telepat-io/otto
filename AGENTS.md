@@ -4,13 +4,14 @@
 Build Otto as a secure, debuggable remote browser automation platform (controller -> relay -> extension node).
 
 ## Invariants
-- Always require `targetNodeId` on commands.
+- Always require `targetNodeId` on commands. If there's only one connected node, CLI can auto-select it.
 - Preserve terminal command outcomes: `completed`, `failed`, `timed_out`, or `cancelled`.
 - Keep per-tab session execution serial and cross-tab execution parallel.
 - Apply pre-ingress redaction for logs.
 - Keep `chrome.debugger` features behind explicit opt-in flags.
 - Keep recipe execution site-scoped and validate tab URL before running recipe logic.
 - Never automate user credential submission; use explicit manual login handoff (`manual_login_required`).
+- Keep listener lifecycle deterministic: `listener.subscribe` and `listener.unsubscribe` are terminal commands, while async `listener_update` events are correlated by the original subscribe `requestId`.
 
 ## Canonical Commands
 - Install deps: `npm install`

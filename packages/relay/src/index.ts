@@ -82,9 +82,17 @@ type PendingCommand = {
   controllerId: string;
   nodeId: string;
   action: string;
+  unsubscribeTargetRequestId?: string;
   createdAt: number;
   tabKey?: string;
   timeoutHandle: ReturnType<typeof setTimeout>;
+};
+
+type ListenerSubscription = {
+  requestId: string;
+  controllerId: string;
+  nodeId: string;
+  createdAt: number;
 };
 
 type QueuedCommand = {
@@ -167,6 +175,13 @@ const extensionLogEventSchema = z.object({
   }),
 });
 
+const listenerUpdateEventSchema = z.object({
+  type: z.literal('listener_update'),
+  data: z.unknown(),
+  updateType: z.string().min(1).max(120).optional(),
+  emittedAt: z.string().datetime().optional(),
+});
+
 const refreshSessionSchema = z.object({
   role: z.enum(['controller', 'node']),
   nodeId: z.string().optional(),
@@ -184,6 +199,7 @@ const clients = new Map<string, Client>();
 const nodeClients = new Map<string, Client>();
 const locks = new Map<string, LockState>();
 const pendingCommands = new Map<string, PendingCommand>();
+const listenerSubscriptions = new Map<string, ListenerSubscription>();
 const queuedByTab = new Map<string, QueuedCommand[]>();
 const inflightByTab = new Set<string>();
 const pairingByCode = new Map<string, PairingChallenge>();
@@ -679,6 +695,26 @@ function clearInflightAndRunNext(tabKey?: string): void {
     type: 'routed',
     targetNodeId: nodeId,
   }));
+}
+
+function removeListenerSubscription(requestId: string): void {
+  listenerSubscriptions.delete(requestId);
+}
+
+function removeListenerSubscriptionsForController(controllerId: string): void {
+  for (const [requestId, subscription] of listenerSubscriptions.entries()) {
+    if (subscription.controllerId === controllerId) {
+      listenerSubscriptions.delete(requestId);
+    }
+  }
+}
+
+function removeListenerSubscriptionsForNode(nodeId: string): void {
+  for (const [requestId, subscription] of listenerSubscriptions.entries()) {
+    if (subscription.nodeId === nodeId) {
+      listenerSubscriptions.delete(requestId);
+    }
+  }
 }
 
 const server = createServer();
@@ -1323,6 +1359,62 @@ wss.on('connection', (ws) => {
           },
         });
       }
+
+      if (client.role === 'node' && payload.type === 'listener_update') {
+        const parsed = listenerUpdateEventSchema.safeParse(msg.payload);
+        if (!parsed.success) {
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'validation',
+            code: 'invalid_listener_update',
+            message: parsed.error.message,
+          }));
+          return;
+        }
+
+        const subscription = listenerSubscriptions.get(msg.requestId);
+        if (!subscription) {
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'routing',
+            code: 'listener_not_found',
+            message: 'No active listener subscription for requestId',
+          }));
+          return;
+        }
+
+        if (subscription.nodeId !== client.nodeId) {
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'auth',
+            code: 'listener_node_mismatch',
+            message: 'Listener subscription does not belong to this node session',
+            nodeId: client.nodeId,
+          }));
+          return;
+        }
+
+        const owner = clients.get(subscription.controllerId);
+        if (!owner || !owner.authenticated) {
+          removeListenerSubscription(msg.requestId);
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'routing',
+            code: 'listener_owner_offline',
+            message: 'Listener owner is no longer connected',
+            nodeId: client.nodeId,
+          }));
+          return;
+        }
+
+        send(owner.ws, msg);
+        emitLog({
+          level: 'info',
+          source: 'node',
+          type: 'listener_update',
+          requestId: msg.requestId,
+          nodeId: client.nodeId,
+          status: 'update',
+          data: parsed.data,
+        });
+        return;
+      }
       return;
     }
 
@@ -1422,7 +1514,12 @@ wss.on('connection', (ws) => {
         return;
       }
 
-      const payload = msg.payload as { targetNodeId?: string; action?: string; replayNonce?: string };
+      const payload = msg.payload as {
+        targetNodeId?: string;
+        action?: string;
+        replayNonce?: string;
+        payload?: { targetRequestId?: string };
+      };
       if (!isActionAllowed(client.scopes, String(payload.action ?? ''))) {
         send(ws, buildError(msg.requestId, 'relay', {
           category: 'auth',
@@ -1451,6 +1548,53 @@ wss.on('connection', (ws) => {
           message: 'targetNodeId is required',
         }));
         return;
+      }
+
+      if (payload.action === 'listener.unsubscribe') {
+        const targetRequestId = payload.payload?.targetRequestId;
+        if (!targetRequestId || typeof targetRequestId !== 'string') {
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'validation',
+            code: 'missing_listener_target',
+            message: 'listener.unsubscribe requires payload.targetRequestId',
+            action: String(payload.action ?? ''),
+          }));
+          return;
+        }
+
+        const existing = listenerSubscriptions.get(targetRequestId);
+        if (!existing) {
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'routing',
+            code: 'listener_not_found',
+            message: 'No active listener subscription for payload.targetRequestId',
+            action: String(payload.action ?? ''),
+            nodeId: payload.targetNodeId,
+          }));
+          return;
+        }
+
+        if (existing.controllerId !== client.id) {
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'auth',
+            code: 'listener_owner_mismatch',
+            message: 'Cannot unsubscribe a listener owned by another controller',
+            action: String(payload.action ?? ''),
+            nodeId: payload.targetNodeId,
+          }));
+          return;
+        }
+
+        if (existing.nodeId !== payload.targetNodeId) {
+          send(ws, buildError(msg.requestId, 'relay', {
+            category: 'validation',
+            code: 'listener_node_mismatch',
+            message: 'listener target node must match subscribed listener node',
+            action: String(payload.action ?? ''),
+            nodeId: payload.targetNodeId,
+          }));
+          return;
+        }
       }
 
       const targetNode = nodeClients.get(payload.targetNodeId);
@@ -1571,6 +1715,7 @@ wss.on('connection', (ws) => {
         controllerId: client.id,
         nodeId: payload.targetNodeId,
         action: String(payload.action ?? 'unknown'),
+        unsubscribeTargetRequestId: payload.action === 'listener.unsubscribe' ? payload.payload?.targetRequestId : undefined,
         createdAt: Date.now(),
         tabKey: queueKey,
         timeoutHandle,
@@ -1690,11 +1835,25 @@ wss.on('connection', (ws) => {
       if (pending) {
         const owner = clients.get(pending.controllerId);
         if (owner) send(owner.ws, msg);
-        if (msg.messageType === 'result' || msg.messageType === 'error') {
-          clearTimeout(pending.timeoutHandle);
-          pendingCommands.delete(msg.requestId);
-          clearInflightAndRunNext(pending.tabKey);
+
+        if (msg.messageType === 'result') {
+          const resultPayload = msg.payload as { ok?: boolean };
+          if (resultPayload.ok === true && pending.action === 'listener.subscribe') {
+            listenerSubscriptions.set(msg.requestId, {
+              requestId: msg.requestId,
+              controllerId: pending.controllerId,
+              nodeId: pending.nodeId,
+              createdAt: Date.now(),
+            });
+          }
+          if (resultPayload.ok === true && pending.action === 'listener.unsubscribe' && pending.unsubscribeTargetRequestId) {
+            removeListenerSubscription(pending.unsubscribeTargetRequestId);
+          }
         }
+
+        clearTimeout(pending.timeoutHandle);
+        pendingCommands.delete(msg.requestId);
+        clearInflightAndRunNext(pending.tabKey);
       }
 
       emitLog({
@@ -1749,6 +1908,7 @@ wss.on('connection', (ws) => {
     replayState.delete(client.id);
     if (client.role === 'node' && client.nodeId) {
       nodeClients.delete(client.nodeId);
+      removeListenerSubscriptionsForNode(client.nodeId);
 
       for (const [requestId, pending] of pendingCommands.entries()) {
         if (pending.nodeId === client.nodeId) {
@@ -1768,6 +1928,10 @@ wss.on('connection', (ws) => {
           clearInflightAndRunNext(pending.tabKey);
         }
       }
+    }
+
+    if (client.role === 'controller') {
+      removeListenerSubscriptionsForController(client.id);
     }
 
     for (const [key, lock] of locks.entries()) {

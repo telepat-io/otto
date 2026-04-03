@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { createEnvelope, type Envelope } from '@telepat/otto-protocol';
 import type { ExtensionLogEntry, ExtensionLogEventPayload } from '@telepat/otto-protocol';
+import type { ListenerUpdateEventPayload } from '@telepat/otto-protocol';
 import { computeReconnectDelayMs, enqueueOutbound } from './offscreen-transport.js';
 import { createExtensionLogQueue } from './extension-log-queue.js';
 import type { RelayConnectionStatus } from './onboarding-state.js';
@@ -329,6 +330,31 @@ chrome.runtime.onMessage.addListener((message: { type?: string; payload?: unknow
       ws.close();
     }
     void connect();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === 'otto.offscreen.emitListenerUpdate') {
+    const payload = (message.payload ?? {}) as {
+      requestId?: string;
+      data?: unknown;
+      updateType?: string;
+      emittedAt?: string;
+    };
+    const requestId = typeof payload.requestId === 'string' ? payload.requestId.trim() : '';
+    if (!requestId) {
+      sendResponse({ ok: false, error: 'missing_request_id' });
+      return true;
+    }
+
+    const eventPayload: ListenerUpdateEventPayload = {
+      type: 'listener_update',
+      data: payload.data,
+      updateType: payload.updateType,
+      emittedAt: payload.emittedAt ?? new Date().toISOString(),
+    };
+    enqueueOutbound(outboundQueue, createEnvelope('event', 'node', requestId, eventPayload));
+    flushOutboundQueue();
     sendResponse({ ok: true });
     return true;
   }

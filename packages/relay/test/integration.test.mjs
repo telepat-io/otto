@@ -597,6 +597,146 @@ test('logs subscribe source filter streams only matching entries', async (t) => 
   assert.equal(streamed.payload.entry.type, 'offscreen.websocket_opened');
 });
 
+test('listener subscribe routes updates and unsubscribe stops further updates', async (t) => {
+  const port = 8844;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port, {
+    OTTO_DEFAULT_CONTROLLER_SCOPES: 'listener.subscribe,listener.unsubscribe',
+  });
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const pairing = await requestPairing(base, 'node_listener_suite');
+  const nodeWs = await connectAuthedNodeWs(port, 'node_listener_suite', 'listener_node');
+  const controllerWs = await connectAuthedControllerWs(port, pairing.controllerAccessToken, 'listener_controller');
+
+  t.after(() => {
+    nodeWs.close();
+    controllerWs.close();
+  });
+
+  controllerWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'listener_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: pairing.nodeId,
+      action: 'listener.subscribe',
+      replayNonce: 'listener_sub_nonce_1',
+      payload: {
+        listener: 'reddit.chat.messages',
+      },
+    },
+  }));
+
+  await nextWsEnvelope(nodeWs, (msg) => msg.messageType === 'command' && msg.requestId === 'listener_sub_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'listener_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 5,
+      action: 'listener.subscribe',
+      data: {
+        listener: 'reddit.chat.messages',
+        subscribed: true,
+      },
+    },
+  }));
+
+  await nextWsEnvelope(controllerWs, (msg) => msg.messageType === 'result' && msg.requestId === 'listener_sub_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'listener_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'listener_update',
+      updateType: 'new_message',
+      data: {
+        conversationId: 'c_1',
+        messageId: 'm_1',
+      },
+    },
+  }));
+
+  const update = await nextWsEnvelope(
+    controllerWs,
+    (msg) => msg.messageType === 'event' && msg.requestId === 'listener_sub_1' && msg.payload?.type === 'listener_update',
+  );
+  assert.equal(update.payload.updateType, 'new_message');
+
+  controllerWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'listener_unsub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: pairing.nodeId,
+      action: 'listener.unsubscribe',
+      replayNonce: 'listener_unsub_nonce_1',
+      payload: {
+        targetRequestId: 'listener_sub_1',
+      },
+    },
+  }));
+
+  await nextWsEnvelope(nodeWs, (msg) => msg.messageType === 'command' && msg.requestId === 'listener_unsub_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'listener_unsub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 4,
+      action: 'listener.unsubscribe',
+      data: {
+        targetRequestId: 'listener_sub_1',
+        unsubscribed: true,
+      },
+    },
+  }));
+
+  await nextWsEnvelope(controllerWs, (msg) => msg.messageType === 'result' && msg.requestId === 'listener_unsub_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'listener_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'listener_update',
+      updateType: 'new_message',
+      data: {
+        conversationId: 'c_1',
+        messageId: 'm_2',
+      },
+    },
+  }));
+
+  const rejected = await nextWsEnvelope(
+    nodeWs,
+    (msg) => msg.messageType === 'error' && msg.requestId === 'listener_sub_1',
+  );
+  assert.equal(rejected.payload?.code, 'listener_not_found');
+});
+
 test('issued controller tokens include configured claims and are revocable', async (t) => {
   const port = 8800;
   const base = `http://127.0.0.1:${port}`;

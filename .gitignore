@@ -3,6 +3,7 @@ dist/
 .webext/
 .wxt/
 extension/.output/
+extension/output/
 coverage/
 *.log
 .otto-relay/

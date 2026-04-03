@@ -1,6 +1,6 @@
 # Relay Operations
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-04
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -107,6 +107,18 @@ Operational goals:
 - Route commands from controllers to target nodes
 - Maintain lock registry for tabSessionId state
 - Enforce auth, role checks, and origin policy for browser-originated node sockets
+
+Listener operations:
+
+- Relay activates a listener subscription only after successful `result` for `listener.subscribe`.
+- Active listener ownership is keyed by subscribe `requestId` and bound to controller + node.
+- Node-originated `event` payload `type=listener_update` is forwarded only when:
+- subscribe `requestId` is active
+- sending node identity matches listener owner node
+- owning controller connection is still authenticated
+- `listener.unsubscribe` validates `payload.targetRequestId`, ownership, and node match before routing.
+- Successful unsubscribe result removes listener state; future updates on that subscribe `requestId` are rejected with `listener_not_found`.
+- Listener state is cleaned up on controller disconnect and node disconnect.
 
 ## Operational Notes
 

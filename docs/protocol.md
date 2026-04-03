@@ -1,6 +1,6 @@
 # Protocol
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-04
 Owner: Platform
 
 Current shared protocol types live in `packages/shared-protocol/src/index.ts`.
@@ -39,6 +39,35 @@ Envelope requirements:
 - `refresh` / `refresh_ack` for access token renewal.
 - `tab_lock` / `tab_unlock` for lock lifecycle.
 - `command_cancel` reserved for cancellation pipeline.
+
+## Listener Commands
+
+Listener lifecycle uses normal command frames with action values:
+
+- `listener.subscribe`
+- `listener.unsubscribe`
+
+Listener semantics:
+
+- Subscribe is terminal immediately: node responds with normal `result` or `error`.
+- Relay preserves normal command outcomes for subscribe/unsubscribe (`completed`, `failed`, `timed_out`, `cancelled`).
+- Active listener updates are emitted later as `event` frames using the original subscribe `requestId`.
+- Unsubscribe is terminal immediately and targets a prior subscribe via `payload.targetRequestId`.
+- After successful unsubscribe, further updates on the original subscribe `requestId` are rejected.
+
+Listener command payload expectations:
+
+- `listener.subscribe`: payload includes `listener` (string) and optional `options` object.
+- `listener.unsubscribe`: payload includes `targetRequestId` (string).
+
+Listener update event shape:
+
+- `messageType: event`
+- `requestId: <original subscribe requestId>`
+- `payload.type: listener_update`
+- `payload.data: <arbitrary JSON>`
+- `payload.updateType` optional short event name
+- `payload.emittedAt` optional ISO timestamp
 
 ## Command Payload
 

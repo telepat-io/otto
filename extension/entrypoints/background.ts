@@ -75,6 +75,7 @@ export default defineBackground(() => {
   let maintenanceInFlight: Promise<void> | null = null;
   let rerunRequested = false;
   let rerunRequiresBootstrap = false;
+  const activeListenerRequestIds = new Set<string>();
 
   const runMaintenance = (mode: 'bootstrap' | 'keepwarm') => {
     if (maintenanceInFlight) {
@@ -255,6 +256,41 @@ export default defineBackground(() => {
       return true;
     }
 
+    if ((message as { type?: string }).type === 'otto.listenerUpdate') {
+      withRuntimeErrorLogging(
+        (async () => {
+          const payload = ((message as { payload?: unknown }).payload ?? {}) as {
+            requestId?: string;
+            data?: unknown;
+            updateType?: string;
+            emittedAt?: string;
+          };
+          const requestId = typeof payload.requestId === 'string' ? payload.requestId.trim() : '';
+          if (!requestId) {
+            sendResponse({ ok: false, error: 'missing_request_id' });
+            return;
+          }
+
+          if (!activeListenerRequestIds.has(requestId)) {
+            sendResponse({ ok: false, error: 'listener_not_active' });
+            return;
+          }
+
+          await chrome.runtime.sendMessage({
+            type: 'otto.offscreen.emitListenerUpdate',
+            payload: {
+              requestId,
+              data: payload.data,
+              updateType: payload.updateType,
+              emittedAt: payload.emittedAt,
+            },
+          });
+          sendResponse({ ok: true });
+        })(),
+      );
+      return true;
+    }
+
     if ((message as { type?: string }).type === 'otto.getConfig') {
       withRuntimeErrorLogging(
         (async () => {
@@ -297,6 +333,15 @@ export default defineBackground(() => {
 
           try {
             const result = await executeCommand(chrome, cmd.payload);
+            if (cmd.payload.action === 'listener.subscribe') {
+              activeListenerRequestIds.add(cmd.requestId);
+            }
+            if (cmd.payload.action === 'listener.unsubscribe') {
+              const targetRequestId = String(cmd.payload.payload.targetRequestId ?? '').trim();
+              if (targetRequestId) {
+                activeListenerRequestIds.delete(targetRequestId);
+              }
+            }
             const response = createEnvelope('result', 'node', cmd.requestId, {
               ok: true,
               durationMs: result.durationMs,

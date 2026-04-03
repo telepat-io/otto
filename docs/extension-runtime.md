@@ -1,6 +1,6 @@
 # Extension Runtime
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-04
 Owner: Browser Runtime
 
 ## Runtime Components
@@ -68,6 +68,19 @@ Configuration ownership:
 4. Offscreen sends envelope back to relay.
 5. If WebSocket is temporarily unavailable, offscreen queues outbound envelopes and flushes after `auth_ack` on reconnect.
 6. Background deduplicates replayed commands by `idempotencyKey` (or `requestId` fallback) and returns cached terminal response.
+
+Listener infrastructure:
+
+- `listener.subscribe` and `listener.unsubscribe` are supported command actions in runtime scaffolding.
+- Subscribe/unsubscribe return terminal `result`/`error` immediately like any other command.
+- Background tracks active listener subscribe `requestId` values in-memory.
+- Any extension component can emit listener JSON updates by sending runtime message `type=otto.listenerUpdate` with:
+- `requestId` (original subscribe requestId)
+- `data` (JSON payload)
+- optional `updateType`
+- optional `emittedAt`
+- Background rejects updates for unknown/inactive listener request ids.
+- Accepted updates are forwarded to offscreen via `otto.offscreen.emitListenerUpdate` and emitted to relay as `event` with `payload.type=listener_update`.
 
 Recipe commands:
 

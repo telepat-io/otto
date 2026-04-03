@@ -1,6 +1,6 @@
 # Testing
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-04
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -17,6 +17,7 @@ Owner: Platform
 - Relay integration tests for pairing, logs endpoints, and WebSocket auth paths
 - Relay logs filter tests for `source` and `latest` query handling, including invalid query rejection
 - Relay log stream tests for source-filtered `logs_subscribe` behavior
+- Relay listener lifecycle tests for subscribe activation, async `listener_update` routing, unsubscribe teardown, and post-unsubscribe rejection
 - Relay extension-log ingestion tests for authenticated node `extension_log` event handling
 - Relay security tests for scope enforcement, token revocation, JWT key-rotation fallback, and replay defense
 - Relay auth edge tests for malformed/expired access token rejection and first-wins pairing approval conflict handling
