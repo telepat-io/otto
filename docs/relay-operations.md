@@ -37,6 +37,7 @@ Environment overrides:
 - `OTTO_REFRESH_TTL_DAYS`
 - `OTTO_EXTENSION_ORIGIN`
 - `OTTO_LOG_DIR`
+- `OTTO_LOG_MAX_FILE_BYTES`
 - `OTTO_RATE_LIMIT_PER_MIN`
 - `OTTO_REPLAY_WINDOW_MS`
 - `OTTO_TAB_QUEUE_LIMIT`
@@ -74,6 +75,13 @@ WebSocket:
 - Emit synthetic node disconnect failures for in-flight requests
 - Manage tab lock leases and conflicts
 - Persist and stream structured logs
+
+Log storage model:
+
+- Relay writes logs into day-windowed JSONL files in `OTTO_LOG_DIR` (`operations-YYYY-MM-DD.jsonl`).
+- When the active day file exceeds `OTTO_LOG_MAX_FILE_BYTES` (default `100MB`), relay spills over into suffixed files (`operations-YYYY-MM-DD-1.jsonl`, etc.).
+- `/api/logs/status` reports aggregate byte size across all operation log files plus active windowing settings.
+- Retention cleanup deletes operation log files older than 14 days.
 
 Log filtering semantics:
 

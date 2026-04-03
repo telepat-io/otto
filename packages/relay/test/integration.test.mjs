@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -478,6 +478,54 @@ test('logs list and export support source and latest filters', async (t) => {
   const relayOnlyBody = await relayOnlyResp.text();
   const relayRows = relayOnlyBody.split('\n').filter(Boolean).map((line) => JSON.parse(line));
   assert.equal(relayRows.every((row) => row.source === 'relay'), true);
+});
+
+test('logs spill over into multiple window files when max file bytes is exceeded', async (t) => {
+  const port = 8843;
+  const base = `http://127.0.0.1:${port}`;
+  const logDir = mkdtempSync(join(tmpdir(), 'otto-relay-log-window-'));
+  const proc = startRelay(port, {
+    OTTO_LOG_DIR: logDir,
+    OTTO_LOG_MAX_FILE_BYTES: '1024',
+  });
+
+  t.after(() => {
+    proc.kill();
+    rmSync(logDir, { recursive: true, force: true });
+  });
+
+  await waitForRelay(base);
+  await requestPairing(base, 'node_log_spill_suite');
+  const nodeWs = await connectAuthedNodeWs(port, 'node_log_spill_suite', 'spill_node');
+
+  t.after(() => {
+    nodeWs.close();
+  });
+
+  for (let i = 0; i < 20; i += 1) {
+    sendExtensionLogEvent(nodeWs, `spill_log_${i}`, {
+      level: 'info',
+      type: 'offscreen.payload_burst',
+      timestamp: new Date().toISOString(),
+      data: {
+        seq: i,
+        blob: 'x'.repeat(350),
+      },
+    });
+  }
+
+  await wait(250);
+
+  const statusResp = await fetch(`${base}/api/logs/status`);
+  assert.equal(statusResp.status, 200);
+  const statusBody = await statusResp.json();
+  assert.equal(statusBody.windowing?.mode, 'daily');
+  assert.equal(typeof statusBody.windowing?.maxFileBytes, 'number');
+  assert.equal(statusBody.windowing?.maxFileBytes, 1024);
+
+  const operationFiles = readdirSync(logDir)
+    .filter((name) => /^operations-\d{4}-\d{2}-\d{2}(?:-\d+)?\.jsonl$/.test(name));
+  assert.equal(operationFiles.length >= 2, true);
 });
 
 test('logs API rejects invalid source and latest query values', async (t) => {

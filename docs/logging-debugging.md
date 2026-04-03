@@ -70,13 +70,20 @@ Behavior:
 ## Storage Model
 
 - In-memory log ring for quick API filtering.
-- JSONL append file in relay log directory (`.otto-relay/operations.jsonl`).
-- Retention cleanup removes entries older than 14 days.
+- JSONL append files in relay log directory using daily windows (`.otto-relay/operations-YYYY-MM-DD.jsonl`).
+- Size spillover creates additional same-day files when active file exceeds `OTTO_LOG_MAX_FILE_BYTES` (default `100MB`), for example `operations-YYYY-MM-DD-1.jsonl`.
+- Retention cleanup removes window files older than 14 days.
+- Legacy single-file storage (`operations.jsonl`) is still read for compatibility with older local relay data.
 
 Default policy:
 
 - Redact sensitive fields before storage and streaming.
-- Keep 14-day retention with disk budget.
+- Keep 14-day retention with bounded per-file size.
+
+Relevant environment variables:
+
+- `OTTO_LOG_DIR`: relay runtime/log directory
+- `OTTO_LOG_MAX_FILE_BYTES`: max bytes for active window file before spillover (minimum `1024`, default `104857600`)
 
 ## Diagnostic Expectations
 

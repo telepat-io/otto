@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nanoid } from 'nanoid';
 import { jwtVerify, SignJWT } from 'jose';
@@ -54,7 +54,10 @@ const DEFAULT_CONTROLLER_SCOPES =
   ];
 const LOG_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const LOG_DIR = process.env.OTTO_LOG_DIR ?? join(process.cwd(), '.otto-relay');
-const LOG_FILE = join(LOG_DIR, 'operations.jsonl');
+const LOG_LEGACY_FILE_NAME = 'operations.jsonl';
+const LOG_WINDOW_PREFIX = 'operations-';
+const LOG_WINDOW_SUFFIX = '.jsonl';
+const LOG_WINDOW_MAX_FILE_BYTES = parseEnvInt('OTTO_LOG_MAX_FILE_BYTES', 100 * 1024 * 1024, 1024);
 const REFRESH_SESSIONS_FILE = join(LOG_DIR, 'refresh-sessions.jsonl');
 
 type Client = {
@@ -189,6 +192,88 @@ const refreshTokens = new Map<string, RefreshSession>();
 const rateLimit = new Map<string, RateLimitState>();
 const replayState = new Map<string, ReplayState>();
 const logEvents: LogEvent[] = [];
+let activeLogWindowDate = '';
+let activeLogWindowSpill = 0;
+
+function logWindowDateKey(date: Date): string {
+  const year = String(date.getUTCFullYear());
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function logWindowFileName(dateKey: string, spill: number): string {
+  return spill <= 0
+    ? `${LOG_WINDOW_PREFIX}${dateKey}${LOG_WINDOW_SUFFIX}`
+    : `${LOG_WINDOW_PREFIX}${dateKey}-${spill}${LOG_WINDOW_SUFFIX}`;
+}
+
+function isWindowedLogFileName(fileName: string): boolean {
+  return /^operations-\d{4}-\d{2}-\d{2}(?:-\d+)?\.jsonl$/.test(fileName);
+}
+
+function isOperationLogFileName(fileName: string): boolean {
+  return fileName === LOG_LEGACY_FILE_NAME || isWindowedLogFileName(fileName);
+}
+
+function listOperationLogFiles(): string[] {
+  if (!existsSync(LOG_DIR)) {
+    return [];
+  }
+
+  const names = readdirSync(LOG_DIR).filter(isOperationLogFileName);
+  return names
+    .map((name) => ({ name, path: join(LOG_DIR, name), mtimeMs: statSync(join(LOG_DIR, name)).mtimeMs }))
+    .sort((a, b) => a.mtimeMs - b.mtimeMs || a.name.localeCompare(b.name))
+    .map((item) => item.path);
+}
+
+function parseTimestampMs(timestamp: string): number | null {
+  const parsed = Date.parse(timestamp);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function resolveWriteLogFilePath(eventLine: string): string {
+  const now = new Date();
+  const dateKey = logWindowDateKey(now);
+  if (activeLogWindowDate !== dateKey) {
+    activeLogWindowDate = dateKey;
+    activeLogWindowSpill = 0;
+  }
+
+  const nextBytes = Buffer.byteLength(eventLine, 'utf8');
+  while (true) {
+    const filePath = join(LOG_DIR, logWindowFileName(activeLogWindowDate, activeLogWindowSpill));
+    const currentSize = existsSync(filePath) ? statSync(filePath).size : 0;
+    if (currentSize === 0 || currentSize + nextBytes <= LOG_WINDOW_MAX_FILE_BYTES) {
+      return filePath;
+    }
+    activeLogWindowSpill += 1;
+  }
+}
+
+function cleanupLogFiles(cutoffMs: number): void {
+  for (const filePath of listOperationLogFiles()) {
+    try {
+      const stats = statSync(filePath);
+      if (stats.mtimeMs < cutoffMs) {
+        unlinkSync(filePath);
+      }
+    } catch {
+      // Ignore races where another process rotates/deletes between stat and unlink.
+    }
+  }
+}
+
+function totalLogBytes(): number {
+  return listOperationLogFiles().reduce((total, filePath) => {
+    try {
+      return total + statSync(filePath).size;
+    } catch {
+      return total;
+    }
+  }, 0);
+}
 
 function persistRefreshSessions(): void {
   const serialized = Array.from(refreshTokens.entries())
@@ -293,12 +378,13 @@ if (!existsSync(LOG_DIR)) {
 
 const refreshStoreStats = loadRefreshSessions();
 
-if (existsSync(LOG_FILE)) {
-  const lines = readFileSync(LOG_FILE, 'utf8').split('\n').filter(Boolean);
+for (const filePath of listOperationLogFiles()) {
+  const lines = readFileSync(filePath, 'utf8').split('\n').filter(Boolean);
   for (const line of lines) {
     try {
       const evt = JSON.parse(line) as LogEvent;
-      if (Date.now() - Date.parse(evt.timestamp) <= LOG_RETENTION_MS) {
+      const ts = parseTimestampMs(evt.timestamp);
+      if (ts !== null && Date.now() - ts <= LOG_RETENTION_MS) {
         logEvents.push(evt);
       }
     } catch {
@@ -326,14 +412,13 @@ function redactValue(input: unknown): unknown {
 
 function cleanupLogs(): void {
   const cutoff = Date.now() - LOG_RETENTION_MS;
-  while (logEvents.length > 0) {
-    const first = logEvents[0];
-    if (!first) break;
-    if (Date.parse(first.timestamp) >= cutoff) break;
-    logEvents.shift();
-  }
-  const serialized = logEvents.map((evt) => JSON.stringify(evt)).join('\n');
-  writeFileSync(LOG_FILE, serialized ? `${serialized}\n` : '');
+  const retained = logEvents.filter((evt) => {
+    const ts = parseTimestampMs(evt.timestamp);
+    return ts !== null && ts >= cutoff;
+  });
+  logEvents.length = 0;
+  logEvents.push(...retained);
+  cleanupLogFiles(cutoff);
 }
 
 function send(ws: WebSocket, msg: Envelope): void {
@@ -363,7 +448,8 @@ function emitLog(event: Omit<LogEvent, 'id' | 'timestamp'>): void {
     data: redactValue(event.data),
   };
   logEvents.push(full);
-  appendFileSync(LOG_FILE, `${JSON.stringify(full)}\n`);
+  const line = `${JSON.stringify(full)}\n`;
+  appendFileSync(resolveWriteLogFilePath(line), line);
 
   for (const client of clients.values()) {
     if (client.role !== 'controller' || !client.authenticated || !client.subscriptions.has('logs')) {
@@ -883,13 +969,17 @@ server.on('request', (req, res) => {
   }
 
   if (req.method === 'GET' && url.pathname === '/api/logs/status') {
-    const sizeBytes = existsSync(LOG_FILE) ? statSync(LOG_FILE).size : 0;
+    const sizeBytes = totalLogBytes();
     const oldest = logEvents.length > 0 ? logEvents[0]?.timestamp : null;
     const newest = logEvents.length > 0 ? logEvents[logEvents.length - 1]?.timestamp : null;
     jsonResponse(res, 200, {
       retentionDays: 14,
       totalEvents: logEvents.length,
       sizeBytes,
+      windowing: {
+        mode: 'daily',
+        maxFileBytes: LOG_WINDOW_MAX_FILE_BYTES,
+      },
       oldest,
       newest,
     });

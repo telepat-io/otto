@@ -58,6 +58,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Start condition: after relay URL is saved in popup/options, extension starts queueing log objects immediately and flushes them after socket auth succeeds.
 - Relay stores these as `source: node` events and concatenates them with relay-native logs for `otto logs` APIs and follow streams.
 - CLI log source filters now support `relay|controller|node|all`; use `node` to inspect extension-originated runtime logs.
+- Relay operation logs are persisted in day-windowed JSONL files with size-based spillover (`OTTO_LOG_MAX_FILE_BYTES`) and 14-day file retention.
 - Keep this feature for local debugging only; do not enable broad sensitive payload logging.
 
 ## Agent Debugging Guidance
