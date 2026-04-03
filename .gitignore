@@ -2,7 +2,9 @@ node_modules/
 dist/
 .webext/
 .wxt/
+extension/.output/
 coverage/
 *.log
+.otto-relay/
 .env
 .DS_Store
