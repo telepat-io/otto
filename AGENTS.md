@@ -65,6 +65,9 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - When debugging extension-relay behavior locally, prefer `otto logs follow --source all` in one terminal while reproducing in extension UI.
 - For extension-only traces, use `otto logs follow --source node` or `otto logs list --source node --latest 50`.
 - Validate that early extension logs appear before `authenticated_connected` transitions during relay URL + pairing workflows.
+- For autonomous/CI agents, prefer non-TTY invocation and `--json` output for machine parsing.
+- Treat `otto logs follow` as unbounded: enforce a caller-side timeout window for live capture sessions.
+- Correlate failures by `requestId` first, then narrow by source (`all` -> `node` or `relay`) to isolate root cause.
 
 ## CLI TUI Guidance
 - For any CLI TUI updates, prefer `@inkjs/ui` components and patterns over bespoke terminal rendering.

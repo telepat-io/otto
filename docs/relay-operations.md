@@ -58,9 +58,9 @@ Pairing and auth:
 
 Logs:
 
-- `GET /api/logs?since=&level=&source=&latest=&nodeId=`
+- `GET /api/logs?since=&level=&source=&latest=&nodeId=&requestId=`
 - `GET /api/logs/status`
-- `GET /api/logs/export?since=&level=&source=&latest=&nodeId=`
+- `GET /api/logs/export?since=&level=&source=&latest=&nodeId=&requestId=`
 
 WebSocket:
 

@@ -96,6 +96,7 @@ Suggested local sequence:
 - Prefer non-TTY mode for deterministic JSON output and exit codes.
 - Parse command `requestId` and correlate with relay logs when diagnosing failures.
 - Keep recipe test payloads small and stable to reduce flaky selector behavior.
+- For logs automation patterns (bounded historical pulls, TTY-sensitive follow behavior, and JSON streaming guidance), use `docs/logging-debugging.md` -> Agent Automation Patterns.
 
 ## Setup Command Validation
 

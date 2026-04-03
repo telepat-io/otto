@@ -19,6 +19,10 @@ Owner: Platform
 
 `otto logs follow --source node`
 
+- Live tail with full JSON events:
+
+`otto logs follow --source node --json`
+
 - Export NDJSON:
 
 `otto logs export --since 2026-04-03T00:00:00Z --source relay --latest 500`
@@ -29,6 +33,42 @@ Sources:
 - `controller`: controller-originated events (when present)
 - `node`: extension node-originated events, including local-dev extension runtime logs
 - `all`: merged stream across all sources
+
+`logs follow` output defaults to a human-readable line format optimized for scanning: timestamp, source, level, event type, and key message metadata. Use `--json` for full structured event objects.
+
+## Agent Automation Patterns
+
+Use these patterns for deterministic autonomous debugging workflows.
+
+Historical queries (bounded and machine-readable):
+
+- Prefer `otto logs list` or `otto logs export` over `logs follow` when an agent only needs recent evidence.
+- Always bound result size/time (`--since`, `--latest`) to avoid unexpectedly large payloads.
+- Use source filters early (`--source node` for extension runtime traces).
+
+Live stream capture (follow mode):
+
+- `otto logs follow` is TTY-sensitive.
+- In interactive TTY sessions, it renders a live TUI view and exits with `q`, `Esc`, or `Ctrl+C`.
+- In non-TTY sessions, it streams lines indefinitely until the parent process stops it.
+- For automation, use `--json` and a bounded runtime (runner timeout or external process timeout wrapper).
+
+Example correlation loop for agents:
+
+1. Run command in non-TTY mode and capture `requestId` from JSON output.
+2. Pull correlated logs:
+
+`otto logs list --request-id <requestId> --latest 100 --source all`
+
+3. If extension behavior is suspected, narrow to node logs:
+
+`otto logs list --request-id <requestId> --source node --latest 100`
+
+Exit behavior for automation:
+
+- Empty filtered log results are valid and should be handled as non-error outcomes.
+- Invalid log options (`--source`, `--level`, `--latest`) fail fast with non-zero exit.
+- `logs follow` is intentionally unbounded and must be interrupted by the caller.
 
 ## Event Shape
 
@@ -90,6 +130,7 @@ Relevant environment variables:
 - `requestId` should be used as the primary cross-component correlation key.
 - Node disconnect during in-flight execution is surfaced as deterministic terminal `node_disconnected`.
 - Lock lifecycle events (`lock_acquired`, `lock_conflict`, `lock_released`, `lock_expired`) are emitted for troubleshooting concurrency issues.
+- For autonomous debugging, prefer non-TTY + JSON output and bounded log pulls before starting long-lived follow sessions.
 
 ## Recipe Debugging Playbook
 

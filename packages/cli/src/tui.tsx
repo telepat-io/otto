@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Static, Text, render, useApp, useInput } from 'ink';
+import { Box, Text, render, useApp, useInput } from 'ink';
 import { Alert, ConfirmInput, Select, Spinner, StatusMessage, TextInput, UnorderedList } from '@inkjs/ui';
 import { nanoid } from 'nanoid';
 import WebSocket from 'ws';
@@ -7,6 +7,13 @@ import { createEnvelope, type CommandPayload, type Envelope } from '@telepat/ott
 import { DEFAULT_CONTROLLER_RELAY_URL, deriveHttpUrl, type OttoConfig } from './config.js';
 import { resolveSettingsResult } from './settings-logic.js';
 import { openControllerSocket } from './index.js';
+import {
+  buildHumanLogEntryParts,
+  formatLogEntryJson,
+  type HumanLogEntryParts,
+  type LogEntry,
+  type LogSource,
+} from './logs-options.js';
 
 type CommandTuiOptions = {
   targetNodeId: string;
@@ -17,10 +24,16 @@ type CommandTuiOptions = {
 
 type LogLine = {
   id: string;
-  line: string;
+  line?: string;
+  human?: HumanLogEntryParts;
 };
 
-type LogSource = 'relay' | 'controller' | 'node' | 'all';
+function levelColor(level: string): string {
+  if (level === 'ERROR') return 'red';
+  if (level === 'WARN') return 'yellow';
+  if (level === 'DEBUG') return 'blue';
+  return 'green';
+}
 
 function jsonLine(value: unknown): string {
   try {
@@ -155,7 +168,15 @@ function CommandScreen({ config, options }: { config: OttoConfig; options: Comma
   );
 }
 
-function LogsFollowScreen({ config, source }: { config: OttoConfig; source?: LogSource }): React.JSX.Element {
+function LogsFollowScreen({
+  config,
+  source,
+  jsonOutput,
+}: {
+  config: OttoConfig;
+  source?: LogSource;
+  jsonOutput: boolean;
+}): React.JSX.Element {
   const { exit } = useApp();
   const [status, setStatus] = useState<'connecting' | 'subscribed' | 'failed'>('connecting');
   const [error, setError] = useState<string | null>(null);
@@ -199,8 +220,11 @@ function LogsFollowScreen({ config, source }: { config: OttoConfig; source?: Log
           if (msg.messageType === 'event') {
             const payload = msg.payload as { type?: string; entry?: unknown };
             if (payload.type === 'log') {
-              const line = jsonLine(payload.entry);
-              setEntries((prev) => [...prev, { id: nanoid(), line }]);
+              const entry = (payload.entry ?? {}) as LogEntry;
+              const next = jsonOutput
+                ? { id: nanoid(), line: formatLogEntryJson(entry) }
+                : { id: nanoid(), human: buildHumanLogEntryParts(entry) };
+              setEntries((prev) => [...prev, next]);
             }
           }
 
@@ -231,7 +255,9 @@ function LogsFollowScreen({ config, source }: { config: OttoConfig; source?: Log
         ws.close();
       }
     };
-  }, [config]);
+  }, [config, jsonOutput, source]);
+
+  const visibleEntries = entries.slice(-200);
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -244,11 +270,31 @@ function LogsFollowScreen({ config, source }: { config: OttoConfig; source?: Log
       <Box marginTop={1}>
         <Text dimColor>Press q to stop following.</Text>
       </Box>
-      <Static items={entries}>
-        {(entry) => (
-          <Text key={entry.id}>{entry.line}</Text>
-        )}
-      </Static>
+      <Box marginTop={1} flexDirection="column">
+        {visibleEntries.map((entry) => {
+          if (jsonOutput) {
+            return <Text key={entry.id}>{entry.line ?? ''}</Text>;
+          }
+
+          const human = entry.human;
+          if (!human) {
+            return null;
+          }
+
+          return (
+            <Text key={entry.id}>
+              <Text color="gray">{human.timestamp}</Text>
+              <Text> </Text>
+              <Text color="cyan">{human.source}</Text>
+              <Text> </Text>
+              <Text color={levelColor(human.level)}>{human.level}</Text>
+              <Text> </Text>
+              <Text>{human.eventType}</Text>
+              {human.details.length > 0 ? <Text color="gray"> {' | '}{human.details.join(' | ')}</Text> : null}
+            </Text>
+          );
+        })}
+      </Box>
     </Box>
   );
 }
@@ -258,8 +304,8 @@ export async function runCommandTui(config: OttoConfig, options: CommandTuiOptio
   await app.waitUntilExit();
 }
 
-export async function runLogsFollowTui(config: OttoConfig, source?: LogSource): Promise<void> {
-  const app = render(<LogsFollowScreen config={config} source={source} />);
+export async function runLogsFollowTui(config: OttoConfig, source: LogSource | undefined, jsonOutput: boolean): Promise<void> {
+  const app = render(<LogsFollowScreen config={config} source={source} jsonOutput={jsonOutput} />);
   await app.waitUntilExit();
 }
 

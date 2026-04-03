@@ -18,7 +18,15 @@ import { resolveTargetNodeId } from './node-resolution.js';
 import { readRelayDaemonState, startRelayAttached, startRelayDaemon, stopRelayDaemon } from './relay-daemon.js';
 import { ensureRelayDaemonReadyForSetup, shouldReuseCachedInstall, shouldRunSetupNonInteractive } from './setup-logic.js';
 import { runCommandTui, runLogsFollowTui, runSettingsTui, runSetupPromptTui } from './tui.js';
-import { parseLatestOption, parseLogLevelOption, parseLogSourceOption, type LogSource } from './logs-options.js';
+import {
+  formatLogEntryHuman,
+  formatLogEntryJson,
+  parseLatestOption,
+  parseLogLevelOption,
+  parseLogSourceOption,
+  type LogEntry,
+  type LogSource,
+} from './logs-options.js';
 
 type RelayAuthErrorPayload = {
   category?: string;
@@ -250,7 +258,7 @@ async function runCommandOnce(
   });
 }
 
-async function followLogsOnce(config: OttoConfig, source?: LogSource): Promise<void> {
+async function followLogsOnce(config: OttoConfig, source: LogSource | undefined, jsonOutput: boolean): Promise<void> {
   const ws = await openControllerSocket(config);
   const requestId = nanoid();
   console.error(`[otto:cli][debug] subscribing to logs stream source=${source ?? 'all'}`);
@@ -268,7 +276,9 @@ async function followLogsOnce(config: OttoConfig, source?: LogSource): Promise<v
     if (msg.messageType === 'event') {
       const payload = msg.payload as { type?: string; entry?: unknown };
       if (payload.type === 'log') {
-        console.log(JSON.stringify(payload.entry));
+        const entry = (payload.entry ?? {}) as LogEntry;
+        const line = jsonOutput ? formatLogEntryJson(entry) : formatLogEntryHuman(entry);
+        console.log(line);
       }
     }
   });
@@ -835,14 +845,16 @@ logs
   .command('follow')
   .description('Follow live relay logs')
   .option('--source <source>', 'relay|controller|node|all')
+  .option('--json', 'Output full JSON log entries', false)
   .action(async (opts) => {
     const config = loadConfig();
     const source = parseLogSourceOption(opts.source);
+    const jsonOutput = Boolean(opts.json);
     if (process.stdout.isTTY && process.stdin.isTTY) {
-      await runLogsFollowTui(config, source);
+      await runLogsFollowTui(config, source, jsonOutput);
       return;
     }
-    await followLogsOnce(config, source);
+    await followLogsOnce(config, source, jsonOutput);
   });
 
 logs
