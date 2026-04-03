@@ -146,9 +146,11 @@ Relevant environment variables:
 
 4. If `site_mismatch`, verify `tabSessionId` points to the intended website.
 
-5. If `forbidden_action`, confirm controller token scope includes `recipe.run`.
+5. If `tab_url_not_ready`, rerun once after a brief delay; this is a transient post-open timing state where tab URL has not committed yet.
 
-6. Use `requestId` from command output to filter relay logs for that execution.
+6. If `forbidden_action`, confirm controller token scope includes `recipe.run`.
+
+7. Use `requestId` from command output to filter relay logs for that execution.
 
 ## Setup Troubleshooting
 

@@ -10,6 +10,8 @@ type MockOptions = {
   sessionSeed?: AnyRecord;
   tabIds?: number[];
   tabUrls?: Record<number, string>;
+  tabUrlSequenceById?: Record<number, Array<string | null | undefined>>;
+  defaultTabUrl?: string | null;
   scriptResults?: unknown[];
   initialActiveTabId?: number;
 };
@@ -18,6 +20,10 @@ function createChromeMock(options: MockOptions = {}) {
   const sessionStore: AnyRecord = { ...(options.sessionSeed ?? {}) };
   const existingTabs = new Set<number>(options.tabIds ?? []);
   const tabUrls = { ...(options.tabUrls ?? {}) };
+  const tabUrlSequenceById = Object.fromEntries(
+    Object.entries(options.tabUrlSequenceById ?? {}).map(([tabId, sequence]) => [tabId, [...sequence]]),
+  ) as Record<string, Array<string | null | undefined>>;
+  const defaultTabUrl = options.defaultTabUrl === undefined ? 'https://www.reddit.com/' : options.defaultTabUrl;
   const scriptResults = [...(options.scriptResults ?? [])];
   let nextTabId = Math.max(0, ...(options.tabIds ?? [0])) + 1;
   let activeTabId = options.initialActiveTabId ?? (options.tabIds?.[0] ?? 1);
@@ -48,9 +54,24 @@ function createChromeMock(options: MockOptions = {}) {
         if (!existingTabs.has(tabId)) {
           throw new Error(`No tab with id ${tabId}`);
         }
+
+        const sequence = tabUrlSequenceById[String(tabId)];
+        if (sequence && sequence.length > 0) {
+          const next = sequence.shift();
+          if (typeof next === 'string') {
+            tabUrls[tabId] = next;
+          } else {
+            delete tabUrls[tabId];
+          }
+        }
+
+        const resolvedUrl = Object.prototype.hasOwnProperty.call(tabUrls, tabId)
+          ? tabUrls[tabId]
+          : (defaultTabUrl ?? undefined);
+
         return {
           id: tabId,
-          url: tabUrls[tabId] ?? 'https://www.reddit.com/',
+          url: resolvedUrl,
           windowId: 1,
           groupId: tabGroupById.get(tabId) ?? -1,
         };
@@ -68,10 +89,13 @@ function createChromeMock(options: MockOptions = {}) {
       },
       async query(_query: { windowId?: number; active?: boolean }) {
         void _query;
+        const activeUrl = Object.prototype.hasOwnProperty.call(tabUrls, activeTabId)
+          ? tabUrls[activeTabId]
+          : (defaultTabUrl ?? undefined);
         return [{
           id: activeTabId,
           windowId: 1,
-          url: tabUrls[activeTabId] ?? 'https://www.reddit.com/',
+          url: activeUrl,
           groupId: tabGroupById.get(activeTabId) ?? -1,
         }];
       },
@@ -209,6 +233,67 @@ test('recipe.run rejects site mismatch for current tab URL', async () => {
       assert.ok(err instanceof CommandExecutionError);
       const commandErr = err as CommandExecutionError;
       assert.equal(commandErr.code, 'site_mismatch');
+      return true;
+    },
+  );
+});
+
+test('recipe.run waits for committed tab URL before site validation', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    defaultTabUrl: null,
+    tabUrlSequenceById: {
+      11: [undefined, undefined, 'https://www.reddit.com/'],
+    },
+    scriptResults: [true, [{ title: 'Ready', author: 'eve' }]],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getFeed',
+    input: {},
+    authMode: 'auto',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getFeed',
+    posts: [{ title: 'Ready', author: 'eve' }],
+  });
+});
+
+test('recipe.run returns transient tab_url_not_ready when committed URL never appears', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    defaultTabUrl: null,
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      recipe: 'getFeed',
+      input: {},
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'tab_url_not_ready');
+      assert.equal(commandErr.stage, 'recipe.run');
+      assert.equal(commandErr.retryable, true);
       return true;
     },
   );

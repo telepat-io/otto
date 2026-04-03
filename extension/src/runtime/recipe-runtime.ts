@@ -5,6 +5,9 @@ import { CommandExecutionError } from './execution-error.js';
 
 type ChromeLike = typeof chrome;
 
+const TAB_URL_READY_TIMEOUT_MS = 1200;
+const TAB_URL_POLL_INTERVAL_MS = 75;
+
 type RecipeRun = {
   site: string;
   recipe: string;
@@ -67,6 +70,48 @@ function buildContext(chromeApi: ChromeLike, tabId: number, tabSessionId: string
   };
 }
 
+type TabUrlProbe = {
+  url: string | null;
+  pendingUrl: string | null;
+};
+
+function normalizeTabUrl(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function readTabUrlProbe(chromeApi: ChromeLike, tabId: number): Promise<TabUrlProbe> {
+  const tab = await chromeApi.tabs.get(tabId);
+  return {
+    url: normalizeTabUrl(tab.url),
+    pendingUrl: normalizeTabUrl(tab.pendingUrl),
+  };
+}
+
+function wait(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+async function waitForCommittedTabUrl(chromeApi: ChromeLike, tabId: number): Promise<TabUrlProbe> {
+  const deadline = Date.now() + TAB_URL_READY_TIMEOUT_MS;
+  let lastProbe: TabUrlProbe = { url: null, pendingUrl: null };
+
+  while (Date.now() <= deadline) {
+    lastProbe = await readTabUrlProbe(chromeApi, tabId);
+    if (lastProbe.url) {
+      return lastProbe;
+    }
+    await wait(TAB_URL_POLL_INTERVAL_MS);
+  }
+
+  return lastProbe;
+}
+
 export function listRecipesForRuntime() {
   return listRecipeDescriptors();
 }
@@ -89,10 +134,21 @@ export async function runRecipeCommand(
   }
 
   const ctx = buildContext(chromeApi, tabId, tabSessionId);
-  const tabUrl = await ctx.getTabUrl();
+  const urlProbe = await waitForCommittedTabUrl(chromeApi, tabId);
+  const tabUrl = urlProbe.url;
+  if (!tabUrl) {
+    const pendingDetails = urlProbe.pendingUrl ? ` (pending: ${urlProbe.pendingUrl})` : '';
+    throw new CommandExecutionError(
+      `Tab URL not ready yet for site validation on ${bundle.site}${pendingDetails}`,
+      'tab_url_not_ready',
+      'recipe.run',
+      true,
+    );
+  }
+
   if (!isSiteMatch(tabUrl, bundle.site)) {
     throw new CommandExecutionError(
-      `Tab URL does not match site ${bundle.site}: ${tabUrl ?? 'unknown'}`,
+      `Tab URL does not match site ${bundle.site}: ${tabUrl}`,
       'site_mismatch',
       'recipe.run',
       false,

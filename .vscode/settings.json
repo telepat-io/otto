@@ -17,6 +17,7 @@
       "approve": true,
       "matchCommandLine": true
     },
-    "npm run --workspace extension": true
+    "npm run --workspace extension": true,
+    "npm --workspace extension": true
   }
 }

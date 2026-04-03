@@ -66,7 +66,8 @@ Envelope requirements:
 Recipe result/error behavior:
 
 - Successful `recipe.run` returns normalized metadata fields (`site`, `recipe`) plus recipe output.
-- Site mismatch returns deterministic execution error (`site_mismatch`).
+- If tab URL is not yet committed during immediate post-open execution, runtime returns transient execution error (`tab_url_not_ready`, `retryable=true`).
+- Site mismatch after URL commit returns deterministic execution error (`site_mismatch`, `retryable=false`).
 - Unauthenticated website session on `requiresAuth` recipe returns `manual_login_required` after optional login navigation.
 
 ## Routing Rules

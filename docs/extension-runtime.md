@@ -78,10 +78,17 @@ Recipe commands:
 Recipe auth flow:
 
 1. Resolve site bundle and recipe metadata.
-2. Validate current tab URL belongs to target site.
+2. Wait briefly for tab URL commit when a tab was just opened, then validate URL belongs to target site.
 3. If `requiresAuth` and `authMode` is not `skip`, run `checkLogin`.
 4. If unauthenticated and `authMode=auto`, run `gotoLogin` then return `manual_login_required`.
 5. User logs in manually and reruns command.
+
+URL readiness behavior:
+
+- Recipe runtime applies a short bounded poll window before site validation to avoid false negatives immediately after `primitive.tab.open`.
+- If committed tab URL remains unavailable after the window, runtime returns transient execution error `tab_url_not_ready` (`retryable=true`).
+- If committed URL is present but does not match recipe site, runtime returns `site_mismatch` (`retryable=false`).
+- Runtime still never executes recipe logic before site validation succeeds.
 
 ## MV3 Resilience
 

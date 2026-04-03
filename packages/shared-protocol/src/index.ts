@@ -41,6 +41,7 @@ export interface AuthPayload {
 
 export interface CommandPayload {
   targetNodeId: string;
+  // Canonical reference for tab-scoped execution. Runtime also accepts payload.tabSessionId for compatibility.
   tabSessionId?: string;
   action: string;
   timeoutMs?: number;
