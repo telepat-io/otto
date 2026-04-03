@@ -1,0 +1,29 @@
+import type { SiteRecipe } from '../types.js';
+
+export const getFrontPageRecipe: SiteRecipe = {
+  metadata: {
+    site: 'news.ycombinator.com',
+    id: 'getFrontPage',
+    displayName: 'Get Hacker News Front Page',
+    description: 'Extracts front-page story titles and links from Hacker News.',
+    tags: ['feed', 'hackernews'],
+    requiresAuth: false,
+  },
+  async execute(ctx) {
+    const stories = await ctx.executeScript(
+      () => {
+        const rows = Array.from(document.querySelectorAll('tr.athing')).slice(0, 30);
+        return rows.map((row) => {
+          const titleLink = row.querySelector<HTMLAnchorElement>('span.titleline > a');
+          return {
+            title: titleLink?.textContent?.trim() ?? null,
+            href: titleLink?.href ?? null,
+          };
+        });
+      },
+      [],
+    );
+
+    return { stories: Array.isArray(stories) ? stories : [] };
+  },
+};

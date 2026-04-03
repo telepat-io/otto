@@ -1,0 +1,267 @@
+# Otto
+
+Otto is a secure remote browser automation platform with three runtime components:
+
+- `@telepat/otto` CLI controller
+- `@telepat/otto-relay` relay daemon
+- `@telepat/otto-extension` browser node (Chrome extension via WXT)
+
+## Architecture
+
+1. Controller sends command envelopes over WebSocket to relay.
+2. Relay authenticates, authorizes by action scope, and routes by `targetNodeId`.
+3. Node executes the action and returns terminal `result` or `error`.
+4. Relay forwards terminal outcome back to the originating controller.
+
+Execution guarantees:
+
+- `targetNodeId` is required for all commands.
+- Per-tab execution is serial; cross-tab execution is parallel.
+- Replay protection is enforced (`replayNonce` plus timestamp window).
+- Sensitive fields are redacted before log persistence and streaming.
+
+## Quick Start
+
+### Global Install Path (End Users)
+
+1. Install Otto CLI globally:
+
+```bash
+npm install -g @telepat/otto
+```
+
+2. Run guided setup:
+
+```bash
+otto setup
+```
+
+Setup now focuses on quick-start essentials:
+
+- Strategy selection (`auto`, `download`, `build`) is controlled by `otto settings` defaults or `otto setup --strategy ...`.
+- Relay URL defaults are reused instead of prompting through full controller settings.
+- `build` strategy asks for one additional value (`repo path`) when missing.
+- Relay daemon readiness is now part of setup: setup starts the relay daemon when needed and reuses it when already running on the same port.
+- Interactive setup prompt flow uses Ink with `@inkjs/ui` components for strategy selection, repo-path entry, and confirmation.
+
+Setup downloads an extension zip from Otto releases (or builds locally), verifies checksum when downloading, extracts it locally, and prints the exact path for Chrome `Load unpacked`.
+
+`auto` strategy behavior:
+
+- If setup is run inside a full Otto repo checkout (or `--repo-path` points to one), it builds locally.
+- Otherwise it downloads the release artifact.
+
+When using local build strategy, the unpacked folder is `extension/output/chrome-mv3`.
+
+If a relay daemon is already running on a different port than your selected setup relay URL, setup fails with explicit instructions to stop and restart on the intended port.
+
+Setup behavior reference:
+
+- Interactive TTY `otto setup`:
+	- ensures relay daemon readiness;
+	- prints setup summary plus Chrome load-unpacked instructions;
+	- prints extension artifact source/path details.
+- Explicit non-interactive `otto setup --non-interactive` (or non-TTY):
+	- emits deterministic JSON-only output;
+	- includes `relayDaemon` state (`status`, `pid`, `port`, `logPath`, `startedAt`);
+	- omits human-readable Chrome handoff block.
+- Daemon readiness policy:
+	- starts daemon when not running;
+	- reuses daemon when running on matching setup relay URL port;
+	- fails setup on daemon port mismatch to avoid implicit port drift.
+
+3. Load extension into Chrome:
+
+```text
+1) Open chrome://extensions
+2) Enable Developer mode
+3) Click Load unpacked
+4) Select the folder printed by otto setup (contains manifest.json)
+```
+
+4. Open extension options and configure node relay URL if needed:
+
+```text
+Default extension relay URL is ws://127.0.0.1:8787?role=node
+```
+
+5. Pair controller and node:
+
+```bash
+otto authcode
+otto pair <code>
+```
+
+6. Smoke test:
+
+```bash
+otto recipes list
+```
+
+### Monorepo Dev Path
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Build all workspaces:
+
+```bash
+npm run build
+```
+
+3. Start relay:
+
+```bash
+otto start
+```
+
+For local development with foreground logs:
+
+```bash
+otto start --attached
+```
+
+Run the CLI from source in local dev context:
+
+```bash
+npm run dev -- setup
+```
+
+Argument pass-through supports any CLI command, for example:
+
+```bash
+npm run dev -- recipes list
+```
+
+4. Configure CLI:
+
+```bash
+node packages/cli/dist/index.js config --relay-url 'ws://127.0.0.1:8787?role=controller'
+```
+
+5. Start extension dev runtime:
+
+```bash
+npm run dev:ext
+```
+
+6. Pair node and controller:
+
+```bash
+node packages/cli/dist/index.js authcode
+node packages/cli/dist/index.js pair 123-456
+```
+
+7. Run a primitive command:
+
+```bash
+node packages/cli/dist/index.js cmd --action primitive.tab.query --node-id <nodeId>
+```
+
+8. Discover and run recipes:
+
+```bash
+node packages/cli/dist/index.js recipes list
+node packages/cli/dist/index.js test reddit.com getFeed
+```
+
+9. Read relay logs:
+
+```bash
+node packages/cli/dist/index.js logs list --since 2026-04-03T00:00:00Z
+node packages/cli/dist/index.js logs follow
+```
+
+## Setup and Settings Commands
+
+- `otto start`
+- Starts relay in daemon mode when not already running.
+- If relay is already running, prints the existing pid and log path.
+
+- `otto start --attached`
+- Starts relay in attached foreground mode for development (logs in current terminal).
+
+- `otto stop`
+- Stops relay daemon if running.
+
+- `otto status`
+- Shows whether relay daemon is running.
+- If daemon is not running, prints: `otto start` as the suggested next command.
+
+- `otto setup`
+- Interactive wizard by default on TTY.
+- Add `--non-interactive` for deterministic JSON output.
+- Add `--yes` to accept defaults without prompts.
+- Add `--force` to reinstall extension artifact even when cached.
+- Setup uses `auto` strategy by default for first-run onboarding.
+- Default setup strategy can be changed in `otto settings`.
+- Add `--strategy auto|download|build` to override strategy for one run.
+- Normalizes relay URL to controller role (`?role=controller`).
+- Reuses cached extension artifact for current CLI version unless `--force` is set.
+
+- `otto extension get`
+- Retrieves extension artifact directly (download or dev-only build strategy).
+- Build strategy requires `--repo-path` and a full repo checkout.
+
+- `otto extension info`
+- Shows installed extension artifact metadata from `~/.otto/config.json`.
+
+- `otto settings`
+- Opens controller-global settings TUI.
+- CLI interactive TUI surfaces are being standardized on Ink + `@inkjs/ui` for a more consistent operator experience.
+- Navigation: up/down to select setting, Enter to open selector options, up/down to choose option, Enter to apply.
+- Save with `s`; exit with `q` or `Esc`.
+- Settings changes are selector-based (no free-text entry inside the TUI).
+
+Settings ownership boundary:
+
+- CLI controller settings live in `~/.otto/config.json`.
+- Extension node settings live in `chrome.storage.*` and are configured via extension options.
+- Extension runtime does not depend on CLI config files.
+
+Release artifact contract used by setup:
+
+- Release base URL default: `https://github.com/telepat/otto/releases/download`
+- Expected tag segment: `v<cli-version>`
+- Expected zip asset: `otto-extension-<version>-chrome-mv3.zip`
+- Expected checksum asset: `otto-extension-<version>-chrome-mv3.zip.sha256`
+- Checksum file can be `sha256sum` style (`<hash> <filename>`) or OpenSSL style (`SHA256(...) = <hash>`)
+
+## Recipe Framework
+
+Recipe model:
+
+- Site-scoped bundles live in `extension/src/recipes/<site>/`.
+- Each site bundle provides built-ins `checkLogin` and `gotoLogin`.
+- Main runtime actions are `recipe.list` and `recipe.run`.
+- Legacy alias `recipe.reddit_feed` is still supported for migration.
+
+Auth-aware behavior:
+
+- Recipes can declare `requiresAuth` in metadata.
+- In `authMode=auto`, runtime checks login and navigates to login page if needed.
+- Automation never submits credentials; users authenticate manually and rerun.
+
+## Validation Commands
+
+Run after any code update:
+
+```bash
+npm run lint
+npm run build
+npm run -ws --if-present test
+```
+
+## Reference Docs
+
+- Architecture: `docs/overview.md`
+- Protocol: `docs/protocol.md`
+- Pairing and auth: `docs/pairing-auth.md`
+- Extension runtime: `docs/extension-runtime.md`
+- Recipes: `docs/recipes.md`
+- Relay ops: `docs/relay-operations.md`
+- Security: `docs/security.md`
+- Testing: `docs/testing.md`

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Otto Node</title>
+    <style>
+      :root {
+        --ink: #0f172a;
+      }
+
+      body {
+        margin: 0;
+        width: 360px;
+        color: var(--ink);
+        font-family: 'Avenir Next', 'Futura', 'Trebuchet MS', sans-serif;
+        background:
+          radial-gradient(circle at top left, #ffe3b8, transparent 48%),
+          linear-gradient(170deg, #f6f2e8, #f7efe3 55%, #f2e6da);
+      }
+
+      .shell {
+        padding: 14px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        letter-spacing: 0.02em;
+      }
+
+      .subhead {
+        margin: 6px 0 12px;
+        font-size: 13px;
+      }
+
+      .panel {
+        border: 1px solid #d9cdb3;
+        background: #fffaf0;
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 700;
+        font-size: 13px;
+      }
+
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 9px;
+        margin-bottom: 6px;
+      }
+
+      .toggle-row label {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .toggle-row input[type='checkbox'] {
+        width: auto;
+      }
+
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #c6bca4;
+        border-radius: 9px;
+        padding: 8px 10px;
+        font-size: 13px;
+        background: #fff;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 10px;
+        color: white;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      #refreshStatus {
+        background: #1d4ed8;
+      }
+
+      .status-card {
+        margin-top: 12px;
+        border: 1px solid #d8caa9;
+        border-radius: 10px;
+        padding: 10px;
+        background: #fffdfa;
+      }
+
+      #stateChip {
+        display: inline-block;
+        border-radius: 999px;
+        min-width: 54px;
+        text-align: center;
+        padding: 3px 8px;
+        color: white;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+      }
+
+      #stateTitle {
+        margin-top: 8px;
+        font-weight: 700;
+        font-size: 16px;
+      }
+
+      #stateDetail,
+      #pairingCode,
+      #nodeId {
+        margin-top: 5px;
+        font-size: 12px;
+      }
+
+      #pairingCommand {
+        margin-top: 8px;
+        padding: 7px 8px;
+        background: #111827;
+        color: #f8fafc;
+        border-radius: 8px;
+        font-size: 12px;
+        display: none;
+        overflow-x: auto;
+      }
+
+      #pairingCommandToast {
+        margin-top: 7px;
+        padding: 5px 7px;
+        border-radius: 7px;
+        background: #0f5132;
+        color: #ecfdf3;
+        font-size: 11px;
+        font-weight: 700;
+        display: none;
+      }
+
+      .hint {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #334155;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <h1>Otto Node</h1>
+      <p class="subhead">Pair this browser node with relay from one place.</p>
+      <section class="panel">
+        <label for="relayUrl">Relay URL</label>
+        <input id="relayUrl" placeholder="ws://127.0.0.1:8787?role=node" />
+        <div id="localDevLogRow" class="toggle-row">
+          <input id="localDevLogStreamingEnabled" type="checkbox" />
+          <label for="localDevLogStreamingEnabled">Send extension debug logs to relay (local dev)</label>
+        </div>
+        <div class="actions">
+          <button id="refreshStatus">Refresh now</button>
+        </div>
+        <div id="relaySaveStatus" class="hint">Relay URL saves automatically</div>
+        <section class="status-card">
+          <span id="stateChip">SET</span>
+          <div id="stateTitle">Loading status…</div>
+          <div id="stateDetail"></div>
+          <div id="pairingCode"></div>
+          <div id="pairingCommandToast" aria-live="polite"></div>
+          <pre id="pairingCommand"></pre>
+          <div id="nodeId"></div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="../src/runtime/popup-ui.ts"></script>
+  </body>
+</html>
