@@ -150,6 +150,34 @@ function waitForWsError(ws, timeoutMs = 2000) {
   });
 }
 
+function waitForWsClose(ws, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('timed out waiting for websocket close'));
+    }, timeoutMs);
+
+    function cleanup() {
+      clearTimeout(timeout);
+      ws.off('close', onClose);
+      ws.off('error', onError);
+    }
+
+    function onClose() {
+      cleanup();
+      resolve();
+    }
+
+    function onError(err) {
+      cleanup();
+      reject(err);
+    }
+
+    ws.on('close', onClose);
+    ws.on('error', onError);
+  });
+}
+
 async function connectAuthedNodeWs(port, nodeId, requestPrefix, options = {}) {
   const {
     secret = 'dev-only-change-me',
@@ -463,6 +491,31 @@ test('controller auth rejects expired access token', async (t) => {
   assert.equal(authError.payload?.code, 'invalid_access_token');
 });
 
+test('controller heartbeat timeout disconnects stale controller sessions', async (t) => {
+  const port = 8862;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port, {
+    OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS: '1000',
+    OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT: '1',
+  });
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const pairing = await requestPairing(base, 'node_heartbeat_timeout_suite');
+  const nodeWs = await connectAuthedNodeWs(port, 'node_heartbeat_timeout_suite', 'heartbeat_timeout_node');
+  const controllerWs = await connectAuthedControllerWs(port, pairing.controllerAccessToken, 'heartbeat_timeout_controller');
+
+  t.after(() => {
+    nodeWs.close();
+    controllerWs.close();
+  });
+
+  await waitForWsClose(controllerWs, 4000);
+});
+
 test('logs list and export support source and latest filters', async (t) => {
   const port = 8840;
   const base = `http://127.0.0.1:${port}`;
@@ -767,7 +820,7 @@ test('listener subscribe routes updates and unsubscribe stops further updates', 
   assert.equal(rejected.payload?.code, 'listener_not_found');
 });
 
-test('recipe.test stream events are proxied by recipe request and cancel unsubscribes listeners', async (t) => {
+test('recipe.test streams stay active past timeout window and cancel unsubscribes listeners', async (t) => {
   const port = 8845;
   const base = `http://127.0.0.1:${port}`;
   const proc = startRelay(port, {
@@ -788,10 +841,10 @@ test('recipe.test stream events are proxied by recipe request and cancel unsubsc
     controllerWs.close();
   });
 
-  const waitController = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(controllerWs, predicate, timeoutMs).catch((error) => {
+  const waitController = (label, predicate, timeoutMs = 5000) => nextWsEnvelope(controllerWs, predicate, timeoutMs).catch((error) => {
     throw new Error(`${label}: ${error.message}`);
   });
-  const waitNode = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(nodeWs, predicate, timeoutMs).catch((error) => {
+  const waitNode = (label, predicate, timeoutMs = 5000) => nextWsEnvelope(nodeWs, predicate, timeoutMs).catch((error) => {
     throw new Error(`${label}: ${error.message}`);
   });
 
@@ -806,7 +859,7 @@ test('recipe.test stream events are proxied by recipe request and cancel unsubsc
       action: 'recipe.test',
       replayNonce: 'recipe_stream_nonce_1',
       tabSessionId: 'recipe_stream_tab_1',
-      timeoutMs: 15000,
+      timeoutMs: 1000,
       payload: {
         site: 'reddit.com',
         recipe: 'getChatMessages',
@@ -904,14 +957,52 @@ test('recipe.test stream events are proxied by recipe request and cancel unsubsc
   const proxiedUpdate = await waitController(
     'listener_update proxied to recipe.test request',
     (msg) => msg.messageType === 'event' && msg.requestId === 'recipe_test_stream_1' && msg.payload?.type === 'listener_update',
-    3000,
+    5000,
   );
   assert.equal(proxiedUpdate.payload?.updateType, 'network_event');
+
+  await wait(1300);
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'recipe_stream_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'listener_update',
+      updateType: 'network_event_after_timeout_window',
+      data: {
+        eventId: 'evt_2',
+      },
+    },
+  }));
+
+  const proxiedUpdateAfterWindow = await waitController(
+    'listener_update still proxied after timeout window elapsed',
+    (msg) => msg.messageType === 'event'
+      && msg.requestId === 'recipe_test_stream_1'
+      && msg.payload?.type === 'listener_update'
+      && msg.payload?.updateType === 'network_event_after_timeout_window',
+    5000,
+  );
+  assert.equal(proxiedUpdateAfterWindow.payload?.data?.eventId, 'evt_2');
 
   const nodeUnsubscribePromise = waitNode(
     'relay forwarded listener.unsubscribe to node',
     (msg) => msg.messageType === 'command' && msg.payload?.action === 'listener.unsubscribe',
-    3000,
+    5000,
+  );
+
+  const cancelledPromise = waitController(
+    'cancel terminal result emitted for recipe.test request',
+    (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_test_stream_1',
+    5000,
+  );
+  const cancelAckPromise = waitController(
+    'cancel ack emitted',
+    (msg) => msg.messageType === 'event' && msg.requestId === 'recipe_stream_cancel_req_1' && msg.payload?.type === 'cancel_ack',
+    5000,
   );
 
   controllerWs.send(JSON.stringify({
@@ -925,22 +1016,268 @@ test('recipe.test stream events are proxied by recipe request and cancel unsubsc
     },
   }));
 
-  const cancelled = await waitController(
-    'cancel terminal result emitted for recipe.test request',
-    (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_test_stream_1',
-    3000,
-  );
+  const cancelled = await cancelledPromise;
   assert.equal(cancelled.payload?.commandOutcome, 'cancelled');
 
-  const cancelAck = await waitController(
-    'cancel ack emitted',
-    (msg) => msg.messageType === 'event' && msg.requestId === 'recipe_stream_cancel_req_1' && msg.payload?.type === 'cancel_ack',
-    3000,
-  );
+  const cancelAck = await cancelAckPromise;
   assert.equal(cancelAck.payload?.status, 'cancelled');
 
   const nodeUnsubscribe = await nodeUnsubscribePromise;
   assert.equal(nodeUnsubscribe.payload?.payload?.targetRequestId, 'recipe_stream_sub_1');
+});
+
+test('non-responsive controller stream session is heartbeat-disconnected and listener updates are rejected', async (t) => {
+  const port = 8863;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port, {
+    OTTO_DEFAULT_CONTROLLER_SCOPES: 'recipe.test,listener.subscribe,listener.unsubscribe',
+    OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS: '1000',
+    OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT: '1',
+  });
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const pairing = await requestPairing(base, 'node_recipe_stream_heartbeat_suite');
+  const nodeWs = await connectAuthedNodeWs(port, 'node_recipe_stream_heartbeat_suite', 'recipe_stream_heartbeat_node');
+  const controllerWs = await connectAuthedControllerWs(port, pairing.controllerAccessToken, 'recipe_stream_heartbeat_controller');
+
+  t.after(() => {
+    nodeWs.close();
+    controllerWs.close();
+  });
+
+  const waitController = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(controllerWs, predicate, timeoutMs).catch((error) => {
+    throw new Error(`${label}: ${error.message}`);
+  });
+  const waitNode = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(nodeWs, predicate, timeoutMs).catch((error) => {
+    throw new Error(`${label}: ${error.message}`);
+  });
+
+  controllerWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'recipe_test_stream_hb_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: pairing.nodeId,
+      action: 'recipe.test',
+      replayNonce: 'recipe_stream_hb_nonce_1',
+      tabSessionId: 'recipe_stream_hb_tab_1',
+      timeoutMs: 1000,
+      payload: {
+        site: 'reddit.com',
+        recipe: 'getChatMessages',
+      },
+    },
+  }));
+
+  await waitNode('recipe.test routed to node', (msg) => msg.messageType === 'command' && msg.requestId === 'recipe_test_stream_hb_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'recipe_test_stream_hb_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 8,
+      action: 'recipe.test',
+      data: {
+        stream: {
+          listeners: [
+            {
+              listener: 'network.http_intercept',
+              options: {
+                tabSessionId: 'recipe_stream_hb_tab_1',
+                urlPattern: 'https://chat.reddit.com/sync*',
+              },
+            },
+          ],
+        },
+      },
+    },
+  }));
+
+  await waitController('recipe.test result delivered to controller', (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_test_stream_hb_1');
+
+  controllerWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'recipe_stream_hb_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: pairing.nodeId,
+      action: 'listener.subscribe',
+      replayNonce: 'recipe_stream_hb_nonce_2',
+      tabSessionId: 'recipe_stream_hb_tab_1',
+      payload: {
+        listener: 'network.http_intercept',
+        options: {
+          tabSessionId: 'recipe_stream_hb_tab_1',
+          urlPattern: 'https://chat.reddit.com/sync*',
+        },
+      },
+    },
+  }));
+
+  await waitNode('listener.subscribe routed to node', (msg) => msg.messageType === 'command' && msg.requestId === 'recipe_stream_hb_sub_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'recipe_stream_hb_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 5,
+      action: 'listener.subscribe',
+      data: {
+        listener: 'network.http_intercept',
+        subscribed: true,
+      },
+    },
+  }));
+
+  await waitController('listener.subscribe result delivered to controller', (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_stream_hb_sub_1');
+
+  await waitForWsClose(controllerWs, 4000);
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'recipe_stream_hb_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'listener_update',
+      updateType: 'network_event_post_disconnect',
+      data: {
+        eventId: 'evt_post_disconnect',
+      },
+    },
+  }));
+
+  const rejected = await waitNode(
+    'listener_update rejected after controller heartbeat disconnect cleanup',
+    (msg) => msg.messageType === 'error' && msg.requestId === 'recipe_stream_hb_sub_1',
+    3000,
+  );
+  assert.equal(rejected.payload?.code, 'listener_not_found');
+});
+
+test('new controller cannot cancel stale stream request owned by disconnected controller', async (t) => {
+  const port = 8864;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port, {
+    OTTO_DEFAULT_CONTROLLER_SCOPES: 'recipe.test,listener.subscribe,listener.unsubscribe',
+    OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS: '1000',
+    OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT: '1',
+  });
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+
+  const pairingA = await requestPairing(base, 'node_recipe_stream_owner_mismatch_suite');
+  const nodeWs = await connectAuthedNodeWs(port, 'node_recipe_stream_owner_mismatch_suite', 'recipe_stream_owner_mismatch_node');
+  const controllerA = await connectAuthedControllerWs(port, pairingA.controllerAccessToken, 'recipe_stream_owner_mismatch_controller_a');
+
+  t.after(() => {
+    nodeWs.close();
+    controllerA.close();
+  });
+
+  const waitControllerA = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(controllerA, predicate, timeoutMs).catch((error) => {
+    throw new Error(`${label}: ${error.message}`);
+  });
+  const waitNode = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(nodeWs, predicate, timeoutMs).catch((error) => {
+    throw new Error(`${label}: ${error.message}`);
+  });
+
+  controllerA.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'recipe_test_owner_mismatch_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: pairingA.nodeId,
+      action: 'recipe.test',
+      replayNonce: 'recipe_owner_mismatch_nonce_1',
+      tabSessionId: 'recipe_owner_mismatch_tab_1',
+      timeoutMs: 1000,
+      payload: {
+        site: 'reddit.com',
+        recipe: 'getChatMessages',
+      },
+    },
+  }));
+
+  await waitNode('owner stream recipe.test routed to node', (msg) => msg.messageType === 'command' && msg.requestId === 'recipe_test_owner_mismatch_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'recipe_test_owner_mismatch_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 8,
+      action: 'recipe.test',
+      data: {
+        stream: {
+          listeners: [
+            {
+              listener: 'network.http_intercept',
+              options: {
+                tabSessionId: 'recipe_owner_mismatch_tab_1',
+                urlPattern: 'https://chat.reddit.com/sync*',
+              },
+            },
+          ],
+        },
+      },
+    },
+  }));
+
+  await waitControllerA('owner recipe.test result delivered', (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_test_owner_mismatch_1');
+
+  await waitForWsClose(controllerA, 4000);
+
+  const pairingB = await requestPairing(base, 'node_recipe_stream_owner_mismatch_suite');
+  const controllerB = await connectAuthedControllerWs(port, pairingB.controllerAccessToken, 'recipe_stream_owner_mismatch_controller_b');
+
+  t.after(() => {
+    controllerB.close();
+  });
+
+  controllerB.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command_cancel',
+    requestId: 'recipe_owner_mismatch_cancel_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetRequestId: 'recipe_test_owner_mismatch_1',
+    },
+  }));
+
+  const cancelError = await nextWsEnvelope(
+    controllerB,
+    (msg) => msg.messageType === 'error' && msg.requestId === 'recipe_owner_mismatch_cancel_1',
+    3000,
+  );
+  assert.equal(cancelError.payload?.code, 'command_not_found');
 });
 
 test('issued controller tokens include configured claims and are revocable', async (t) => {

@@ -111,8 +111,11 @@ Recipe test streaming:
 - `stream.listeners` is an array of listener manifests with `listener` and optional `options`.
 - CLI treats this as recipe-native streaming intent and subscribes until interrupted.
 - Controller implementations should keep `recipe.test`, follow-up `listener.subscribe`, stream updates, and optional `command_cancel` on the same authenticated websocket session so relay stream ownership and correlation remain valid.
+- `timeoutMs` on `recipe.test` applies to the initial command response window only.
+- After a successful `recipe.test` response activates streaming listeners, stream lifetime is unbounded at relay and ends via explicit `command_cancel`, unsubscribe/teardown, or socket disconnect cleanup.
+- Controllers should send periodic heartbeat frames (`ping`) during long-lived sessions and handle relay `pong` responses.
 - Relay may proxy `listener_update` events to the original `recipe.test` `requestId` for active stream sessions.
-- `command_cancel` targeting the original `recipe.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled` or `timed_out`).
+- `command_cancel` targeting the original `recipe.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled`).
 
 ## Command Payload
 

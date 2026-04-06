@@ -67,6 +67,8 @@ const CONTROLLER_CLIENTS_FILE = join(LOG_DIR, 'controller-clients.jsonl');
 const CONTROLLER_ACL_FILE = join(LOG_DIR, 'controller-acl.jsonl');
 const ALLOW_REMOTE_CONTROLLER_REGISTRATION = process.env.OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION === '1';
 const CONTROLLER_REGISTRATION_SECRET = process.env.OTTO_CONTROLLER_REGISTRATION_SECRET;
+const CONTROLLER_HEARTBEAT_INTERVAL_MS = parseEnvInt('OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS', 15_000, 1_000, 120_000);
+const CONTROLLER_HEARTBEAT_MISS_LIMIT = parseEnvInt('OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT', 3, 1, 20);
 
 type Client = {
   id: string;
@@ -79,6 +81,7 @@ type Client = {
   authenticated: boolean;
   subscriptions: Set<string>;
   logSourceFilter?: 'relay' | 'controller' | 'node' | 'all';
+  lastHeartbeatAtMs?: number;
 };
 
 type LockState = {
@@ -1330,6 +1333,13 @@ function clearRecipeTestStreamSessionsForNode(nodeId: string): void {
   }
 }
 
+function markControllerHeartbeat(client: Client): void {
+  if (client.role !== 'controller') {
+    return;
+  }
+  client.lastHeartbeatAtMs = Date.now();
+}
+
 const server = createServer();
 const wss = new WebSocketServer({ noServer: true });
 
@@ -2130,6 +2140,7 @@ wss.on('connection', (ws) => {
         scopes: [],
         authenticated: false,
         subscriptions: new Set<string>(),
+        lastHeartbeatAtMs: Date.now(),
       };
       clients.set(client.id, client);
       if (client.role === 'node' && client.nodeId) {
@@ -2138,7 +2149,7 @@ wss.on('connection', (ws) => {
 
       send(ws, buildEnvelope('hello_ack', 'relay', msg.requestId, {
         accepted: true,
-        heartbeatIntervalMs: 15000,
+        heartbeatIntervalMs: CONTROLLER_HEARTBEAT_INTERVAL_MS,
       }));
       return;
     }
@@ -2274,6 +2285,19 @@ wss.on('connection', (ws) => {
         code: 'unauthenticated',
         message: 'Authenticate before sending this frame type',
       }));
+      return;
+    }
+
+    markControllerHeartbeat(client);
+
+    if (msg.messageType === 'ping') {
+      send(ws, buildEnvelope('pong', 'relay', msg.requestId, {
+        ok: true,
+      }));
+      return;
+    }
+
+    if (msg.messageType === 'pong') {
       return;
     }
 
@@ -2971,28 +2995,6 @@ wss.on('connection', (ws) => {
           if (resultPayload.ok === true && pending.action === 'recipe.test') {
             const listeners = extractRecipeStreamListeners(msg.payload);
             if (listeners.length > 0) {
-              const streamTimeoutMs = Math.max(1000, pending.timeoutMs);
-              const timeoutHandle = setTimeout(() => {
-                const activeSession = recipeTestStreamSessions.get(msg.requestId);
-                if (!activeSession) {
-                  return;
-                }
-
-                const sessionOwner = clients.get(activeSession.controllerId);
-                if (sessionOwner) {
-                  send(sessionOwner.ws, buildEnvelope('result', 'relay', activeSession.requestId, {
-                    ok: true,
-                    durationMs: Date.now() - activeSession.createdAt,
-                    action: activeSession.action,
-                    commandOutcome: 'timed_out',
-                    data: {
-                      streamTimedOut: true,
-                    },
-                  }));
-                }
-                clearRecipeTestStreamSession(activeSession.requestId);
-              }, streamTimeoutMs);
-
               recipeTestStreamSessions.set(msg.requestId, {
                 requestId: msg.requestId,
                 controllerId: pending.controllerId,
@@ -3000,7 +3002,6 @@ wss.on('connection', (ws) => {
                 action: pending.action,
                 createdAt: pending.createdAt,
                 tabKey: pending.tabKey,
-                timeoutHandle,
                 listeners,
               });
             }
@@ -3147,6 +3148,38 @@ setInterval(() => {
   cleanupRefreshSessions();
   cleanupControllerAcl();
 }, 60 * 60 * 1000);
+
+setInterval(() => {
+  const nowMs = Date.now();
+  const staleThresholdMs = CONTROLLER_HEARTBEAT_INTERVAL_MS * CONTROLLER_HEARTBEAT_MISS_LIMIT;
+
+  for (const client of clients.values()) {
+    if (client.role !== 'controller' || !client.authenticated) {
+      continue;
+    }
+
+    const lastSeenMs = client.lastHeartbeatAtMs ?? nowMs;
+    if (nowMs - lastSeenMs <= staleThresholdMs) {
+      continue;
+    }
+
+    emitLog({
+      level: 'warn',
+      source: 'relay',
+      type: 'controller_heartbeat_timeout',
+      nodeId: client.nodeId,
+      status: 'disconnecting',
+      data: {
+        controllerId: client.controllerId,
+        clientId: client.clientId,
+        staleForMs: nowMs - lastSeenMs,
+        heartbeatIntervalMs: CONTROLLER_HEARTBEAT_INTERVAL_MS,
+        heartbeatMissLimit: CONTROLLER_HEARTBEAT_MISS_LIMIT,
+      },
+    });
+    client.ws.close();
+  }
+}, Math.max(1_000, Math.floor(CONTROLLER_HEARTBEAT_INTERVAL_MS / 2)));
 
 server.listen(PORT, () => {
   console.log(`[relay] listening on :${PORT}`);

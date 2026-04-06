@@ -73,6 +73,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Validate that early extension logs appear before `authenticated_connected` transitions during relay URL + pairing workflows.
 - For autonomous/CI agents, prefer non-TTY invocation and `--json` output for machine parsing.
 - Treat `otto logs follow` as unbounded: enforce a caller-side timeout window for live capture sessions.
+- For long-running controller stream sessions (for example `otto test` streaming recipes), keep websocket heartbeat `ping`/`pong` active; stale controllers should be treated as disconnected and cleaned up by relay.
 - Correlate failures by `requestId` first, then narrow by source (`all` -> `node` or `relay`) to isolate root cause.
 
 ## CLI TUI Guidance

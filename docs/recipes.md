@@ -1,6 +1,6 @@
 # Recipes
 
-Last Updated: 2026-04-04
+Last Updated: 2026-04-07
 Owner: Browser Runtime
 
 ## Source-of-Truth Code Paths
@@ -38,7 +38,7 @@ Recipe actions:
 CLI entrypoints:
 
 - `otto recipes list [--site <site>]`
-- `otto test <site> <recipe> [--payload <json>] [--auth-mode auto|strict_fail|skip]`
+- `otto test <site> <recipe> [--payload <json>] [--timeout <ms>] [--auth-mode auto|strict_fail|skip]`
 
 Site-scoped recipe model:
 
@@ -109,6 +109,8 @@ Reddit recipe notes:
 - `recipe.run`: call `execute` directly.
 - `recipe.test`: call `test` when defined, otherwise fall back to `execute`.
 - For recipes returning `stream.listeners` from `test`, CLI subscribes to listener updates and stays active until `Ctrl+C`; cancellation targets the original `recipe.test` request so relay can deterministically close stream sessions.
+- For streaming recipes, `otto test --timeout` bounds only the initial `recipe.test` response window; once stream listeners are active, relay does not enforce a stream duration timeout.
+- Long-running controller sessions should send heartbeat `ping` frames and expect relay `pong` responses.
 8. Enforce `metadata.preloadHost` before any call into `execute`.
 9. Return normalized recipe result object.
 

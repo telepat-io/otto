@@ -101,6 +101,9 @@ type ControllerRegistrationMetadata = {
   avatarSeed?: string;
 };
 
+const DEFAULT_CONTROLLER_HEARTBEAT_INTERVAL_MS = 15_000;
+const controllerHeartbeatIntervalBySocket = new WeakMap<WebSocket, number>();
+
 class RelayAuthError extends Error {
   payload?: RelayAuthErrorPayload;
 
@@ -151,6 +154,7 @@ export async function openControllerSocket(config: OttoConfig): Promise<WebSocke
   const authWithToken = async (token: string): Promise<WebSocket> => {
     console.error('[otto:cli][debug] opening controller websocket connection');
     const ws = new WebSocket(resolvedConfig.relayUrl);
+    let heartbeatIntervalMs = DEFAULT_CONTROLLER_HEARTBEAT_INTERVAL_MS;
     await new Promise<void>((resolve, reject) => {
       ws.once('open', () => resolve());
       ws.once('error', reject);
@@ -180,9 +184,17 @@ export async function openControllerSocket(config: OttoConfig): Promise<WebSocke
       }, 5000);
       ws.on('message', (data) => {
         const msg = JSON.parse(String(data)) as Envelope;
+        if (msg.messageType === 'hello_ack') {
+          const payload = msg.payload as { heartbeatIntervalMs?: unknown };
+          const parsed = Number(payload?.heartbeatIntervalMs);
+          if (Number.isFinite(parsed) && parsed > 0) {
+            heartbeatIntervalMs = parsed;
+          }
+        }
         if (msg.messageType === 'auth_ack') {
           console.error('[otto:cli][debug] relay auth acknowledged for controller session');
           clearTimeout(timeout);
+          controllerHeartbeatIntervalBySocket.set(ws, heartbeatIntervalMs);
           resolve();
         }
         if (msg.messageType === 'error') {
@@ -266,6 +278,34 @@ function parsePositiveNumberOption(value: unknown, label: string): number {
     throw new Error(`${label} must be a positive number`);
   }
   return parsed;
+}
+
+function startControllerHeartbeat(ws: WebSocket): () => void {
+  const intervalMs = Math.max(1000, controllerHeartbeatIntervalBySocket.get(ws) ?? DEFAULT_CONTROLLER_HEARTBEAT_INTERVAL_MS);
+  const timer = setInterval(() => {
+    if (ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    try {
+      ws.send(JSON.stringify(createEnvelope('ping', 'controller', nanoid(), {
+        ts: Date.now(),
+      })));
+    } catch {
+      // Keep heartbeat best-effort; close handlers own lifecycle cleanup.
+    }
+  }, intervalMs);
+
+  const onClose = () => {
+    clearInterval(timer);
+  };
+
+  ws.once('close', onClose);
+
+  return () => {
+    ws.off('close', onClose);
+    clearInterval(timer);
+  };
 }
 
 function parseNetworkMode(value: unknown): 'network' | 'fetch' | 'hybrid' {
@@ -600,6 +640,7 @@ async function resolveTestInfo(
 
 async function followLogsOnce(config: OttoConfig, source: LogSource | undefined, jsonOutput: boolean): Promise<void> {
   const ws = await openControllerSocket(config);
+  const stopHeartbeat = startControllerHeartbeat(ws);
   const requestId = nanoid();
   console.error(`[otto:cli][debug] subscribing to logs stream source=${source ?? 'all'}`);
   ws.send(
@@ -621,6 +662,10 @@ async function followLogsOnce(config: OttoConfig, source: LogSource | undefined,
         console.log(line);
       }
     }
+  });
+
+  ws.once('close', () => {
+    stopHeartbeat();
   });
 
   console.log('[otto] following logs, press Ctrl+C to stop');
@@ -789,6 +834,7 @@ async function subscribeNetworkListenerAndFollow(
   timeoutMs: number,
 ): Promise<void> {
   const ws = await openControllerSocket(config);
+  const stopHeartbeat = startControllerHeartbeat(ws);
   const subscribeRequestId = nanoid();
   let unsubscribed = false;
   const handleSigint = () => {
@@ -846,6 +892,7 @@ async function subscribeNetworkListenerAndFollow(
       ws.on('message', handler);
     });
     ws.close();
+    stopHeartbeat();
   };
 
   process.once('SIGINT', handleSigint);
@@ -883,6 +930,7 @@ async function subscribeNetworkListenerAndFollow(
   } catch (error) {
     process.removeListener('SIGINT', handleSigint);
     ws.close();
+    stopHeartbeat();
     throw error;
   }
 
@@ -1585,6 +1633,7 @@ program
     const timeoutMs = Number(opts.timeout);
     const recipeInput = parseJsonObject(opts.payload, '--payload');
     const ws = await openControllerSocket(config);
+    const stopHeartbeat = startControllerHeartbeat(ws);
 
     let tabSessionId = opts.tabSession as string | undefined;
     let openedTabSessionId: string | undefined;
@@ -1734,6 +1783,7 @@ program
       }
 
       ws.close();
+      stopHeartbeat();
 
       if (registration.autoRegisteredClientId && opts.cleanupTestController !== false) {
         try {
