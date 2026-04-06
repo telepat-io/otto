@@ -30,6 +30,7 @@ import {
   type LogEntry,
   type LogSource,
 } from './logs-options.js';
+import { createRecipeTestStreamRenderer } from './test-stream-format.js';
 import { resolveRecipeAutoOpenUrl } from './recipe-open-url.js';
 import { shouldAttemptAccessTokenRefreshOnAuthError } from './auth-retry.js';
 import {
@@ -38,6 +39,7 @@ import {
   resolveClientSecret,
   storeClientSecret,
 } from './client-secret-store.js';
+import { resolveCleanupSocketStrategy } from './test-cleanup.js';
 
 type RecipeDescriptorLike = {
   site?: string;
@@ -674,11 +676,21 @@ async function followLogsOnce(config: OttoConfig, source: LogSource | undefined,
 async function subscribeListenerAndFollow(
   ws: WebSocket,
   targetNodeId: string,
+  site: string,
+  recipe: string,
   recipeTestRequestId: string,
   listener: string,
   options: Record<string, unknown>,
   timeoutMs: number,
+  jsonOutput: boolean,
 ): Promise<void> {
+  const renderer = createRecipeTestStreamRenderer({
+    site,
+    recipe,
+    jsonOutput,
+    useColor: process.stdout.isTTY,
+  });
+
   const subscribeRequestId = nanoid();
   let cleanedUp = false;
   let cancellationRequested = false;
@@ -756,7 +768,9 @@ async function subscribeListenerAndFollow(
       if (msg.messageType === 'result') {
         clearTimeout(timer);
         ws.off('message', handler);
-        console.log(JSON.stringify(msg, null, 2));
+        for (const line of renderer.renderSubscribeResponse(msg, listener)) {
+          console.log(line);
+        }
         resolve();
       }
     };
@@ -804,14 +818,18 @@ async function subscribeListenerAndFollow(
       if (msg.messageType === 'event') {
         const payload = (msg.payload ?? {}) as { type?: string };
         if (msg.requestId === recipeTestRequestId && payload.type === 'listener_update') {
-          console.log(JSON.stringify(msg, null, 2));
+          for (const line of renderer.renderListenerUpdate(msg)) {
+            console.log(line);
+          }
           return;
         }
         return;
       }
 
       if ((msg.messageType === 'result' || msg.messageType === 'error') && msg.requestId === recipeTestRequestId) {
-        console.log(JSON.stringify(msg, null, 2));
+        for (const line of renderer.renderTerminalResponse(msg)) {
+          console.log(line);
+        }
         process.removeListener('SIGINT', handleSigint);
         ws.off('message', handleMessage);
         ws.off('close', handleClose);
@@ -1621,6 +1639,7 @@ program
   .option('--controller-avatar-seed <seed>', 'Optional avatar seed for auto self-registration')
   .option('--no-cleanup-test-controller', 'Keep auto-registered test controller after command completion')
   .option('--keep-tab-open', 'Keep auto-opened tab instead of closing it after test', false)
+  .option('--json', 'Output full JSON envelopes for command and stream frames', false)
   .action(async (site: string, recipe: string, opts) => {
     const registration = await maybeSelfRegisterControllerForTest(loadConfig(), opts);
     const config = registration.config;
@@ -1631,12 +1650,21 @@ program
     }
 
     const timeoutMs = Number(opts.timeout);
+    const jsonOutput = Boolean(opts.json) || isJsonOutput(config);
     const recipeInput = parseJsonObject(opts.payload, '--payload');
     const ws = await openControllerSocket(config);
     const stopHeartbeat = startControllerHeartbeat(ws);
+    const renderer = createRecipeTestStreamRenderer({
+      site,
+      recipe,
+      jsonOutput,
+      useColor: process.stdout.isTTY,
+    });
 
     let tabSessionId = opts.tabSession as string | undefined;
     let openedTabSessionId: string | undefined;
+
+    let testExecutionError: unknown;
 
     try {
       const testInfo = await resolveTestInfo(config, targetNodeId, site, recipe, timeoutMs, ws);
@@ -1648,7 +1676,9 @@ program
           timeoutMs,
         });
 
-        console.log(JSON.stringify(openResponse, null, 2));
+        for (const line of renderer.renderCommandResponse(openResponse, 'primitive.tab.open')) {
+          console.log(line);
+        }
         if (openResponse.messageType === 'error') {
           const errorPayload = (openResponse.payload && typeof openResponse.payload === 'object')
             ? openResponse.payload as {
@@ -1689,7 +1719,9 @@ program
         timeoutMs,
       });
 
-      console.log(JSON.stringify(testResponse, null, 2));
+      for (const line of renderer.renderCommandResponse(testResponse, 'recipe.test')) {
+        console.log(line);
+      }
       if (testResponse.messageType === 'error') {
         const errorPayload = (testResponse.payload && typeof testResponse.payload === 'object')
           ? testResponse.payload as {
@@ -1748,37 +1780,76 @@ program
         await subscribeListenerAndFollow(
           ws,
           targetNodeId,
+          site,
+          recipe,
           testResponse.requestId,
           streamListener.listener,
           options,
           timeoutMs,
+          jsonOutput,
         );
       }
+    } catch (error) {
+      testExecutionError = error;
+      throw error;
     } finally {
       if (openedTabSessionId && !opts.keepTabOpen) {
-        const closeResponse = await runCommandWithSocket(ws, targetNodeId, {
-          action: 'primitive.tab.close',
-          tabSession: openedTabSessionId,
-          payload: { tabSessionId: openedTabSessionId },
-          timeoutMs,
+        const cleanupStrategy = resolveCleanupSocketStrategy({
+          socketReadyState: ws.readyState,
+          socketOpenState: WebSocket.OPEN,
+          hasOriginalError: testExecutionError !== undefined,
         });
-        console.log(JSON.stringify(closeResponse, null, 2));
-        if (closeResponse.messageType === 'error') {
-          const errorPayload = (closeResponse.payload && typeof closeResponse.payload === 'object')
-            ? closeResponse.payload as {
-              code?: string;
-              action?: string;
-              message?: string;
-              nodeId?: string;
-              clientId?: string;
-              actionableHint?: string;
+
+        try {
+          if (cleanupStrategy === 'skip') {
+            console.error('[otto] skipped primitive.tab.close cleanup because stream session already failed and websocket is closed');
+          } else {
+            const closeResponse = cleanupStrategy === 'reuse'
+              ? await runCommandWithSocket(ws, targetNodeId, {
+                action: 'primitive.tab.close',
+                tabSession: openedTabSessionId,
+                payload: { tabSessionId: openedTabSessionId },
+                timeoutMs,
+              })
+              : await runCommandOnce(config, targetNodeId, {
+                action: 'primitive.tab.close',
+                tabSession: openedTabSessionId,
+                payload: { tabSessionId: openedTabSessionId },
+                timeoutMs,
+              });
+
+            for (const line of renderer.renderCommandResponse(closeResponse, 'primitive.tab.close')) {
+              console.log(line);
             }
-            : undefined;
-          if (errorPayload) {
-            showAclMissingGrantHint(errorPayload);
+            if (closeResponse.messageType === 'error') {
+              const errorPayload = (closeResponse.payload && typeof closeResponse.payload === 'object')
+                ? closeResponse.payload as {
+                  code?: string;
+                  action?: string;
+                  message?: string;
+                  nodeId?: string;
+                  clientId?: string;
+                  actionableHint?: string;
+                }
+                : undefined;
+              if (errorPayload) {
+                showAclMissingGrantHint(errorPayload);
+              }
+              await showTestFailureFooterAlert(errorPayload, 'otto test cleanup failed during primitive.tab.close');
+              process.exitCode = 1;
+            }
           }
-          await showTestFailureFooterAlert(errorPayload, 'otto test cleanup failed during primitive.tab.close');
-          process.exitCode = 1;
+        } catch (cleanupError) {
+          if (testExecutionError !== undefined) {
+            console.error(
+              `[otto] cleanup after failed stream session also failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+            );
+          } else {
+            console.error(
+              `[otto] cleanup failed during primitive.tab.close: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+            );
+            process.exitCode = 1;
+          }
         }
       }
 

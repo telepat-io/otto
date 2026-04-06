@@ -258,6 +258,7 @@ Recipe metadata and validation:
 - Recipes can declare `inputAtLeastOneOf` for conditional contracts (for example `username` or `roomId`).
 - Recipes can declare `preloadHost`; runtime auto-navigates to that host before `execute` when needed.
 - `otto test` auto-opens `preloadHost` when available from `recipe.list`, then runs `recipe.test` (with fallback to `execute` when no test hook exists).
+- `otto test` prints human-readable stream output by default to make recipe events easier to follow; add `--json` to see full raw envelope objects.
 
 Auth-aware behavior:
 

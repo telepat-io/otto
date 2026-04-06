@@ -98,7 +98,7 @@ Run in this order after any code change:
 - Auto-opened tabs are closed automatically after command completion (pass `--keep-tab-open` to retain)
 - Uses `recipe.test` action with `authMode=auto`
 - Automatically falls back to recipe `execute` when a recipe does not define a `test` hook
-- `otto test` keeps a single controller websocket open for the entire recipe-test lifecycle (open tab, `recipe.test`, listener subscribe, stream follow, cleanup close)
+- `otto test` prefers a single controller websocket for open/test/subscribe/follow; if that socket closes before cleanup close, CLI skips or reconnects for best-effort `primitive.tab.close` without masking the original stream failure.
 - For streaming recipes, `--timeout` applies to initial `recipe.test` response only; active listener follow remains open until explicit stop.
 - Recipes returning `stream.listeners` from `recipe.test` keep `otto test` active and stream listener updates until `Ctrl+C` on that same controller connection
 - Streaming test mode sends `command_cancel` targeting the original `recipe.test` request on `Ctrl+C`; relay owns stream teardown and terminal outcome emission
