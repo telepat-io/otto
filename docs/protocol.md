@@ -1,6 +1,6 @@
 # Protocol
 
-Last Updated: 2026-04-04
+Last Updated: 2026-04-07
 Owner: Platform
 
 Current shared protocol types live in `packages/shared-protocol/src/index.ts`.
@@ -110,6 +110,7 @@ Recipe test streaming:
 - `recipe.test` can return a `stream` object in `result.payload.data`.
 - `stream.listeners` is an array of listener manifests with `listener` and optional `options`.
 - CLI treats this as recipe-native streaming intent and subscribes until interrupted.
+- Controller implementations should keep `recipe.test`, follow-up `listener.subscribe`, stream updates, and optional `command_cancel` on the same authenticated websocket session so relay stream ownership and correlation remain valid.
 - Relay may proxy `listener_update` events to the original `recipe.test` `requestId` for active stream sessions.
 - `command_cancel` targeting the original `recipe.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled` or `timed_out`).
 

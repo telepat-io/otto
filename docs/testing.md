@@ -1,6 +1,6 @@
 # Testing
 
-Last Updated: 2026-04-04
+Last Updated: 2026-04-07
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -98,7 +98,8 @@ Run in this order after any code change:
 - Auto-opened tabs are closed automatically after command completion (pass `--keep-tab-open` to retain)
 - Uses `recipe.test` action with `authMode=auto`
 - Automatically falls back to recipe `execute` when a recipe does not define a `test` hook
-- Recipes returning `stream.listeners` from `recipe.test` keep `otto test` active and stream listener updates until `Ctrl+C`
+- `otto test` keeps a single controller websocket open for the entire recipe-test lifecycle (open tab, `recipe.test`, listener subscribe, stream follow, cleanup close)
+- Recipes returning `stream.listeners` from `recipe.test` keep `otto test` active and stream listener updates until `Ctrl+C` on that same controller connection
 - Streaming test mode sends `command_cancel` targeting the original `recipe.test` request on `Ctrl+C`; relay owns stream teardown and terminal outcome emission
 - Non-TTY output is JSON and exits non-zero on terminal command error
 - In TTY mode, `otto test` terminal errors also print a final high-visibility alert footer after the JSON/error hints (including operation errors such as `primitive.tab.open`/`primitive.tab.close`).

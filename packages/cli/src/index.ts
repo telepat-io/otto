@@ -501,6 +501,18 @@ async function runCommandOnce(
   opts: { action: string; tabSession?: string; payload: Record<string, unknown>; timeoutMs?: number },
 ): Promise<Envelope> {
   const ws = await openControllerSocket(config);
+  try {
+    return await runCommandWithSocket(ws, targetNodeId, opts);
+  } finally {
+    ws.close();
+  }
+}
+
+async function runCommandWithSocket(
+  ws: WebSocket,
+  targetNodeId: string,
+  opts: { action: string; tabSession?: string; payload: Record<string, unknown>; timeoutMs?: number },
+): Promise<Envelope> {
   const requestId = nanoid();
   const timeoutMs = Math.max(1000, Number(opts.timeoutMs ?? 30_000));
 
@@ -517,7 +529,6 @@ async function runCommandOnce(
 
   return new Promise<Envelope>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      ws.close();
       reject(new Error(`Timed out waiting for terminal response (${timeoutMs + 5000}ms)`));
     }, timeoutMs + 5000);
 
@@ -533,7 +544,6 @@ async function runCommandOnce(
 
       clearTimeout(timeout);
       ws.off('message', onMessage);
-      ws.close();
       resolve(msg);
     };
 
@@ -548,11 +558,18 @@ async function resolveTestInfo(
   site: string,
   recipe: string,
   timeoutMs: number,
+  ws?: WebSocket,
 ): Promise<RecipeTestInfo> {
   const fallback = site.startsWith('http://') || site.startsWith('https://') ? site : `https://${site}`;
 
   try {
-    const response = await runCommandOnce(config, targetNodeId, {
+    const response = ws
+      ? await runCommandWithSocket(ws, targetNodeId, {
+        action: 'recipe.list',
+        payload: {},
+        timeoutMs,
+      })
+      : await runCommandOnce(config, targetNodeId, {
       action: 'recipe.list',
       payload: {},
       timeoutMs,
@@ -610,14 +627,13 @@ async function followLogsOnce(config: OttoConfig, source: LogSource | undefined,
 }
 
 async function subscribeListenerAndFollow(
-  config: OttoConfig,
+  ws: WebSocket,
   targetNodeId: string,
   recipeTestRequestId: string,
   listener: string,
   options: Record<string, unknown>,
   timeoutMs: number,
 ): Promise<void> {
-  const ws = await openControllerSocket(config);
   const subscribeRequestId = nanoid();
   let cleanedUp = false;
   let cancellationRequested = false;
@@ -755,7 +771,6 @@ async function subscribeListenerAndFollow(
         ws.off('message', handleMessage);
         ws.off('close', handleClose);
         void unsubscribeFallback().finally(() => {
-          ws.close();
           resolve();
         });
       }
@@ -1569,48 +1584,50 @@ program
 
     const timeoutMs = Number(opts.timeout);
     const recipeInput = parseJsonObject(opts.payload, '--payload');
-    const testInfo = await resolveTestInfo(config, targetNodeId, site, recipe, timeoutMs);
+    const ws = await openControllerSocket(config);
 
     let tabSessionId = opts.tabSession as string | undefined;
     let openedTabSessionId: string | undefined;
 
-    if (!tabSessionId) {
-      const openResponse = await runCommandOnce(config, targetNodeId, {
-        action: 'primitive.tab.open',
-        payload: { url: testInfo.openUrl },
-        timeoutMs,
-      });
-
-      console.log(JSON.stringify(openResponse, null, 2));
-      if (openResponse.messageType === 'error') {
-        const errorPayload = (openResponse.payload && typeof openResponse.payload === 'object')
-          ? openResponse.payload as {
-            code?: string;
-            action?: string;
-            message?: string;
-            nodeId?: string;
-            clientId?: string;
-            actionableHint?: string;
-          }
-          : undefined;
-        if (errorPayload) {
-          showAclMissingGrantHint(errorPayload);
-        }
-        await showTestFailureFooterAlert(errorPayload, 'otto test failed during primitive.tab.open');
-        process.exitCode = 1;
-        return;
-      }
-
-      const openPayload = openResponse.payload as { data?: { tabSessionId?: string } };
-      tabSessionId = openPayload.data?.tabSessionId;
-      openedTabSessionId = tabSessionId;
-      if (!tabSessionId) {
-        throw new Error('primitive.tab.open succeeded but did not return tabSessionId');
-      }
-    }
-
     try {
-      const testResponse = await runCommandOnce(config, targetNodeId, {
+      const testInfo = await resolveTestInfo(config, targetNodeId, site, recipe, timeoutMs, ws);
+
+      if (!tabSessionId) {
+        const openResponse = await runCommandWithSocket(ws, targetNodeId, {
+          action: 'primitive.tab.open',
+          payload: { url: testInfo.openUrl },
+          timeoutMs,
+        });
+
+        console.log(JSON.stringify(openResponse, null, 2));
+        if (openResponse.messageType === 'error') {
+          const errorPayload = (openResponse.payload && typeof openResponse.payload === 'object')
+            ? openResponse.payload as {
+              code?: string;
+              action?: string;
+              message?: string;
+              nodeId?: string;
+              clientId?: string;
+              actionableHint?: string;
+            }
+            : undefined;
+          if (errorPayload) {
+            showAclMissingGrantHint(errorPayload);
+          }
+          await showTestFailureFooterAlert(errorPayload, 'otto test failed during primitive.tab.open');
+          process.exitCode = 1;
+          return;
+        }
+
+        const openPayload = openResponse.payload as { data?: { tabSessionId?: string } };
+        tabSessionId = openPayload.data?.tabSessionId;
+        openedTabSessionId = tabSessionId;
+        if (!tabSessionId) {
+          throw new Error('primitive.tab.open succeeded but did not return tabSessionId');
+        }
+      }
+
+      const testResponse = await runCommandWithSocket(ws, targetNodeId, {
         action: 'recipe.test',
         tabSession: tabSessionId,
         payload: {
@@ -1680,7 +1697,7 @@ program
           : {};
 
         await subscribeListenerAndFollow(
-          config,
+          ws,
           targetNodeId,
           testResponse.requestId,
           streamListener.listener,
@@ -1690,7 +1707,7 @@ program
       }
     } finally {
       if (openedTabSessionId && !opts.keepTabOpen) {
-        const closeResponse = await runCommandOnce(config, targetNodeId, {
+        const closeResponse = await runCommandWithSocket(ws, targetNodeId, {
           action: 'primitive.tab.close',
           tabSession: openedTabSessionId,
           payload: { tabSessionId: openedTabSessionId },
@@ -1715,6 +1732,8 @@ program
           process.exitCode = 1;
         }
       }
+
+      ws.close();
 
       if (registration.autoRegisteredClientId && opts.cleanupTestController !== false) {
         try {
