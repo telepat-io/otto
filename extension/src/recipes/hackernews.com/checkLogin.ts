@@ -8,6 +8,7 @@ export const checkLoginRecipe: SiteRecipe = {
     description: 'Checks whether the current Hacker News tab appears authenticated.',
     tags: ['auth', 'builtin'],
     requiresAuth: false,
+    inputFields: [],
   },
   async execute(ctx) {
     const authenticated = await ctx.executeScript(

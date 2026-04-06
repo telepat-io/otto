@@ -92,6 +92,19 @@ otto authcode
 otto pair <code>
 ```
 
+Alternative controller onboarding (independent client lifecycle):
+
+```bash
+otto client register --label "my-laptop"
+otto client login
+```
+
+Notes:
+
+- `otto client register` stores the client secret in OS keychain when available.
+- If keychain is unavailable, set `OTTO_CONTROLLER_CLIENT_SECRET` and rerun `otto client login`.
+- Newly registered controller clients must be granted node access in extension popup/options under Controller Access.
+
 6. Smoke test:
 
 ```bash
@@ -236,8 +249,15 @@ Recipe model:
 
 - Site-scoped bundles live in `extension/src/recipes/<site>/`.
 - Each site bundle provides built-ins `checkLogin` and `gotoLogin`.
-- Main runtime actions are `recipe.list` and `recipe.run`.
+- Main runtime actions are `recipe.list`, `recipe.run`, and `recipe.test`.
 - Legacy alias `recipe.reddit_feed` is still supported for migration.
+
+Recipe metadata and validation:
+
+- Recipes can declare `inputFields` for strict type/required validation.
+- Recipes can declare `inputAtLeastOneOf` for conditional contracts (for example `username` or `roomId`).
+- Recipes can declare `preloadHost`; runtime auto-navigates to that host before `execute` when needed.
+- `otto test` auto-opens `preloadHost` when available from `recipe.list`, then runs `recipe.test` (with fallback to `execute` when no test hook exists).
 
 Auth-aware behavior:
 

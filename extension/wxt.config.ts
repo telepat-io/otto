@@ -7,7 +7,7 @@ export default defineConfig({
     name: 'Otto',
     description: 'Ottomate Everything - remote browser automation node',
     version: '0.1.0',
-    permissions: ['storage', 'tabs', 'tabGroups', 'scripting', 'offscreen', 'alarms'],
+    permissions: ['storage', 'tabs', 'tabGroups', 'scripting', 'offscreen', 'alarms', 'debugger'],
     host_permissions: ['<all_urls>'],
     action: {
       default_title: 'Otto Node',

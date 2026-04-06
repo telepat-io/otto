@@ -27,6 +27,14 @@ Owner: Platform
 
 `otto logs export --since 2026-04-03T00:00:00Z --source relay --latest 500`
 
+- Subscribe network interception stream:
+
+`otto listener subscribe-network --tab-session tab_abc --site reddit.com --pattern 'https://www.reddit.com/api/*' --mode hybrid --max-body-bytes 200000`
+
+- Unsubscribe listener stream:
+
+`otto listener unsubscribe --target-request-id <subscribeRequestId>`
+
 Sources:
 
 - `relay`: relay-emitted operational events
@@ -95,6 +103,7 @@ Useful event types:
 - `offscreen.connect_attempt`
 - `offscreen.authenticated_connected`
 - `background.refresh_setup_completed`
+- `listener_update` with `updateType=network.response|network.error|network.detached`
 
 ## Extension Local-Dev Log Streaming
 
@@ -150,7 +159,21 @@ Relevant environment variables:
 
 6. If `forbidden_action`, confirm controller token scope includes `recipe.run`.
 
-7. Use `requestId` from command output to filter relay logs for that execution.
+7. If `acl_missing_node_grant`, open extension popup -> Controller Access and grant that controller client for the node before retrying.
+
+8. Use `requestId` from command output to filter relay logs for that execution.
+
+## Network Interception Debugging Playbook
+
+1. Confirm subscription result first.
+2. Keep the `listener.subscribe` `requestId`; it is the correlation key for all `listener_update` events.
+3. If no body is present in `network` mode, verify that request reached `Network.loadingFinished` and response is not redirect/cache-evicted.
+4. If reliability is required for narrow patterns, use `--mode hybrid` or `--mode fetch`.
+5. If traffic appears stalled in fetch/hybrid mode, verify the node is healthy and that update stream still advances (runtime always continues paused requests in `finally`).
+6. If attach fails, inspect error for debugger conflicts (for example DevTools already attached to target tab).
+7. Use node logs for isolation:
+
+`otto logs list --request-id <subscribeRequestId> --source node --latest 200`
 
 ## Setup Troubleshooting
 

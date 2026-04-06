@@ -487,6 +487,38 @@ test('ensurePairingState refreshes stored node access token and skips pairing wh
   assert.equal(fetchCalls.filter((x) => x.includes('/api/pairing/request')).length, 0);
 });
 
+test('ensurePairingState persists rotated node refresh token when refresh endpoint rotates token', async () => {
+  const { chromeApi, localStore } = createChromeMock({
+    nodeId: 'node_test_token_refresh_rotate',
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    nodeAccessToken: 'old_access',
+    nodeRefreshToken: 'old_refresh',
+  });
+
+  const fetchCalls: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    fetchCalls.push(url);
+
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          accessToken: 'new_access_token',
+          refreshToken: 'new_refresh_token',
+        };
+      },
+    };
+  }) as typeof fetch;
+
+  await ensurePairingState(chromeApi, fetchImpl, () => undefined);
+
+  assert.equal(localStore.nodeAccessToken, 'new_access_token');
+  assert.equal(localStore.nodeRefreshToken, 'new_refresh_token');
+  assert.equal(fetchCalls.filter((x) => x.includes('/api/auth/refresh')).length, 1);
+  assert.equal(fetchCalls.filter((x) => x.includes('/api/pairing/request')).length, 0);
+});
+
 test('reconcileAutomationState prunes stale tab sessions after restart', async () => {
   const { chromeApi, sessionStore } = createChromeMock({}, {
     initialSession: {

@@ -19,6 +19,9 @@ export type OttoConfig = {
   relayUrl: string;
   relayHttpUrl?: string;
   targetNodeId?: string;
+  controllerClientId?: string;
+  controllerName?: string;
+  controllerDescription?: string;
   controllerAccessToken?: string;
   controllerRefreshToken?: string;
   outputFormat?: 'pretty' | 'json';

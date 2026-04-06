@@ -8,6 +8,8 @@ export const getFrontPageRecipe: SiteRecipe = {
     description: 'Extracts front-page story titles and links from Hacker News.',
     tags: ['feed', 'hackernews'],
     requiresAuth: false,
+    preloadHost: 'news.ycombinator.com',
+    inputFields: [],
   },
   async execute(ctx) {
     const stories = await ctx.executeScript(

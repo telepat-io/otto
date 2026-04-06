@@ -2,9 +2,15 @@ import { deriveHttpUrl, type OttoConfig } from './config.js';
 
 type RefreshResponse = {
   accessToken?: unknown;
+  refreshToken?: unknown;
 };
 
-export async function refreshControllerAccessToken(config: OttoConfig): Promise<string | null> {
+export type RefreshedControllerTokens = {
+  accessToken: string;
+  refreshToken?: string;
+};
+
+export async function refreshControllerAccessToken(config: OttoConfig): Promise<RefreshedControllerTokens | null> {
   if (!config.controllerRefreshToken) {
     return null;
   }
@@ -25,5 +31,10 @@ export async function refreshControllerAccessToken(config: OttoConfig): Promise<
     throw new Error('Refresh endpoint returned invalid accessToken');
   }
 
-  return body.accessToken;
+  return {
+    accessToken: body.accessToken,
+    refreshToken: typeof body.refreshToken === 'string' && body.refreshToken.length > 0
+      ? body.refreshToken
+      : undefined,
+  };
 }

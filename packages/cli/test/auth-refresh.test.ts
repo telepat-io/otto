@@ -9,8 +9,8 @@ const baseConfig: OttoConfig = {
 };
 
 test('refreshControllerAccessToken returns null when refresh token missing', async () => {
-  const token = await refreshControllerAccessToken(baseConfig);
-  assert.equal(token, null);
+  const tokens = await refreshControllerAccessToken(baseConfig);
+  assert.equal(tokens, null);
 });
 
 test('refreshControllerAccessToken returns new access token on success', async () => {
@@ -24,11 +24,32 @@ test('refreshControllerAccessToken returns new access token on success', async (
   }) as typeof fetch;
 
   try {
-    const token = await refreshControllerAccessToken({
+    const tokens = await refreshControllerAccessToken({
       ...baseConfig,
       controllerRefreshToken: 'refresh_abc',
     });
-    assert.equal(token, 'new_access_token');
+    assert.deepEqual(tokens, { accessToken: 'new_access_token', refreshToken: undefined });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('refreshControllerAccessToken includes rotated refresh token when present', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ accessToken: 'new_access_token', refreshToken: 'new_refresh_token' }),
+    } as Response;
+  }) as typeof fetch;
+
+  try {
+    const tokens = await refreshControllerAccessToken({
+      ...baseConfig,
+      controllerRefreshToken: 'refresh_abc',
+    });
+    assert.deepEqual(tokens, { accessToken: 'new_access_token', refreshToken: 'new_refresh_token' });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -45,11 +66,11 @@ test('refreshControllerAccessToken returns null on refresh rejection', async () 
   }) as typeof fetch;
 
   try {
-    const token = await refreshControllerAccessToken({
+    const tokens = await refreshControllerAccessToken({
       ...baseConfig,
       controllerRefreshToken: 'refresh_abc',
     });
-    assert.equal(token, null);
+    assert.equal(tokens, null);
   } finally {
     globalThis.fetch = originalFetch;
   }

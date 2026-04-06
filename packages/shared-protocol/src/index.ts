@@ -53,6 +53,15 @@ export interface CommandPayload {
 
 export type RecipeAuthMode = 'auto' | 'strict_fail' | 'skip';
 
+export type RecipeInputFieldType = 'string' | 'number' | 'boolean' | 'object' | 'array';
+
+export interface RecipeInputFieldDescriptor {
+  name: string;
+  type: RecipeInputFieldType;
+  description: string;
+  optional?: boolean;
+}
+
 export interface RecipeDescriptor {
   site: string;
   id: string;
@@ -60,7 +69,12 @@ export interface RecipeDescriptor {
   description: string;
   tags: string[];
   requiresAuth: boolean;
+  preloadHost?: string;
+  inputFields?: RecipeInputFieldDescriptor[];
+  inputAtLeastOneOf?: string[];
 }
+
+export type RecipeCommandAction = 'recipe.list' | 'recipe.run' | 'recipe.test' | 'recipe.reddit_feed';
 
 export interface RecipeRunPayload {
   site: string;
@@ -69,12 +83,24 @@ export interface RecipeRunPayload {
   authMode?: RecipeAuthMode;
 }
 
+export interface RecipeTestStreamListener {
+  listener: ListenerName | string;
+  options?: Record<string, unknown>;
+}
+
+export interface RecipeTestStream {
+  listeners: RecipeTestStreamListener[];
+}
+
+export type CommandOutcome = 'completed' | 'failed' | 'timed_out' | 'cancelled';
+
 export interface ResultPayload {
   ok: boolean;
   durationMs: number;
   action: string;
   data?: unknown;
   warnings?: string[];
+  commandOutcome?: CommandOutcome;
 }
 
 export interface ErrorPayload {
@@ -92,7 +118,9 @@ export interface ErrorPayload {
   action?: string;
   stage?: string;
   nodeId?: string;
+  clientId?: string;
   tabSessionId?: string;
+  actionableHint?: string;
 }
 
 export interface LockPayload {
@@ -112,8 +140,45 @@ export interface LogsSubscribePayload {
 
 export type ListenerCommandAction = 'listener.subscribe' | 'listener.unsubscribe';
 
+export type ListenerName = 'network.http_intercept';
+
+export type NetworkInterceptMode = 'network' | 'fetch' | 'hybrid';
+
+export interface NetworkInterceptListenerOptions {
+  tabSessionId: string;
+  site: string;
+  urlPatterns?: string[];
+  requestHostAllowlist?: string[];
+  mode?: NetworkInterceptMode;
+  includeBody?: boolean;
+  includeHeaders?: boolean;
+  maxBodyBytes?: number;
+  mimeTypes?: string[];
+}
+
+export interface NetworkInterceptListenerUpdate {
+  eventId: string;
+  tabSessionId: string;
+  tabId: number;
+  site: string;
+  url: string;
+  method?: string;
+  status?: number;
+  mimeType?: string;
+  requestId: string;
+  captureSource: 'network' | 'fetch';
+  emittedAt: string;
+  body?: string;
+  base64Encoded?: boolean;
+  truncated?: boolean;
+  bodyBytes?: number;
+  error?: string;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+}
+
 export interface ListenerSubscribeCommandPayload {
-  listener: string;
+  listener: ListenerName | string;
   options?: Record<string, unknown>;
 }
 

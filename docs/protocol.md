@@ -60,6 +60,36 @@ Listener command payload expectations:
 - `listener.subscribe`: payload includes `listener` (string) and optional `options` object.
 - `listener.unsubscribe`: payload includes `targetRequestId` (string).
 
+Implemented listener source notes:
+
+- `listener.subscribe` with `listener=network.http_intercept` starts response interception on a managed tab session via `chrome.debugger` CDP domains.
+- Supported `options` keys for this source:
+- `tabSessionId` (required)
+- `site` (required)
+- `urlPatterns` (optional glob list)
+- `requestHostAllowlist` (optional explicit cross-host hostname allowlist)
+- `mode` (`network`, `fetch`, or `hybrid`; default `network`)
+- `includeBody` (default `true`)
+- `includeHeaders` (default `false`, sensitive headers are redacted)
+- `maxBodyBytes` (default `256000`)
+- `mimeTypes` (optional MIME prefix allowlist)
+
+Validation and normalization rules for `network.http_intercept` options:
+
+- `tabSessionId` and `site` are required, trimmed, and `site` is normalized to lowercase.
+- `mode` is case-insensitive after trim and must resolve to `network|fetch|hybrid`.
+- `maxBodyBytes` must be numeric and positive; accepted values are normalized to integer.
+- `includeBody` and `includeHeaders` must be booleans when provided.
+- `urlPatterns`, `mimeTypes`, and `requestHostAllowlist` must be string arrays when provided; entries are trimmed, normalized (lowercased for `mimeTypes`/`requestHostAllowlist`), deduplicated, and empty entries are dropped.
+
+Network interception behavior notes:
+
+- Runtime is scoped to recipe-managed tabs only; `tabSessionId` must resolve to an active session.
+- Runtime validates the tab URL against `site` before attaching debugger session state.
+- `network` mode retrieves bodies only after `Network.loadingFinished` to reduce empty-body failures.
+- `fetch` and `hybrid` modes use `Fetch.requestPaused` at response stage; paused requests are always continued by runtime.
+- Body capture is best-effort and may emit `payload.data.error=response_body_unavailable` for redirects, cache hits, and evicted buffers.
+
 Listener update event shape:
 
 - `messageType: event`
@@ -68,6 +98,20 @@ Listener update event shape:
 - `payload.data: <arbitrary JSON>`
 - `payload.updateType` optional short event name
 - `payload.emittedAt` optional ISO timestamp
+
+Network listener update types:
+
+- `network.response`
+- `network.error`
+- `network.detached`
+
+Recipe test streaming:
+
+- `recipe.test` can return a `stream` object in `result.payload.data`.
+- `stream.listeners` is an array of listener manifests with `listener` and optional `options`.
+- CLI treats this as recipe-native streaming intent and subscribes until interrupted.
+- Relay may proxy `listener_update` events to the original `recipe.test` `requestId` for active stream sessions.
+- `command_cancel` targeting the original `recipe.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled` or `timed_out`).
 
 ## Command Payload
 
@@ -85,18 +129,37 @@ Listener update event shape:
 ## Recipe Commands
 
 - `recipe.list` returns available recipe metadata advertised by the node runtime.
+- Recipe metadata now optionally includes:
+- `preloadHost`: required host before recipe execute logic runs.
+- `inputFields`: declarative input field descriptors (`name`, `type`, `description`, `optional`).
+- `inputAtLeastOneOf`: list of field names where at least one key must be present in payload input.
 - `recipe.run` executes a site-scoped recipe using payload:
 - `site`: website domain (for example `reddit.com`)
 - `recipe`: recipe id (for example `getFeed`)
 - `input`: optional JSON object passed to recipe execution
 - `authMode`: `auto`, `strict_fail`, or `skip`
+- `recipe.test` executes recipe test path with the same payload shape as `recipe.run`.
+- Runtime behavior for `recipe.test`:
+- If recipe defines `test` hook, runtime executes it.
+- If no `test` hook is defined, runtime falls back to `execute`.
 - Legacy `recipe.reddit_feed` remains as a compatibility alias mapped to `recipe.run` (`site=reddit.com`, `recipe=getFeed`).
+
+Current Reddit recipe ids:
+
+- `getFeed`
+- `getUserInfo`
+- `sendChatMessage`
+- `getChatMessages`
 
 Recipe result/error behavior:
 
 - Successful `recipe.run` returns normalized metadata fields (`site`, `recipe`) plus recipe output.
+- Successful `recipe.test` returns the same result envelope shape as `recipe.run`.
 - If tab URL is not yet committed during immediate post-open execution, runtime returns transient execution error (`tab_url_not_ready`, `retryable=true`).
 - Site mismatch after URL commit returns deterministic execution error (`site_mismatch`, `retryable=false`).
+- If a recipe declares `preloadHost`, runtime auto-navigates to that host before execute and returns `preload_host_mismatch` only when post-navigation host still does not match.
+- If a recipe declares `inputFields`, runtime validates required/typed input and rejects unknown keys before recipe logic (`missing_recipe_input`, `invalid_recipe_input_type`, `unexpected_recipe_input`).
+- If a recipe declares `inputAtLeastOneOf`, runtime rejects missing cross-field requirements before recipe logic (`missing_recipe_input_one_of`).
 - Unauthenticated website session on `requiresAuth` recipe returns `manual_login_required` after optional login navigation.
 
 ## Routing Rules

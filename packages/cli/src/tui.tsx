@@ -932,3 +932,39 @@ export async function runSettingsTui(initial: OttoConfig): Promise<OttoConfig> {
     });
   });
 }
+
+function OneShotAlertScreen({
+  title,
+  message,
+}: {
+  title: string;
+  message?: string;
+}): React.JSX.Element {
+  const { exit } = useApp();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      exit();
+    }, 40);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [exit]);
+
+  return (
+    <Box flexDirection="column" paddingX={1}>
+      <Alert variant="error">{title}</Alert>
+      {message ? <Text>{message}</Text> : null}
+    </Box>
+  );
+}
+
+export async function showTerminalErrorAlert(title: string, message?: string): Promise<void> {
+  if (!process.stdout.isTTY || !process.stdin.isTTY) {
+    return;
+  }
+
+  const app = render(<OneShotAlertScreen title={title} message={message} />);
+  await app.waitUntilExit();
+}

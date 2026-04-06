@@ -14,6 +14,10 @@ type MockOptions = {
   defaultTabUrl?: string | null;
   scriptResults?: unknown[];
   initialActiveTabId?: number;
+  invalidGroupIds?: number[];
+  invalidGroupErrorValue?: unknown;
+  invalidTabGroupUpdateIds?: number[];
+  invalidTabGroupUpdateErrorValue?: unknown;
 };
 
 function createChromeMock(options: MockOptions = {}) {
@@ -29,6 +33,10 @@ function createChromeMock(options: MockOptions = {}) {
   let activeTabId = options.initialActiveTabId ?? (options.tabIds?.[0] ?? 1);
   let nextGroupId = 700;
   let groupCreateCount = 0;
+  const invalidGroupIds = new Set<number>(options.invalidGroupIds ?? []);
+  const invalidGroupErrorValue = options.invalidGroupErrorValue;
+  const invalidTabGroupUpdateIds = new Set<number>(options.invalidTabGroupUpdateIds ?? []);
+  const invalidTabGroupUpdateErrorValue = options.invalidTabGroupUpdateErrorValue;
 
   if (!existingTabs.has(activeTabId)) {
     existingTabs.add(activeTabId);
@@ -101,6 +109,12 @@ function createChromeMock(options: MockOptions = {}) {
       },
       async group(params: { groupId?: number; tabIds: [number] | number[] }) {
         const groupId = params.groupId ?? nextGroupId++;
+        if (params.groupId !== undefined && invalidGroupIds.has(groupId)) {
+          if (invalidGroupErrorValue !== undefined) {
+            throw invalidGroupErrorValue;
+          }
+          throw new Error(`No group with id: ${groupId}.`);
+        }
         if (params.groupId === undefined) {
           groupCreateCount += 1;
         }
@@ -126,6 +140,12 @@ function createChromeMock(options: MockOptions = {}) {
     tabGroups: {
       async update(groupId: number, _changes: Record<string, unknown>) {
         void _changes;
+        if (invalidTabGroupUpdateIds.has(groupId)) {
+          if (invalidTabGroupUpdateErrorValue !== undefined) {
+            throw invalidTabGroupUpdateErrorValue;
+          }
+          throw new Error(`No group with id: ${groupId}.`);
+        }
         return { id: groupId };
       },
     },
@@ -250,7 +270,7 @@ test('recipe.run waits for committed tab URL before site validation', async () =
     tabUrlSequenceById: {
       11: [undefined, undefined, 'https://www.reddit.com/'],
     },
-    scriptResults: [true, [{ title: 'Ready', author: 'eve' }]],
+    scriptResults: [{ authenticated: true }, [{ title: 'Ready', author: 'eve' }]],
   });
 
   const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
@@ -338,7 +358,7 @@ test('recipe.run executes when authenticated and returns posts', async () => {
     },
     tabIds: [11],
     tabUrls: { 11: 'https://www.reddit.com/' },
-    scriptResults: [true, [{ title: 'Hello', author: 'alice' }]],
+    scriptResults: [{ authenticated: true }, [{ title: 'Hello', author: 'alice' }]],
   });
 
   const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
@@ -366,7 +386,7 @@ test('legacy recipe.reddit_feed action is routed via recipe runtime', async () =
     },
     tabIds: [11],
     tabUrls: { 11: 'https://www.reddit.com/' },
-    scriptResults: [true, [{ title: 'Legacy', author: 'bob' }]],
+    scriptResults: [{ authenticated: true }, [{ title: 'Legacy', author: 'bob' }]],
   });
 
   const result = await executeCommand(chromeApi, buildCommand('recipe.reddit_feed', {
@@ -378,6 +398,488 @@ test('legacy recipe.reddit_feed action is routed via recipe runtime', async () =
     site: 'reddit.com',
     recipe: 'getFeed',
     posts: [{ title: 'Legacy', author: 'bob' }],
+  });
+});
+
+test('recipe.run sendChatMessage returns deterministic payload', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      { sent: true, roomId: 'room_1', username: 'alice' },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'sendChatMessage',
+    input: {
+      username: 'alice',
+      message: 'hello',
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'sendChatMessage',
+    sent: true,
+    roomId: 'room_1',
+    username: 'alice',
+  });
+});
+
+test('recipe.run getChatMessages normalizes matrix events', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        chunk: [
+          {
+            type: 'm.room.message',
+            event_id: 'evt_1',
+            sender: '@t2_abc:reddit.com',
+            origin_server_ts: 1710000000000,
+            content: { body: 'hi there' },
+          },
+          {
+            type: 'm.typing',
+            content: { user_ids: ['@t2_abc:reddit.com'] },
+          },
+        ],
+      },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    input: {
+      roomId: 'room_1',
+      limit: 20,
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    scope: 'room',
+    roomId: 'room_1',
+    totalCount: 1,
+    roomCount: 1,
+    rooms: [
+      {
+        roomId: 'room_1',
+        count: 1,
+        messages: [
+          {
+            eventId: 'evt_1',
+            roomId: 'room_1',
+            text: 'hi there',
+            sender: '@t2_abc:reddit.com',
+            createdAt: '2024-03-09T16:00:00.000Z',
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test('recipe.run getChatMessages fetches across rooms when roomId is omitted', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        scope: 'all_rooms',
+        chunk: [
+          {
+            type: 'm.room.message',
+            event_id: 'evt_1',
+            sender: '@t2_abc:reddit.com',
+            origin_server_ts: 1710000000000,
+            roomId: 'room_1',
+            content: { body: 'hello room 1' },
+          },
+          {
+            type: 'm.room.message',
+            event_id: 'evt_2',
+            sender: '@t2_def:reddit.com',
+            origin_server_ts: 1710000001000,
+            roomId: 'room_2',
+            content: { body: 'hello room 2' },
+          },
+        ],
+      },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    input: {
+      limit: 20,
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    scope: 'all_rooms',
+    roomId: undefined,
+    totalCount: 2,
+    roomCount: 2,
+    rooms: [
+      {
+        roomId: 'room_1',
+        count: 1,
+        messages: [
+          {
+            eventId: 'evt_1',
+            roomId: 'room_1',
+            text: 'hello room 1',
+            sender: '@t2_abc:reddit.com',
+            createdAt: '2024-03-09T16:00:00.000Z',
+          },
+        ],
+      },
+      {
+        roomId: 'room_2',
+        count: 1,
+        messages: [
+          {
+            eventId: 'evt_2',
+            roomId: 'room_2',
+            text: 'hello room 2',
+            sender: '@t2_def:reddit.com',
+            createdAt: '2024-03-09T16:00:01.000Z',
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test('recipe.test getChatMessages returns stream listener metadata', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      { ready: true },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    input: {
+      roomId: 'room_1',
+      limit: 20,
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    ready: true,
+    roomId: 'room_1',
+    stream: {
+      listeners: [
+        {
+          listener: 'network.http_intercept',
+          options: {
+            tabSessionId: 'tab_alpha',
+            site: 'reddit.com',
+            mode: 'fetch',
+            includeBody: true,
+            includeHeaders: false,
+            urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/sync*'],
+            requestHostAllowlist: ['matrix.redditspace.com'],
+            mimeTypes: ['application/json', 'text/plain'],
+            maxBodyBytes: 1_000_000,
+          },
+        },
+      ],
+    },
+  });
+});
+
+test('recipe.run rejects unexpected input fields before execute', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      recipe: 'getFeed',
+      input: { unexpected: true },
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'unexpected_recipe_input');
+      return true;
+    },
+  );
+});
+
+test('recipe.run rejects missing required input fields before execute', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      recipe: 'sendChatMessage',
+      input: { username: 'alice' },
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'missing_recipe_input');
+      return true;
+    },
+  );
+});
+
+test('recipe.run rejects invalid input field types before execute', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      recipe: 'sendChatMessage',
+      input: { username: 'alice', message: 1 },
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_recipe_input_type');
+      return true;
+    },
+  );
+});
+
+test('recipe.run enforces inputAtLeastOneOf metadata before execute', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      recipe: 'getUserInfo',
+      input: {},
+      authMode: 'strict_fail',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'missing_recipe_input_one_of');
+      return true;
+    },
+  );
+});
+
+test('recipe.run auto-navigates to preloadHost before execute', async () => {
+  const { chromeApi, tabUrls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{ authenticated: true }, { chunk: [] }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    input: { roomId: 'room_1' },
+    authMode: 'strict_fail',
+  }));
+
+  assert.equal(tabUrls[11], 'https://chat.reddit.com');
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    scope: 'room',
+    roomId: 'room_1',
+    totalCount: 0,
+    roomCount: 0,
+    rooms: [],
+  });
+});
+
+test('recipe.test falls back to execute when recipe test hook is absent', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{ authenticated: true }, [{ title: 'Fallback', author: 'zoe' }]],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getFeed',
+    input: {},
+    authMode: 'auto',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getFeed',
+    posts: [{ title: 'Fallback', author: 'zoe' }],
+  });
+});
+
+test('recipe.test falls back to execute and honors preloadHost compatibility', async () => {
+  const { chromeApi, tabUrls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/threads' },
+    scriptResults: [
+      { authenticated: true },
+      [{ title: 'from fallback execute', author: 'otto' }],
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getFeed',
+    input: {},
+    authMode: 'strict_fail',
+  }));
+
+  assert.equal(tabUrls[11], 'https://chat.reddit.com/threads');
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getFeed',
+    posts: [{ title: 'from fallback execute', author: 'otto' }],
+  });
+});
+
+test('recipe.test uses sendChatMessage test hook for non-side-effect readiness checks', async () => {
+  const { chromeApi, tabUrls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      { ready: true, mode: 'create-room' },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'sendChatMessage',
+    input: {
+      username: 'alice',
+      message: 'hello',
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.equal(tabUrls[11], 'https://chat.reddit.com/');
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'sendChatMessage',
+    ready: true,
+    mode: 'create-room',
+    username: 'alice',
+    roomId: undefined,
   });
 });
 
@@ -417,6 +919,72 @@ test('concurrent primitive.tab.open calls initialize automation group once', asy
   assert.equal(getGroupCreateCount(), 1);
 });
 
+test('primitive.tab.open recovers when stored automation group id is stale', async () => {
+  const staleGroupId = 1060980695;
+  const { chromeApi, sessionStore, getGroupCreateCount } = createChromeMock({
+    sessionSeed: {
+      automationGroupId: staleGroupId,
+    },
+    tabIds: [11],
+    invalidGroupIds: [staleGroupId],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.open', { url: 'https://www.reddit.com/' }));
+  const data = result.data as { tabId?: number; tabSessionId?: string };
+
+  assert.equal(typeof data.tabId, 'number');
+  assert.ok(data.tabSessionId);
+  assert.equal(typeof sessionStore.automationGroupId, 'number');
+  assert.notEqual(sessionStore.automationGroupId, staleGroupId);
+  assert.equal(getGroupCreateCount(), 1);
+});
+
+test('primitive.tab.open recovers when stale group error is non-Error value', async () => {
+  const staleGroupId = 1060980695;
+  const { chromeApi, sessionStore, getGroupCreateCount } = createChromeMock({
+    sessionSeed: {
+      automationGroupId: staleGroupId,
+    },
+    tabIds: [11],
+    invalidGroupIds: [staleGroupId],
+    invalidGroupErrorValue: `No group with id: ${staleGroupId}.`,
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.open', { url: 'https://www.reddit.com/' }));
+  const data = result.data as { tabId?: number; tabSessionId?: string };
+
+  assert.equal(typeof data.tabId, 'number');
+  assert.ok(data.tabSessionId);
+  assert.equal(typeof sessionStore.automationGroupId, 'number');
+  assert.notEqual(sessionStore.automationGroupId, staleGroupId);
+  assert.equal(getGroupCreateCount(), 1);
+});
+
+test('primitive.tab.open recovers when tab group update throws nested lastError object', async () => {
+  const staleGroupId = 1060980695;
+  const { chromeApi, sessionStore, getGroupCreateCount } = createChromeMock({
+    sessionSeed: {
+      automationGroupId: staleGroupId,
+    },
+    tabIds: [11],
+    invalidTabGroupUpdateIds: [staleGroupId],
+    invalidTabGroupUpdateErrorValue: {
+      lastError: {
+        message: `No group with id: ${staleGroupId}.`,
+      },
+    },
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.open', { url: 'https://www.reddit.com/' }));
+  const data = result.data as { tabId?: number; tabSessionId?: string };
+
+  assert.equal(typeof data.tabId, 'number');
+  assert.ok(data.tabSessionId);
+  assert.equal(typeof sessionStore.automationGroupId, 'number');
+  assert.notEqual(sessionStore.automationGroupId, staleGroupId);
+  assert.equal(getGroupCreateCount(), 1);
+});
+
 test('listener.subscribe returns deterministic subscribed payload', async () => {
   const { chromeApi } = createChromeMock();
 
@@ -434,6 +1002,224 @@ test('listener.subscribe returns deterministic subscribed payload', async () => 
     options: {
       pollIntervalMs: 15000,
       includeUnreadOnly: true,
+    },
+  });
+});
+
+test('listener.subscribe normalizes network interception options', async () => {
+  const { chromeApi } = createChromeMock();
+
+  const result = await executeCommand(chromeApi, buildCommand('listener.subscribe', {
+    listener: 'network.http_intercept',
+    options: {
+      tabSessionId: 'tab_alpha',
+      site: 'Reddit.com',
+      mode: 'hybrid',
+      maxBodyBytes: 12345,
+      requestHostAllowlist: [' Matrix.RedditSpace.com ', 'matrix.redditspace.com'],
+    },
+  }));
+
+  assert.deepEqual(result.data, {
+    listener: 'network.http_intercept',
+    subscribed: true,
+    options: {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      mode: 'hybrid',
+      maxBodyBytes: 12345,
+      requestHostAllowlist: ['matrix.redditspace.com'],
+    },
+  });
+});
+
+test('listener.subscribe rejects network interception invalid request host allowlist', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        requestHostAllowlist: ['matrix.redditspace.com', 42],
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_listener_request_hosts');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe rejects network interception missing site', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'missing_site');
+      assert.equal(commandErr.stage, 'validation');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe rejects network interception invalid mode', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        mode: 'all',
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_listener_mode');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe rejects network interception invalid mimeTypes', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        mimeTypes: ['application/json', 7],
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_listener_mime_types');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe normalizes network interception mode and list options', async () => {
+  const { chromeApi } = createChromeMock();
+
+  const result = await executeCommand(chromeApi, buildCommand('listener.subscribe', {
+    listener: 'network.http_intercept',
+    options: {
+      tabSessionId: 'tab_alpha',
+      site: ' Reddit.com ',
+      mode: ' HYBRID ',
+      urlPatterns: [' https://www.reddit.com/api/* ', 'https://www.reddit.com/api/*'],
+      mimeTypes: [' Application/JSON ', 'application/json'],
+      includeBody: true,
+      includeHeaders: false,
+      maxBodyBytes: '12345',
+    },
+  }));
+
+  assert.deepEqual(result.data, {
+    listener: 'network.http_intercept',
+    subscribed: true,
+    options: {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      mode: 'hybrid',
+      urlPatterns: ['https://www.reddit.com/api/*'],
+      mimeTypes: ['application/json'],
+      includeBody: true,
+      includeHeaders: false,
+      maxBodyBytes: 12345,
+    },
+  });
+});
+
+test('listener.subscribe rejects network interception invalid includeBody type', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        includeBody: 'yes',
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_listener_include_body');
+      return true;
+    },
+  );
+});
+
+test('recipe.run getUserInfo maps reddit profile payload', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{
+      name: 'alice',
+      id: 'abc123',
+      icon_img: 'https://example.com/avatar.png',
+      created_utc: 123,
+      is_blocked: false,
+      is_mod: false,
+      is_employee: false,
+      accept_chats: true,
+    }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getUserInfo',
+    input: { username: 'alice' },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getUserInfo',
+    username: 'alice',
+    id: 't2_abc123',
+    avatar: 'https://example.com/avatar.png',
+    createdUtc: 123,
+    isBlocked: false,
+    isMod: false,
+    isEmployee: false,
+    acceptChats: true,
+    raw: {
+      name: 'alice',
+      id: 'abc123',
+      icon_img: 'https://example.com/avatar.png',
+      created_utc: 123,
+      is_blocked: false,
+      is_mod: false,
+      is_employee: false,
+      accept_chats: true,
     },
   });
 });

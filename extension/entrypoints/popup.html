@@ -91,10 +91,30 @@
         font-size: 12px;
         font-weight: 700;
         cursor: pointer;
+        transition: transform 130ms ease, filter 130ms ease, box-shadow 160ms ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.06);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        filter: grayscale(0.2) brightness(0.9);
       }
 
       #refreshStatus {
         background: #1d4ed8;
+      }
+
+      #refreshStatus.refresh-success {
+        background: #0f766e;
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
       }
 
       .status-card {
@@ -142,20 +162,174 @@
       }
 
       #pairingCommandToast {
-        margin-top: 7px;
-        padding: 5px 7px;
-        border-radius: 7px;
+        position: fixed;
+        right: 14px;
+        bottom: 14px;
+        z-index: 1000;
+        max-width: calc(100vw - 28px);
+        padding: 7px 10px;
+        border-radius: 999px;
         background: #0f5132;
         color: #ecfdf3;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
         font-size: 11px;
         font-weight: 700;
-        display: none;
+        letter-spacing: 0.01em;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(8px) scale(0.97);
+        transition: opacity 160ms ease, transform 190ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      #pairingCommandToast[data-variant='error'] {
+        background: #b42318;
+        color: #fff1f0;
+      }
+
+      #pairingCommandToast.is-visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
       }
 
       .hint {
         margin-top: 10px;
         font-size: 11px;
         color: #334155;
+      }
+
+      .acl-card {
+        margin-top: 12px;
+        border: 1px solid #d8caa9;
+        border-radius: 10px;
+        padding: 10px;
+        background: #fffdfa;
+      }
+
+      .acl-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .acl-head h2 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      #aclRefresh {
+        background: #0f766e;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      #aclStatus {
+        margin-top: 7px;
+        font-size: 11px;
+        color: #334155;
+      }
+
+      .acl-list {
+        margin-top: 8px;
+        display: grid;
+        gap: 6px;
+      }
+
+      .acl-row {
+        border: 1px solid #e5dcc8;
+        border-radius: 8px;
+        padding: 7px;
+        background: #fffcf7;
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+
+      .acl-left {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .acl-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+      }
+
+      .acl-text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .acl-row-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .acl-description {
+        margin-top: 2px;
+        font-size: 11px;
+        color: #475467;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .acl-label {
+        font-size: 12px;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .acl-meta {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #475569;
+        padding-left: 40px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .acl-action {
+        border: 0;
+        border-radius: 7px;
+        padding: 5px 0;
+        font-size: 11px;
+        font-weight: 700;
+        color: #fff;
+        width: 88px;
+        flex-shrink: 0;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .acl-action.grant {
+        background: #0f766e;
+      }
+
+      .acl-action.revoke {
+        background: #b42318;
       }
     </style>
   </head>
@@ -179,9 +353,24 @@
           <div id="stateTitle">Loading status…</div>
           <div id="stateDetail"></div>
           <div id="pairingCode"></div>
-          <div id="pairingCommandToast" aria-live="polite"></div>
+          <div id="pairingCommandToast" aria-live="polite" aria-hidden="true"></div>
           <pre id="pairingCommand"></pre>
           <div id="nodeId"></div>
+        </section>
+        <section class="acl-card" id="aclCard" style="display: none;">
+          <div class="acl-head">
+            <h2>Controller Access</h2>
+            <button id="aclRefresh" type="button" aria-label="Refresh controller access list" title="Refresh">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                <path d="M8 16H3v5"/>
+              </svg>
+            </button>
+          </div>
+          <div id="aclStatus">Waiting for node authentication...</div>
+          <div class="acl-list" id="aclList"></div>
         </section>
       </section>
     </main>

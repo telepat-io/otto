@@ -8,6 +8,8 @@ export const getFeedRecipe: SiteRecipe = {
     description: 'Extracts lightweight post summaries from the active Reddit feed page.',
     tags: ['feed', 'reddit'],
     requiresAuth: true,
+    preloadHost: 'reddit.com',
+    inputFields: [],
   },
   async execute(ctx) {
     const posts = await ctx.executeScript(

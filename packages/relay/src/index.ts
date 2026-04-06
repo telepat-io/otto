@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import { jwtVerify, SignJWT } from 'jose';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -50,7 +51,10 @@ const DEFAULT_CONTROLLER_SCOPES =
     'primitive.dom.extract_text',
     'recipe.list',
     'recipe.run',
+    'recipe.test',
     'recipe.reddit_feed',
+    'listener.subscribe',
+    'listener.unsubscribe',
   ];
 const LOG_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 const LOG_DIR = process.env.OTTO_LOG_DIR ?? join(process.cwd(), '.otto-relay');
@@ -59,6 +63,10 @@ const LOG_WINDOW_PREFIX = 'operations-';
 const LOG_WINDOW_SUFFIX = '.jsonl';
 const LOG_WINDOW_MAX_FILE_BYTES = parseEnvInt('OTTO_LOG_MAX_FILE_BYTES', 100 * 1024 * 1024, 1024);
 const REFRESH_SESSIONS_FILE = join(LOG_DIR, 'refresh-sessions.jsonl');
+const CONTROLLER_CLIENTS_FILE = join(LOG_DIR, 'controller-clients.jsonl');
+const CONTROLLER_ACL_FILE = join(LOG_DIR, 'controller-acl.jsonl');
+const ALLOW_REMOTE_CONTROLLER_REGISTRATION = process.env.OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION === '1';
+const CONTROLLER_REGISTRATION_SECRET = process.env.OTTO_CONTROLLER_REGISTRATION_SECRET;
 
 type Client = {
   id: string;
@@ -66,6 +74,7 @@ type Client = {
   role: OttoRole;
   nodeId?: string;
   controllerId?: string;
+  clientId?: string;
   scopes: string[];
   authenticated: boolean;
   subscriptions: Set<string>;
@@ -82,10 +91,28 @@ type PendingCommand = {
   controllerId: string;
   nodeId: string;
   action: string;
+  timeoutMs: number;
   unsubscribeTargetRequestId?: string;
   createdAt: number;
   tabKey?: string;
   timeoutHandle: ReturnType<typeof setTimeout>;
+};
+
+type RecipeStreamListenerBinding = {
+  listener: string;
+  options: Record<string, unknown>;
+  subscribeRequestId?: string;
+};
+
+type RecipeTestStreamSession = {
+  requestId: string;
+  controllerId: string;
+  nodeId: string;
+  action: string;
+  createdAt: number;
+  tabKey?: string;
+  timeoutHandle?: ReturnType<typeof setTimeout>;
+  listeners: RecipeStreamListenerBinding[];
 };
 
 type ListenerSubscription = {
@@ -116,8 +143,30 @@ type RefreshSession = {
   role: OttoRole;
   nodeId?: string;
   controllerId?: string;
+  clientId?: string;
   scopes: string[];
   expiresAt: number;
+};
+
+type ControllerClientRecord = {
+  clientId: string;
+  name: string;
+  description: string;
+  normalizedName: string;
+  avatarSeed: string;
+  secretSalt: string;
+  secretHash: string;
+  createdAt: number;
+  lastUsedAt?: number;
+  revokedAt?: number;
+};
+
+type ControllerAclGrant = {
+  clientId: string;
+  nodeId: string;
+  grantedByNodeId: string;
+  grantedAt: number;
+  expiresAt?: number;
 };
 
 type RateLimitState = {
@@ -186,8 +235,32 @@ const refreshSessionSchema = z.object({
   role: z.enum(['controller', 'node']),
   nodeId: z.string().optional(),
   controllerId: z.string().optional(),
+  clientId: z.string().optional(),
   scopes: z.array(z.string()),
   expiresAt: z.number().int(),
+});
+
+const controllerClientSchema = z.object({
+  clientId: z.string().min(1),
+  name: z.string().min(1).max(120).optional(),
+  description: z.string().min(1).max(500).optional(),
+  normalizedName: z.string().min(1).max(120).optional(),
+  avatarSeed: z.string().min(1).max(64).optional(),
+  // Legacy field kept optional for migration from older controller records.
+  label: z.string().min(1).max(120).optional(),
+  secretSalt: z.string().min(1),
+  secretHash: z.string().min(1),
+  createdAt: z.number().int(),
+  lastUsedAt: z.number().int().optional(),
+  revokedAt: z.number().int().optional(),
+});
+
+const controllerAclGrantSchema = z.object({
+  clientId: z.string().min(1),
+  nodeId: z.string().min(1),
+  grantedByNodeId: z.string().min(1),
+  grantedAt: z.number().int(),
+  expiresAt: z.number().int().optional(),
 });
 
 const refreshStoreEntrySchema = z.object({
@@ -195,16 +268,28 @@ const refreshStoreEntrySchema = z.object({
   session: refreshSessionSchema,
 });
 
+const controllerClientStoreEntrySchema = z.object({
+  client: controllerClientSchema,
+});
+
+const controllerAclStoreEntrySchema = z.object({
+  grant: controllerAclGrantSchema,
+});
+
 const clients = new Map<string, Client>();
 const nodeClients = new Map<string, Client>();
 const locks = new Map<string, LockState>();
 const pendingCommands = new Map<string, PendingCommand>();
 const listenerSubscriptions = new Map<string, ListenerSubscription>();
+const listenerToRecipeStreamSession = new Map<string, string>();
+const recipeTestStreamSessions = new Map<string, RecipeTestStreamSession>();
 const queuedByTab = new Map<string, QueuedCommand[]>();
 const inflightByTab = new Set<string>();
 const pairingByCode = new Map<string, PairingChallenge>();
 const pairingByChallenge = new Map<string, PairingChallenge>();
 const refreshTokens = new Map<string, RefreshSession>();
+const controllerClients = new Map<string, ControllerClientRecord>();
+const controllerAcl = new Map<string, ControllerAclGrant>();
 const rateLimit = new Map<string, RateLimitState>();
 const replayState = new Map<string, ReplayState>();
 const logEvents: LogEvent[] = [];
@@ -298,6 +383,85 @@ function persistRefreshSessions(): void {
   writeFileSync(REFRESH_SESSIONS_FILE, serialized ? `${serialized}\n` : '');
 }
 
+function persistControllerClients(): void {
+  const serialized = Array.from(controllerClients.values())
+    .map((client) => JSON.stringify({ client }))
+    .join('\n');
+  writeFileSync(CONTROLLER_CLIENTS_FILE, serialized ? `${serialized}\n` : '');
+}
+
+function normalizeControllerNameInput(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function normalizedControllerNameKey(value: string): string {
+  return normalizeControllerNameInput(value).normalize('NFKC').toLowerCase();
+}
+
+function deriveAvatarSeed(name: string): string {
+  return createHash('sha256').update(normalizedControllerNameKey(name)).digest('hex').slice(0, 16);
+}
+
+function findControllerByNormalizedName(normalizedName: string): ControllerClientRecord | undefined {
+  for (const record of controllerClients.values()) {
+    if (record.normalizedName !== normalizedName) {
+      continue;
+    }
+
+    if (typeof record.revokedAt === 'number') {
+      continue;
+    }
+
+    return record;
+  }
+
+  return undefined;
+}
+
+function materializeControllerRecord(raw: z.infer<typeof controllerClientSchema>): ControllerClientRecord | null {
+  const fallbackName = typeof raw.label === 'string' && raw.label.trim().length > 0
+    ? raw.label
+    : undefined;
+  const resolvedName = normalizeControllerNameInput(String(raw.name ?? fallbackName ?? ''));
+  if (!resolvedName) {
+    return null;
+  }
+
+  const normalizedName = raw.normalizedName && raw.normalizedName.trim().length > 0
+    ? raw.normalizedName.trim()
+    : normalizedControllerNameKey(resolvedName);
+  const description = typeof raw.description === 'string' && raw.description.trim().length > 0
+    ? raw.description.trim()
+    : 'No description provided.';
+  const avatarSeed = typeof raw.avatarSeed === 'string' && raw.avatarSeed.trim().length > 0
+    ? raw.avatarSeed.trim().slice(0, 64)
+    : deriveAvatarSeed(resolvedName);
+
+  return {
+    clientId: raw.clientId,
+    name: resolvedName,
+    description,
+    normalizedName,
+    avatarSeed,
+    secretSalt: raw.secretSalt,
+    secretHash: raw.secretHash,
+    createdAt: raw.createdAt,
+    lastUsedAt: raw.lastUsedAt,
+    revokedAt: raw.revokedAt,
+  };
+}
+
+function persistControllerAcl(): void {
+  const serialized = Array.from(controllerAcl.values())
+    .map((grant) => JSON.stringify({ grant }))
+    .join('\n');
+  writeFileSync(CONTROLLER_ACL_FILE, serialized ? `${serialized}\n` : '');
+}
+
+function aclKey(clientId: string, nodeId: string): string {
+  return `${clientId}:${nodeId}`;
+}
+
 function cleanupRefreshSessions(): { removed: number } {
   let removed = 0;
   const now = Date.now();
@@ -310,6 +474,23 @@ function cleanupRefreshSessions(): { removed: number } {
 
   if (removed > 0) {
     persistRefreshSessions();
+  }
+
+  return { removed };
+}
+
+function cleanupControllerAcl(): { removed: number } {
+  let removed = 0;
+  const now = Date.now();
+  for (const [key, grant] of controllerAcl.entries()) {
+    if (grant.expiresAt && grant.expiresAt <= now) {
+      controllerAcl.delete(key);
+      removed += 1;
+    }
+  }
+
+  if (removed > 0) {
+    persistControllerAcl();
   }
 
   return { removed };
@@ -352,12 +533,298 @@ function loadRefreshSessions(): { loaded: number; invalid: number; expired: numb
   return { loaded, invalid, expired };
 }
 
-function issueRefreshToken(role: OttoRole, nodeId?: string, controllerId?: string, scopes: string[] = []): string {
+function loadControllerClients(): { loaded: number; invalid: number } {
+  if (!existsSync(CONTROLLER_CLIENTS_FILE)) {
+    return { loaded: 0, invalid: 0 };
+  }
+
+  const lines = readFileSync(CONTROLLER_CLIENTS_FILE, 'utf8').split('\n').filter(Boolean);
+  let loaded = 0;
+  let invalid = 0;
+
+  for (const line of lines) {
+    try {
+      const parsed = controllerClientStoreEntrySchema.safeParse(JSON.parse(line));
+      if (!parsed.success) {
+        invalid += 1;
+        continue;
+      }
+      const materialized = materializeControllerRecord(parsed.data.client);
+      if (!materialized) {
+        invalid += 1;
+        continue;
+      }
+
+      controllerClients.set(materialized.clientId, materialized);
+      loaded += 1;
+    } catch {
+      invalid += 1;
+    }
+  }
+
+  persistControllerClients();
+  return { loaded, invalid };
+}
+
+function loadControllerAcl(): { loaded: number; invalid: number; expired: number } {
+  if (!existsSync(CONTROLLER_ACL_FILE)) {
+    return { loaded: 0, invalid: 0, expired: 0 };
+  }
+
+  const now = Date.now();
+  const lines = readFileSync(CONTROLLER_ACL_FILE, 'utf8').split('\n').filter(Boolean);
+  let loaded = 0;
+  let invalid = 0;
+  let expired = 0;
+
+  for (const line of lines) {
+    try {
+      const parsed = controllerAclStoreEntrySchema.safeParse(JSON.parse(line));
+      if (!parsed.success) {
+        invalid += 1;
+        continue;
+      }
+
+      const grant = parsed.data.grant;
+      if (grant.expiresAt && grant.expiresAt <= now) {
+        expired += 1;
+        continue;
+      }
+      controllerAcl.set(aclKey(grant.clientId, grant.nodeId), grant);
+      loaded += 1;
+    } catch {
+      invalid += 1;
+    }
+  }
+
+  persistControllerAcl();
+  return { loaded, invalid, expired };
+}
+
+function hashClientSecret(secret: string, salt: string): string {
+  return scryptSync(secret, salt, 32).toString('base64');
+}
+
+function verifyClientSecret(secret: string, record: ControllerClientRecord): boolean {
+  const expected = Buffer.from(record.secretHash, 'base64');
+  const actual = Buffer.from(hashClientSecret(secret, record.secretSalt), 'base64');
+  if (expected.length !== actual.length) {
+    return false;
+  }
+  return timingSafeEqual(expected, actual);
+}
+
+function isLoopbackAddress(address: string | undefined): boolean {
+  if (!address) {
+    return false;
+  }
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+}
+
+function canRegisterControllerClient(req: import('node:http').IncomingMessage): boolean {
+  if (!ALLOW_REMOTE_CONTROLLER_REGISTRATION && !isLoopbackAddress(req.socket.remoteAddress)) {
+    return false;
+  }
+
+  if (!CONTROLLER_REGISTRATION_SECRET) {
+    return true;
+  }
+
+  return req.headers['x-otto-registration-secret'] === CONTROLLER_REGISTRATION_SECRET;
+}
+
+function listAclForNode(nodeId: string): Array<{
+  clientId: string;
+  name: string;
+  description: string;
+  avatarSeed: string;
+  createdAt: number;
+  lastUsedAt?: number;
+  revoked: boolean;
+  granted: boolean;
+  grantExpiresAt?: number;
+}> {
+  return Array.from(controllerClients.values())
+    .map((client) => {
+      const grant = controllerAcl.get(aclKey(client.clientId, nodeId));
+      return {
+        clientId: client.clientId,
+        name: client.name,
+        description: client.description,
+        avatarSeed: client.avatarSeed,
+        createdAt: client.createdAt,
+        lastUsedAt: client.lastUsedAt,
+        revoked: typeof client.revokedAt === 'number',
+        granted: Boolean(grant),
+        grantExpiresAt: grant?.expiresAt,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function revokeControllerAclByClientId(clientId: string): number {
+  let removed = 0;
+  for (const [key, grant] of controllerAcl.entries()) {
+    if (grant.clientId !== clientId) {
+      continue;
+    }
+    controllerAcl.delete(key);
+    removed += 1;
+  }
+
+  if (removed > 0) {
+    persistControllerAcl();
+  }
+
+  return removed;
+}
+
+function revokeRefreshSessionsByClientId(clientId: string): number {
+  let removed = 0;
+  for (const [token, session] of refreshTokens.entries()) {
+    if (session.clientId !== clientId) {
+      continue;
+    }
+    refreshTokens.delete(token);
+    removed += 1;
+  }
+
+  if (removed > 0) {
+    persistRefreshSessions();
+  }
+
+  return removed;
+}
+
+function disconnectControllerSessionsByClientId(clientId: string): number {
+  let disconnected = 0;
+  for (const client of clients.values()) {
+    if (client.role !== 'controller' || client.clientId !== clientId || !client.authenticated) {
+      continue;
+    }
+
+    send(client.ws, buildError(nanoid(), 'relay', {
+      category: 'auth',
+      code: 'controller_revoked',
+      message: 'Controller client has been removed and access has been revoked',
+      clientId,
+    }));
+    client.ws.close();
+    disconnected += 1;
+  }
+
+  return disconnected;
+}
+
+function removeControllerClientById(clientId: string): {
+  ok: boolean;
+  clientId: string;
+  revokedAt: number;
+  aclRevokedCount: number;
+  refreshRevokedCount: number;
+  disconnectedSessions: number;
+  alreadyRevoked: boolean;
+} {
+  const record = controllerClients.get(clientId);
+  if (!record) {
+    throw new Error('client_not_found');
+  }
+
+  if (typeof record.revokedAt === 'number') {
+    return {
+      ok: true,
+      clientId,
+      revokedAt: record.revokedAt,
+      aclRevokedCount: 0,
+      refreshRevokedCount: 0,
+      disconnectedSessions: 0,
+      alreadyRevoked: true,
+    };
+  }
+
+  record.revokedAt = Date.now();
+  controllerClients.set(clientId, record);
+  persistControllerClients();
+
+  const aclRevokedCount = revokeControllerAclByClientId(clientId);
+  const refreshRevokedCount = revokeRefreshSessionsByClientId(clientId);
+  const disconnectedSessions = disconnectControllerSessionsByClientId(clientId);
+
+  emitLog({
+    level: 'warn',
+    source: 'relay',
+    type: 'controller_client_removed',
+    status: 'revoked',
+    data: {
+      clientId,
+      aclRevokedCount,
+      refreshRevokedCount,
+      disconnectedSessions,
+    },
+  });
+
+  return {
+    ok: true,
+    clientId,
+    revokedAt: record.revokedAt,
+    aclRevokedCount,
+    refreshRevokedCount,
+    disconnectedSessions,
+    alreadyRevoked: false,
+  };
+}
+
+function purgeControllerClientById(clientId: string): boolean {
+  if (!controllerClients.has(clientId)) {
+    return false;
+  }
+
+  controllerClients.delete(clientId);
+  persistControllerClients();
+  return true;
+}
+
+function isRevokedControllerClient(clientId: string | undefined): boolean {
+  if (!clientId) {
+    return false;
+  }
+
+  const record = controllerClients.get(clientId);
+  return !record || typeof record.revokedAt === 'number';
+}
+
+function isControllerAllowedNode(client: Client, targetNodeId: string): boolean {
+  if (!client.clientId) {
+    return true;
+  }
+
+  const grant = controllerAcl.get(aclKey(client.clientId, targetNodeId));
+  if (!grant) {
+    return false;
+  }
+
+  if (grant.expiresAt && grant.expiresAt <= Date.now()) {
+    controllerAcl.delete(aclKey(client.clientId, targetNodeId));
+    persistControllerAcl();
+    return false;
+  }
+
+  return true;
+}
+
+function issueRefreshToken(
+  role: OttoRole,
+  nodeId?: string,
+  controllerId?: string,
+  scopes: string[] = [],
+  clientId?: string,
+): string {
   const token = `rt_${nanoid(36)}`;
   refreshTokens.set(token, {
     role,
     nodeId,
     controllerId,
+    clientId,
     scopes,
     expiresAt: Date.now() + REFRESH_TTL_SECONDS * 1000,
   });
@@ -393,6 +860,8 @@ if (!existsSync(LOG_DIR)) {
 }
 
 const refreshStoreStats = loadRefreshSessions();
+const controllerClientStoreStats = loadControllerClients();
+const controllerAclStoreStats = loadControllerAcl();
 
 for (const filePath of listOperationLogFiles()) {
   const lines = readFileSync(filePath, 'utf8').split('\n').filter(Boolean);
@@ -514,15 +983,82 @@ function queuedDepthForController(controllerId: string): number {
   return total;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function extractRecipeStreamListeners(payload: unknown): RecipeStreamListenerBinding[] {
+  const resultPayload = asRecord(payload);
+  const data = asRecord(resultPayload?.data);
+  const stream = asRecord(data?.stream);
+  const listenersRaw = stream?.listeners;
+  if (!Array.isArray(listenersRaw)) {
+    return [];
+  }
+
+  const listeners: RecipeStreamListenerBinding[] = [];
+  for (const entry of listenersRaw) {
+    const listenerRecord = asRecord(entry);
+    const listener = listenerRecord?.listener;
+    if (typeof listener !== 'string' || listener.length === 0) {
+      continue;
+    }
+    const optionsRecord = asRecord(listenerRecord?.options) ?? {};
+    listeners.push({
+      listener,
+      options: optionsRecord,
+    });
+  }
+
+  return listeners;
+}
+
+function findCandidateRecipeStreamSession(
+  controllerId: string,
+  nodeId: string,
+  tabKey: string | undefined,
+  listener: string,
+): RecipeTestStreamSession | undefined {
+  for (const session of recipeTestStreamSessions.values()) {
+    if (session.controllerId !== controllerId || session.nodeId !== nodeId) {
+      continue;
+    }
+    if (session.tabKey !== tabKey) {
+      continue;
+    }
+
+    const candidate = session.listeners.find((declared) => {
+      if (declared.subscribeRequestId) {
+        return false;
+      }
+      return declared.listener === listener;
+    });
+    if (candidate) {
+      return session;
+    }
+  }
+
+  return undefined;
+}
+
 function randomCode(): string {
   const a = Math.floor(100 + Math.random() * 900);
   const b = Math.floor(100 + Math.random() * 900);
   return `${a}-${b}`;
 }
 
-async function issueAccessToken(role: OttoRole, nodeId?: string, controllerId?: string, scopes: string[] = []): Promise<string> {
+async function issueAccessToken(
+  role: OttoRole,
+  nodeId?: string,
+  controllerId?: string,
+  scopes: string[] = [],
+  clientId?: string,
+): Promise<string> {
   const secret = new TextEncoder().encode(TOKEN_SECRET);
-  return new SignJWT({ role, nodeId, controllerId, scopes })
+  return new SignJWT({ role, nodeId, controllerId, clientId, scopes })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuer(TOKEN_ISSUER)
     .setAudience(TOKEN_AUDIENCE)
@@ -531,7 +1067,13 @@ async function issueAccessToken(role: OttoRole, nodeId?: string, controllerId?: 
     .sign(secret);
 }
 
-async function verifyAccessToken(token: string): Promise<{ role: OttoRole; nodeId?: string; controllerId?: string; scopes: string[] }> {
+async function verifyAccessToken(token: string): Promise<{
+  role: OttoRole;
+  nodeId?: string;
+  controllerId?: string;
+  clientId?: string;
+  scopes: string[];
+}> {
   const secrets = [TOKEN_SECRET, TOKEN_PREVIOUS_SECRET].filter((x): x is string => Boolean(x));
   let payload: Awaited<ReturnType<typeof jwtVerify>>['payload'] | undefined;
   for (const candidate of secrets) {
@@ -559,6 +1101,7 @@ async function verifyAccessToken(token: string): Promise<{ role: OttoRole; nodeI
     role,
     nodeId: payload.nodeId as string | undefined,
     controllerId: payload.controllerId as string | undefined,
+    clientId: payload.clientId as string | undefined,
     scopes,
   };
 }
@@ -665,6 +1208,26 @@ function clearInflightAndRunNext(tabKey?: string): void {
   const timeoutHandle = setTimeout(() => {
     const stillPending = pendingCommands.get(next.message.requestId);
     if (!stillPending) return;
+    if (stillPending.action === 'listener.subscribe') {
+      const sessionRequestId = listenerToRecipeStreamSession.get(stillPending.requestId);
+      if (sessionRequestId) {
+        const streamSession = recipeTestStreamSessions.get(sessionRequestId);
+        const streamOwner = streamSession ? clients.get(streamSession.controllerId) : undefined;
+        if (streamSession && streamOwner) {
+          send(streamOwner.ws, buildEnvelope('result', 'relay', streamSession.requestId, {
+            ok: true,
+            durationMs: Date.now() - streamSession.createdAt,
+            action: streamSession.action,
+            commandOutcome: 'timed_out',
+            data: {
+              streamTimedOut: true,
+              reason: 'listener_subscribe_timeout',
+            },
+          }));
+        }
+        clearRecipeTestStreamSession(sessionRequestId);
+      }
+    }
     const controller = clients.get(stillPending.controllerId);
     if (controller) {
       send(controller.ws, buildError(next.message.requestId, 'relay', {
@@ -685,6 +1248,7 @@ function clearInflightAndRunNext(tabKey?: string): void {
     controllerId: next.controllerId,
     nodeId,
     action: String(payload.action ?? 'unknown'),
+    timeoutMs,
     createdAt: Date.now(),
     tabKey,
     timeoutHandle,
@@ -698,6 +1262,18 @@ function clearInflightAndRunNext(tabKey?: string): void {
 }
 
 function removeListenerSubscription(requestId: string): void {
+  const sessionRequestId = listenerToRecipeStreamSession.get(requestId);
+  if (sessionRequestId) {
+    const session = recipeTestStreamSessions.get(sessionRequestId);
+    if (session) {
+      for (const listener of session.listeners) {
+        if (listener.subscribeRequestId === requestId) {
+          listener.subscribeRequestId = undefined;
+        }
+      }
+    }
+    listenerToRecipeStreamSession.delete(requestId);
+  }
   listenerSubscriptions.delete(requestId);
 }
 
@@ -705,6 +1281,7 @@ function removeListenerSubscriptionsForController(controllerId: string): void {
   for (const [requestId, subscription] of listenerSubscriptions.entries()) {
     if (subscription.controllerId === controllerId) {
       listenerSubscriptions.delete(requestId);
+      listenerToRecipeStreamSession.delete(requestId);
     }
   }
 }
@@ -713,6 +1290,42 @@ function removeListenerSubscriptionsForNode(nodeId: string): void {
   for (const [requestId, subscription] of listenerSubscriptions.entries()) {
     if (subscription.nodeId === nodeId) {
       listenerSubscriptions.delete(requestId);
+      listenerToRecipeStreamSession.delete(requestId);
+    }
+  }
+}
+
+function clearRecipeTestStreamSession(sessionRequestId: string): void {
+  const session = recipeTestStreamSessions.get(sessionRequestId);
+  if (!session) {
+    return;
+  }
+
+  if (session.timeoutHandle) {
+    clearTimeout(session.timeoutHandle);
+  }
+
+  for (const listener of session.listeners) {
+    if (listener.subscribeRequestId) {
+      listenerToRecipeStreamSession.delete(listener.subscribeRequestId);
+    }
+  }
+
+  recipeTestStreamSessions.delete(sessionRequestId);
+}
+
+function clearRecipeTestStreamSessionsForController(controllerId: string): void {
+  for (const [requestId, session] of recipeTestStreamSessions.entries()) {
+    if (session.controllerId === controllerId) {
+      clearRecipeTestStreamSession(requestId);
+    }
+  }
+}
+
+function clearRecipeTestStreamSessionsForNode(nodeId: string): void {
+  for (const [requestId, session] of recipeTestStreamSessions.entries()) {
+    if (session.nodeId === nodeId) {
+      clearRecipeTestStreamSession(requestId);
     }
   }
 }
@@ -936,8 +1549,22 @@ server.on('request', (req, res) => {
           jsonResponse(res, 401, { error: 'invalid_refresh_token' });
           return;
         }
-        const accessToken = await issueAccessToken(session.role, session.nodeId, session.controllerId, session.scopes);
-        jsonResponse(res, 200, { accessToken });
+        const accessToken = await issueAccessToken(
+          session.role,
+          session.nodeId,
+          session.controllerId,
+          session.scopes,
+          session.clientId,
+        );
+        const refreshToken = issueRefreshToken(
+          session.role,
+          session.nodeId,
+          session.controllerId,
+          session.scopes,
+          session.clientId,
+        );
+        revokeRefreshToken(body.refreshToken);
+        jsonResponse(res, 200, { accessToken, refreshToken });
       } catch {
         jsonResponse(res, 400, { error: 'invalid_json' });
       }
@@ -960,6 +1587,336 @@ server.on('request', (req, res) => {
       } catch {
         jsonResponse(res, 400, { error: 'invalid_json' });
       }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/controller/register') {
+    if (!canRegisterControllerClient(req)) {
+      jsonResponse(res, 403, { error: 'registration_forbidden' });
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+          name?: string;
+          description?: string;
+          avatarSeed?: string;
+        };
+        const name = typeof body.name === 'string' ? normalizeControllerNameInput(body.name).slice(0, 120) : '';
+        const description = typeof body.description === 'string'
+          ? body.description.trim().slice(0, 500)
+          : '';
+        if (!name || !description) {
+          jsonResponse(res, 400, { error: 'controller_metadata_required' });
+          return;
+        }
+
+        const normalizedName = normalizedControllerNameKey(name);
+        const existing = findControllerByNormalizedName(normalizedName);
+        if (existing) {
+          jsonResponse(res, 409, {
+            error: 'controller_name_conflict',
+            code: 'controller_name_conflict',
+            message: 'Controller name is already registered',
+            clientId: existing.clientId,
+          });
+          return;
+        }
+
+        const clientId = `clt_${nanoid(10)}`;
+        const clientSecret = `cs_${randomBytes(24).toString('base64url')}`;
+        const secretSalt = randomBytes(16).toString('hex');
+        const record: ControllerClientRecord = {
+          clientId,
+          name,
+          description,
+          normalizedName,
+          avatarSeed: typeof body.avatarSeed === 'string' && body.avatarSeed.trim().length > 0
+            ? body.avatarSeed.trim().slice(0, 64)
+            : deriveAvatarSeed(name),
+          secretSalt,
+          secretHash: hashClientSecret(clientSecret, secretSalt),
+          createdAt: Date.now(),
+        };
+
+        controllerClients.set(clientId, record);
+        persistControllerClients();
+
+        emitLog({
+          level: 'info',
+          source: 'relay',
+          type: 'controller_client_registered',
+          status: 'created',
+          data: { clientId, name },
+        });
+
+        jsonResponse(res, 200, {
+          clientId,
+          name,
+          description,
+          avatarSeed: record.avatarSeed,
+          clientSecret,
+          createdAt: record.createdAt,
+        });
+      } catch {
+        jsonResponse(res, 400, { error: 'invalid_json' });
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/controller/token') {
+    const chunks: Buffer[] = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', async () => {
+      try {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+          clientId?: string;
+          clientSecret?: string;
+        };
+
+        if (!body.clientId || !body.clientSecret) {
+          jsonResponse(res, 400, { error: 'client_credentials_required' });
+          return;
+        }
+
+        const record = controllerClients.get(body.clientId);
+        if (!record || record.revokedAt) {
+          jsonResponse(res, 401, { error: 'invalid_client_credentials' });
+          return;
+        }
+
+        if (!verifyClientSecret(body.clientSecret, record)) {
+          emitLog({
+            level: 'warn',
+            source: 'relay',
+            type: 'controller_client_auth_failed',
+            status: 'denied',
+            data: { clientId: body.clientId },
+          });
+          jsonResponse(res, 401, { error: 'invalid_client_credentials' });
+          return;
+        }
+
+        const controllerId = `ctl_${nanoid(10)}`;
+        const accessToken = await issueAccessToken(
+          'controller',
+          undefined,
+          controllerId,
+          DEFAULT_CONTROLLER_SCOPES,
+          record.clientId,
+        );
+        const refreshToken = issueRefreshToken(
+          'controller',
+          undefined,
+          controllerId,
+          DEFAULT_CONTROLLER_SCOPES,
+          record.clientId,
+        );
+
+        record.lastUsedAt = Date.now();
+        controllerClients.set(record.clientId, record);
+        persistControllerClients();
+
+        emitLog({
+          level: 'info',
+          source: 'relay',
+          type: 'controller_client_token_issued',
+          status: 'issued',
+          data: { clientId: record.clientId, controllerId },
+        });
+
+        jsonResponse(res, 200, {
+          clientId: record.clientId,
+          controllerId,
+          scopes: DEFAULT_CONTROLLER_SCOPES,
+          accessToken,
+          refreshToken,
+        });
+      } catch {
+        jsonResponse(res, 400, { error: 'invalid_json' });
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/controller/remove') {
+    if (!canRegisterControllerClient(req)) {
+      jsonResponse(res, 403, { error: 'registration_forbidden' });
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      try {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { clientId?: string };
+        const clientId = typeof body.clientId === 'string' ? body.clientId.trim() : '';
+        if (!clientId) {
+          jsonResponse(res, 400, { error: 'clientId_required' });
+          return;
+        }
+
+        if (!controllerClients.has(clientId)) {
+          jsonResponse(res, 404, { error: 'client_not_found' });
+          return;
+        }
+
+        jsonResponse(res, 200, removeControllerClientById(clientId));
+      } catch {
+        jsonResponse(res, 400, { error: 'invalid_json' });
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/controller/remove-all') {
+    if (!canRegisterControllerClient(req)) {
+      jsonResponse(res, 403, { error: 'registration_forbidden' });
+      return;
+    }
+
+    const removedClientIds: string[] = [];
+    let aclRevokedCount = 0;
+    let refreshRevokedCount = 0;
+    let disconnectedSessions = 0;
+    const clientIds = Array.from(controllerClients.keys());
+
+    for (const clientId of clientIds) {
+      const removal = removeControllerClientById(clientId);
+      removedClientIds.push(clientId);
+      aclRevokedCount += removal.aclRevokedCount;
+      refreshRevokedCount += removal.refreshRevokedCount;
+      disconnectedSessions += removal.disconnectedSessions;
+      purgeControllerClientById(clientId);
+    }
+
+    jsonResponse(res, 200, {
+      ok: true,
+      removedClientIds,
+      removedCount: removedClientIds.length,
+      aclRevokedCount,
+      refreshRevokedCount,
+      disconnectedSessions,
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/controller/access') {
+    const token = parseBearerToken(req);
+    if (!token) {
+      jsonResponse(res, 401, { error: 'missing_access_token' });
+      return;
+    }
+
+    void (async () => {
+      try {
+        const claims = await verifyAccessToken(token);
+        if (claims.role !== 'node' || !claims.nodeId) {
+          jsonResponse(res, 403, { error: 'forbidden_role' });
+          return;
+        }
+
+        jsonResponse(res, 200, {
+          nodeId: claims.nodeId,
+          clients: listAclForNode(claims.nodeId),
+        });
+      } catch {
+        jsonResponse(res, 401, { error: 'invalid_access_token' });
+      }
+    })();
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/controller/access') {
+    const token = parseBearerToken(req);
+    if (!token) {
+      jsonResponse(res, 401, { error: 'missing_access_token' });
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      void (async () => {
+        try {
+          const claims = await verifyAccessToken(token);
+          if (claims.role !== 'node' || !claims.nodeId) {
+            jsonResponse(res, 403, { error: 'forbidden_role' });
+            return;
+          }
+
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+            clientId?: string;
+            grant?: boolean;
+            expiresAt?: number;
+          };
+
+          if (!body.clientId || typeof body.grant !== 'boolean') {
+            jsonResponse(res, 400, { error: 'clientId_and_grant_required' });
+            return;
+          }
+
+          const record = controllerClients.get(body.clientId);
+          if (!record || record.revokedAt) {
+            jsonResponse(res, 404, { error: 'client_not_found' });
+            return;
+          }
+
+          const key = aclKey(body.clientId, claims.nodeId);
+          if (body.grant) {
+            if (typeof body.expiresAt === 'number' && body.expiresAt <= Date.now()) {
+              jsonResponse(res, 400, { error: 'invalid_expiresAt' });
+              return;
+            }
+
+            const nextGrant: ControllerAclGrant = {
+              clientId: body.clientId,
+              nodeId: claims.nodeId,
+              grantedByNodeId: claims.nodeId,
+              grantedAt: Date.now(),
+              expiresAt: typeof body.expiresAt === 'number' ? body.expiresAt : undefined,
+            };
+
+            controllerAcl.set(key, nextGrant);
+            persistControllerAcl();
+
+            emitLog({
+              level: 'info',
+              source: 'node',
+              type: 'controller_acl_granted',
+              nodeId: claims.nodeId,
+              status: 'granted',
+              data: { clientId: body.clientId, expiresAt: nextGrant.expiresAt },
+            });
+
+            jsonResponse(res, 200, { ok: true, clientId: body.clientId, nodeId: claims.nodeId, granted: true });
+            return;
+          }
+
+          const removed = controllerAcl.delete(key);
+          if (removed) {
+            persistControllerAcl();
+          }
+
+          emitLog({
+            level: 'info',
+            source: 'node',
+            type: 'controller_acl_revoked',
+            nodeId: claims.nodeId,
+            status: 'revoked',
+            data: { clientId: body.clientId, existed: removed },
+          });
+
+          jsonResponse(res, 200, { ok: true, clientId: body.clientId, nodeId: claims.nodeId, granted: false });
+        } catch {
+          jsonResponse(res, 400, { error: 'invalid_json' });
+        }
+      })();
     });
     return;
   }
@@ -1249,10 +2206,28 @@ wss.on('connection', (ws) => {
             return;
           }
 
+          if (token.role === 'controller' && isRevokedControllerClient(token.clientId)) {
+            emitLog({
+              level: 'warn',
+              source: 'relay',
+              type: 'auth_rejected',
+              requestId: msg.requestId,
+              data: { reason: 'controller_revoked', clientId: token.clientId },
+            });
+            send(ws, buildError(msg.requestId, 'relay', {
+              category: 'auth',
+              code: 'invalid_access_token',
+              message: 'Controller client has been revoked',
+              clientId: token.clientId,
+            }));
+            return;
+          }
+
           if (client) {
             client.authenticated = true;
             client.nodeId = token.nodeId ?? client.nodeId;
             client.controllerId = token.controllerId;
+            client.clientId = token.clientId;
             client.scopes = token.scopes;
           }
 
@@ -1403,7 +2378,17 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        send(owner.ws, msg);
+        const streamSessionRequestId = listenerToRecipeStreamSession.get(msg.requestId);
+        if (streamSessionRequestId) {
+          send(owner.ws, buildEnvelope('event', 'relay', streamSessionRequestId, {
+            type: 'listener_update',
+            data: parsed.data.data,
+            updateType: parsed.data.updateType,
+            emittedAt: parsed.data.emittedAt,
+          }));
+        } else {
+          send(owner.ws, msg);
+        }
         emitLog({
           level: 'info',
           source: 'node',
@@ -1514,6 +2499,17 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (isRevokedControllerClient(client.clientId)) {
+        send(ws, buildError(msg.requestId, 'relay', {
+          category: 'auth',
+          code: 'controller_revoked',
+          message: 'Controller client has been removed and cannot execute commands',
+          clientId: client.clientId,
+        }));
+        ws.close();
+        return;
+      }
+
       const payload = msg.payload as {
         targetNodeId?: string;
         action?: string;
@@ -1547,6 +2543,32 @@ wss.on('connection', (ws) => {
           code: 'missing_target_node',
           message: 'targetNodeId is required',
         }));
+        return;
+      }
+
+      if (!isControllerAllowedNode(client, payload.targetNodeId)) {
+        send(ws, buildError(msg.requestId, 'relay', {
+          category: 'auth',
+          code: 'acl_missing_node_grant',
+          message: 'Controller is not granted access to targetNodeId. Approve this controller in extension Controller Access UI.',
+          actionableHint: 'Approve this controller from extension popup/options Controller Access section.',
+          action: String(payload.action ?? ''),
+          nodeId: payload.targetNodeId,
+          clientId: client.clientId,
+        }));
+        emitLog({
+          level: 'warn',
+          source: 'relay',
+          type: 'controller_acl_denied',
+          requestId: msg.requestId,
+          nodeId: payload.targetNodeId,
+          action: String(payload.action ?? ''),
+          status: 'denied',
+          data: {
+            controllerId: client.controllerId,
+            clientId: client.clientId,
+          },
+        });
         return;
       }
 
@@ -1690,11 +2712,56 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (payload.action === 'listener.subscribe') {
+        const subscribePayload = asRecord(payload.payload);
+        const listener = subscribePayload?.listener;
+        if (typeof listener === 'string' && listener.length > 0) {
+          const streamSession = findCandidateRecipeStreamSession(
+            client.id,
+            payload.targetNodeId,
+            queueKey,
+            listener,
+          );
+          if (streamSession) {
+            const declaredListener = streamSession.listeners.find((item) => {
+              if (item.subscribeRequestId) {
+                return false;
+              }
+              return item.listener === listener;
+            });
+            if (declaredListener) {
+              declaredListener.subscribeRequestId = msg.requestId;
+              listenerToRecipeStreamSession.set(msg.requestId, streamSession.requestId);
+            }
+          }
+        }
+      }
+
       const timeoutMs = Number((msg.payload as { timeoutMs?: number }).timeoutMs ?? 30_000);
       if (queueKey) inflightByTab.add(queueKey);
       const timeoutHandle = setTimeout(() => {
         const stillPending = pendingCommands.get(msg.requestId);
         if (!stillPending) return;
+        if (stillPending.action === 'listener.subscribe') {
+          const sessionRequestId = listenerToRecipeStreamSession.get(stillPending.requestId);
+          if (sessionRequestId) {
+            const streamSession = recipeTestStreamSessions.get(sessionRequestId);
+            const streamOwner = streamSession ? clients.get(streamSession.controllerId) : undefined;
+            if (streamSession && streamOwner) {
+              send(streamOwner.ws, buildEnvelope('result', 'relay', streamSession.requestId, {
+                ok: true,
+                durationMs: Date.now() - streamSession.createdAt,
+                action: streamSession.action,
+                commandOutcome: 'timed_out',
+                data: {
+                  streamTimedOut: true,
+                  reason: 'listener_subscribe_timeout',
+                },
+              }));
+            }
+            clearRecipeTestStreamSession(sessionRequestId);
+          }
+        }
         const owner = clients.get(stillPending.controllerId);
         if (owner) {
           send(owner.ws, buildError(msg.requestId, 'relay', {
@@ -1715,6 +2782,7 @@ wss.on('connection', (ws) => {
         controllerId: client.id,
         nodeId: payload.targetNodeId,
         action: String(payload.action ?? 'unknown'),
+        timeoutMs,
         unsubscribeTargetRequestId: payload.action === 'listener.unsubscribe' ? payload.payload?.targetRequestId : undefined,
         createdAt: Date.now(),
         tabKey: queueKey,
@@ -1805,6 +2873,56 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        const streamSession = recipeTestStreamSessions.get(payload.targetRequestId);
+        if (streamSession) {
+          if (streamSession.controllerId !== client.id) {
+            send(ws, buildError(msg.requestId, 'relay', {
+              category: 'auth',
+              code: 'command_owner_mismatch',
+              message: 'Cannot cancel a recipe test stream owned by another controller',
+              nodeId: streamSession.nodeId,
+              action: streamSession.action,
+            }));
+            return;
+          }
+
+          const nodeClient = nodeClients.get(streamSession.nodeId);
+          if (nodeClient) {
+            for (const listener of streamSession.listeners) {
+              if (!listener.subscribeRequestId) {
+                continue;
+              }
+
+              send(nodeClient.ws, buildEnvelope('command', 'relay', nanoid(), {
+                targetNodeId: streamSession.nodeId,
+                action: 'listener.unsubscribe',
+                payload: {
+                  targetRequestId: listener.subscribeRequestId,
+                },
+                timeoutMs: 5000,
+                waitPolicy: 'fail_fast',
+              }));
+            }
+          }
+
+          send(ws, buildEnvelope('result', 'relay', payload.targetRequestId, {
+            ok: true,
+            durationMs: Date.now() - streamSession.createdAt,
+            action: streamSession.action,
+            commandOutcome: 'cancelled',
+            data: {
+              streamCancelled: true,
+            },
+          }));
+          clearRecipeTestStreamSession(streamSession.requestId);
+          send(ws, buildEnvelope('event', 'relay', msg.requestId, {
+            type: 'cancel_ack',
+            targetRequestId: payload.targetRequestId,
+            status: 'cancelled',
+          }));
+          return;
+        }
+
         send(ws, buildError(msg.requestId, 'relay', {
           category: 'routing',
           code: 'command_not_found',
@@ -1849,6 +2967,67 @@ wss.on('connection', (ws) => {
           if (resultPayload.ok === true && pending.action === 'listener.unsubscribe' && pending.unsubscribeTargetRequestId) {
             removeListenerSubscription(pending.unsubscribeTargetRequestId);
           }
+
+          if (resultPayload.ok === true && pending.action === 'recipe.test') {
+            const listeners = extractRecipeStreamListeners(msg.payload);
+            if (listeners.length > 0) {
+              const streamTimeoutMs = Math.max(1000, pending.timeoutMs);
+              const timeoutHandle = setTimeout(() => {
+                const activeSession = recipeTestStreamSessions.get(msg.requestId);
+                if (!activeSession) {
+                  return;
+                }
+
+                const sessionOwner = clients.get(activeSession.controllerId);
+                if (sessionOwner) {
+                  send(sessionOwner.ws, buildEnvelope('result', 'relay', activeSession.requestId, {
+                    ok: true,
+                    durationMs: Date.now() - activeSession.createdAt,
+                    action: activeSession.action,
+                    commandOutcome: 'timed_out',
+                    data: {
+                      streamTimedOut: true,
+                    },
+                  }));
+                }
+                clearRecipeTestStreamSession(activeSession.requestId);
+              }, streamTimeoutMs);
+
+              recipeTestStreamSessions.set(msg.requestId, {
+                requestId: msg.requestId,
+                controllerId: pending.controllerId,
+                nodeId: pending.nodeId,
+                action: pending.action,
+                createdAt: pending.createdAt,
+                tabKey: pending.tabKey,
+                timeoutHandle,
+                listeners,
+              });
+            }
+          }
+        }
+
+        if (pending.action === 'listener.subscribe') {
+          const sessionRequestId = listenerToRecipeStreamSession.get(msg.requestId);
+          const listenerSubscribeFailed = msg.messageType === 'error'
+            || (msg.messageType === 'result' && (msg.payload as { ok?: boolean }).ok !== true);
+          if (sessionRequestId && listenerSubscribeFailed) {
+            const streamSession = recipeTestStreamSessions.get(sessionRequestId);
+            const streamOwner = streamSession ? clients.get(streamSession.controllerId) : undefined;
+            if (streamSession && streamOwner) {
+              send(streamOwner.ws, buildEnvelope('result', 'relay', streamSession.requestId, {
+                ok: true,
+                durationMs: Date.now() - streamSession.createdAt,
+                action: streamSession.action,
+                commandOutcome: 'failed',
+                data: {
+                  streamFailed: true,
+                  reason: 'listener_subscribe_failed',
+                },
+              }));
+            }
+            clearRecipeTestStreamSession(sessionRequestId);
+          }
         }
 
         clearTimeout(pending.timeoutHandle);
@@ -1887,7 +3066,7 @@ wss.on('connection', (ws) => {
         }));
         return;
       }
-      issueAccessToken(session.role, session.nodeId, session.controllerId, session.scopes)
+      issueAccessToken(session.role, session.nodeId, session.controllerId, session.scopes, session.clientId)
         .then((accessToken) => {
           send(ws, buildEnvelope('refresh_ack', 'relay', msg.requestId, { accessToken }));
         })
@@ -1909,6 +3088,26 @@ wss.on('connection', (ws) => {
     if (client.role === 'node' && client.nodeId) {
       nodeClients.delete(client.nodeId);
       removeListenerSubscriptionsForNode(client.nodeId);
+
+      for (const [sessionRequestId, session] of recipeTestStreamSessions.entries()) {
+        if (session.nodeId !== client.nodeId) {
+          continue;
+        }
+        const owner = clients.get(session.controllerId);
+        if (owner) {
+          send(owner.ws, buildEnvelope('result', 'relay', sessionRequestId, {
+            ok: true,
+            durationMs: Date.now() - session.createdAt,
+            action: session.action,
+            commandOutcome: 'failed',
+            data: {
+              streamFailed: true,
+              reason: 'node_disconnected',
+            },
+          }));
+        }
+      }
+      clearRecipeTestStreamSessionsForNode(client.nodeId);
 
       for (const [requestId, pending] of pendingCommands.entries()) {
         if (pending.nodeId === client.nodeId) {
@@ -1932,6 +3131,7 @@ wss.on('connection', (ws) => {
 
     if (client.role === 'controller') {
       removeListenerSubscriptionsForController(client.id);
+      clearRecipeTestStreamSessionsForController(client.id);
     }
 
     for (const [key, lock] of locks.entries()) {
@@ -1945,6 +3145,7 @@ wss.on('connection', (ws) => {
 setInterval(() => {
   cleanupLogs();
   cleanupRefreshSessions();
+  cleanupControllerAcl();
 }, 60 * 60 * 1000);
 
 server.listen(PORT, () => {
@@ -1964,6 +3165,14 @@ server.listen(PORT, () => {
       refreshSessionStore: {
         file: REFRESH_SESSIONS_FILE,
         ...refreshStoreStats,
+      },
+      controllerClientStore: {
+        file: CONTROLLER_CLIENTS_FILE,
+        ...controllerClientStoreStats,
+      },
+      controllerAclStore: {
+        file: CONTROLLER_ACL_FILE,
+        ...controllerAclStoreStats,
       },
     },
   });

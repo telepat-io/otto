@@ -12,6 +12,9 @@ import {
 import { getReplayResponse, rememberReplayResponse } from '../src/runtime/command-replay.js';
 import { executeCommand } from '../src/runtime/command-executor.js';
 import { CommandExecutionError } from '../src/runtime/execution-error.js';
+import {
+  getNetworkInterceptListenerManager,
+} from '../src/runtime/listener-managers.js';
 import { deriveOnboardingState, type RelayConnectionStatus } from '../src/runtime/onboarding-state.js';
 
 function withRuntimeErrorLogging<T>(promise: Promise<T>): void {
@@ -76,6 +79,8 @@ export default defineBackground(() => {
   let rerunRequested = false;
   let rerunRequiresBootstrap = false;
   const activeListenerRequestIds = new Set<string>();
+  const listenerNameByRequestId = new Map<string, string>();
+  const networkInterceptListenerManager = getNetworkInterceptListenerManager(chrome);
 
   const runMaintenance = (mode: 'bootstrap' | 'keepwarm') => {
     if (maintenanceInFlight) {
@@ -334,12 +339,53 @@ export default defineBackground(() => {
           try {
             const result = await executeCommand(chrome, cmd.payload);
             if (cmd.payload.action === 'listener.subscribe') {
+              const listener = String(cmd.payload.payload.listener ?? '').trim();
+              const resultData = (result.data ?? {}) as Record<string, unknown>;
+              const normalizedOptions = (
+                resultData.options && typeof resultData.options === 'object'
+                  ? resultData.options
+                  : {}
+              ) as Record<string, unknown>;
+
+              if (listener === 'network.http_intercept') {
+                await networkInterceptListenerManager.subscribe(cmd.requestId, normalizedOptions as {
+                  tabSessionId: string;
+                  site: string;
+                  urlPatterns?: string[];
+                  requestHostAllowlist?: string[];
+                  mode?: 'network' | 'fetch' | 'hybrid';
+                  includeBody?: boolean;
+                  includeHeaders?: boolean;
+                  maxBodyBytes?: number;
+                  mimeTypes?: string[];
+                });
+              } else {
+                throw new CommandExecutionError(
+                  `Unsupported listener: ${listener}`,
+                  'unsupported_listener',
+                  'listener.subscribe',
+                  false,
+                );
+              }
               activeListenerRequestIds.add(cmd.requestId);
+              listenerNameByRequestId.set(cmd.requestId, listener);
             }
             if (cmd.payload.action === 'listener.unsubscribe') {
               const targetRequestId = String(cmd.payload.payload.targetRequestId ?? '').trim();
               if (targetRequestId) {
+                const listenerName = listenerNameByRequestId.get(targetRequestId);
+                if (listenerName === 'network.http_intercept') {
+                  await networkInterceptListenerManager.unsubscribe(targetRequestId);
+                } else if (listenerName) {
+                  throw new CommandExecutionError(
+                    `Unsupported listener for unsubscribe: ${listenerName}`,
+                    'unsupported_listener',
+                    'listener.unsubscribe',
+                    false,
+                  );
+                }
                 activeListenerRequestIds.delete(targetRequestId);
+                listenerNameByRequestId.delete(targetRequestId);
               }
             }
             const response = createEnvelope('result', 'node', cmd.requestId, {
@@ -395,5 +441,16 @@ export default defineBackground(() => {
     }
 
     return false;
+  });
+
+  chrome.runtime.onSuspend.addListener(() => {
+    withRuntimeErrorLogging(
+      Promise.all([
+        networkInterceptListenerManager.unsubscribeAll(),
+      ]).then(() => {
+        activeListenerRequestIds.clear();
+        listenerNameByRequestId.clear();
+      }),
+    );
   });
 });

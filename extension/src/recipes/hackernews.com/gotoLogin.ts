@@ -10,6 +10,7 @@ export const gotoLoginRecipe: SiteRecipe = {
     description: 'Navigates the current tab to the Hacker News login page.',
     tags: ['auth', 'builtin'],
     requiresAuth: false,
+    inputFields: [],
   },
   async execute(ctx) {
     await ctx.navigateTab(HN_LOGIN_URL);

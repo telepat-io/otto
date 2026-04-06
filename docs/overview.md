@@ -1,6 +1,6 @@
 # Otto Overview
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-04
 Owner: Platform
 
 ## Purpose
@@ -16,7 +16,7 @@ Primary architecture:
 ## Current Capabilities
 
 - Primitive browser actions (`primitive.tab.*`, `primitive.dom.extract_text`).
-- Site-scoped recipe execution (`recipe.run`) with runtime discovery (`recipe.list`).
+- Site-scoped recipe execution (`recipe.run`) with runtime discovery (`recipe.list`) and test-path execution (`recipe.test`).
 - Legacy recipe alias support (`recipe.reddit_feed` -> `reddit.com/getFeed`).
 - Deterministic terminal outcomes and replay-safe command handling.
 - CLI onboarding setup flow (`otto setup`) for relay daemon readiness, extension artifact retrieval, and Chrome import handoff.
@@ -31,11 +31,13 @@ Primary architecture:
 
 Recipe-specific path:
 
-1. Controller invokes `recipe.run` with `site`, `recipe`, `input`, and optional `authMode`.
+1. Controller invokes `recipe.run` or `recipe.test` with `site`, `recipe`, `input`, and optional `authMode`.
 2. Extension recipe runtime resolves site bundle and recipe metadata.
 3. Runtime validates active tab domain against target site.
-4. If recipe requires auth, runtime runs `checkLogin` and optional `gotoLogin`.
-5. Runtime executes recipe and returns structured data.
+4. Runtime validates recipe metadata input contracts (`inputFields`, optional `inputAtLeastOneOf`).
+5. If recipe requires auth, runtime runs `checkLogin` and optional `gotoLogin`.
+6. Runtime ensures `preloadHost` before `execute` (auto-navigation when needed).
+7. Runtime executes recipe and returns structured data.
 
 ## Extension Runtime Model
 
@@ -62,6 +64,8 @@ Recipe implementation location:
 Recipe invariants:
 
 - Recipe execution must run on a site-matching tab URL.
+- Declared recipe metadata inputs are validated before execution and sanitized before handler invocation.
+- Optional `inputAtLeastOneOf` constraints are enforced before execution.
 - `requiresAuth` recipes never automate credential submission.
 - Manual authentication handoff is explicit via `manual_login_required`.
 

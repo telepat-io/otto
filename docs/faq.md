@@ -1,6 +1,6 @@
 # FAQ
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-05
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -24,14 +24,35 @@ v1 uses fail-fast in-flight behavior and expects idempotent retry.
 ## Why does `otto test <site> <recipe>` return `manual_login_required`?
 The recipe is marked `requiresAuth` and the current website session is not authenticated. Complete login in the browser tab and rerun the same command.
 
+## Why does `otto test` fail with `acl_missing_node_grant` even after client registration?
+Controller registration and node access are separate controls. Open the extension popup, go to "Controller Access", and grant that controller client for the target node. Commands are denied until that node-owned ACL grant exists.
+
+## Why does popup show a controller row as "awaiting approval"?
+The controller is registered/authenticated at relay level but has not yet been granted access by that node. Use the row action button in popup to grant access.
+
 ## Why does `recipe.run` return `site_mismatch`?
 The resolved tab URL does not match the recipe site bundle. Open or navigate to the target site, then run again.
+
+## Why does `recipe.run` return `unexpected_recipe_input`?
+The recipe metadata declares strict `inputFields`, and your payload included keys that are not declared. Remove extra keys or update recipe metadata.
+
+## Why does `recipe.run` return `missing_recipe_input_one_of`?
+The recipe metadata declares `inputAtLeastOneOf`, which means at least one key from that list must be present in payload input.
+
+## Why does `recipe.run` return `preload_host_mismatch`?
+The recipe declares `preloadHost`, runtime attempted to navigate there before execute, and the committed URL host still did not match. This can happen with redirects, blocked navigation, or site-side interstitials.
+
+## Why did `otto test` open a different host than `<site>`?
+`otto test` now prefers recipe `preloadHost` from `recipe.list` metadata when available so preconditions are satisfied before command execution.
 
 ## Why does `otto recipes list` fail with `forbidden_action`?
 Your controller token scopes do not include `recipe.list`. Re-pair with broader scopes or adjust relay default scopes.
 
 ## Why does non-interactive CLI output look different from TUI mode?
 TTY sessions use Ink UI (`runCommandTui`), while non-TTY sessions return machine-parseable JSON and set exit code on terminal errors.
+
+## Why does `otto client remove --all` return zero on a second run?
+Bulk remove now purges controller client records after revocation. Once all clients are removed, the next `--all` run is expected to return `removedCount: 0` until new clients are registered.
 
 ## Why did `otto setup` not print Chrome install steps?
 `otto setup` prints human guidance in interactive TTY mode. If you pass `--non-interactive` (or run in a non-TTY environment), setup emits deterministic JSON output instead.

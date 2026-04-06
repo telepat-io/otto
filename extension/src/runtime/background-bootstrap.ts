@@ -20,6 +20,7 @@ type PairingChallenge = {
 
 type RefreshAccessTokenResponse = {
   accessToken?: string;
+  refreshToken?: string;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -83,7 +84,13 @@ async function validateNodeTokens(
       return false;
     }
 
-    await chromeApi.storage.local.set({ nodeAccessToken: refreshed.accessToken });
+    await chromeApi.storage.local.set({
+      nodeAccessToken: refreshed.accessToken,
+      nodeRefreshToken:
+        typeof refreshed.refreshToken === 'string' && refreshed.refreshToken.length > 0
+          ? refreshed.refreshToken
+          : refreshToken,
+    });
     return true;
   } catch {
     // Keep existing tokens on transient transport failures.

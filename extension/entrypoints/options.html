@@ -90,11 +90,31 @@
         padding: 8px 14px;
         cursor: pointer;
         font-weight: 700;
+        transition: transform 130ms ease, filter 130ms ease, box-shadow 160ms ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.06);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        filter: grayscale(0.2) brightness(0.9);
       }
 
       #refreshStatus {
         background: #1d4ed8;
         color: #fff;
+      }
+
+      #refreshStatus.refresh-success {
+        background: #0f766e;
+        box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
       }
 
       .status-card {
@@ -143,20 +163,148 @@
       }
 
       #pairingCommandToast {
-        margin-top: 8px;
-        padding: 6px 10px;
-        border-radius: 8px;
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 1000;
+        max-width: calc(100vw - 40px);
+        padding: 9px 12px;
+        border-radius: 999px;
         background: #0f5132;
         color: #ecfdf3;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.24);
         font-size: 12px;
         font-weight: 700;
-        display: none;
+        letter-spacing: 0.01em;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(10px) scale(0.97);
+        transition: opacity 170ms ease, transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      #pairingCommandToast[data-variant='error'] {
+        background: #b42318;
+        color: #fff1f0;
+      }
+
+      #pairingCommandToast.is-visible {
+        opacity: 1;
+        transform: translateY(0) scale(1);
       }
 
       #relaySaveStatus {
         margin-top: 10px;
         font-size: 13px;
         color: #334155;
+      }
+
+      .acl-card {
+        margin-top: 16px;
+        border: 1px solid #e2d6bb;
+        border-radius: 12px;
+        padding: 14px;
+        background: #fffcf4;
+      }
+
+      .acl-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .acl-head h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      #aclRefresh {
+        background: #0f766e;
+        color: #fff;
+      }
+
+      #aclStatus {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #334155;
+      }
+
+      .acl-list {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .acl-row {
+        border: 1px solid #e7dcc4;
+        border-radius: 10px;
+        padding: 10px;
+        background: #fffdf7;
+      }
+
+      .acl-left {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .acl-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+      }
+
+      .acl-text {
+        min-width: 0;
+      }
+
+      .acl-row-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+
+      .acl-description {
+        margin-top: 2px;
+        font-size: 11px;
+        color: #475467;
+      }
+      }
+
+      .acl-label {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .acl-meta {
+        margin-top: 5px;
+        font-size: 12px;
+        color: #475569;
+      }
+
+      .acl-action {
+        border: 0;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .acl-action.grant {
+        background: #0f766e;
+      }
+
+      .acl-action.revoke {
+        background: #b42318;
       }
 
       @media (max-width: 640px) {
@@ -187,10 +335,18 @@
           <div id="stateTitle">Loading status…</div>
           <div id="stateDetail"></div>
           <div id="pairingCode"></div>
-          <div id="pairingCommandToast" aria-live="polite"></div>
+          <div id="pairingCommandToast" aria-live="polite" aria-hidden="true"></div>
           <pre id="pairingCommand"></pre>
           <div id="nodeId"></div>
         </div>
+        <section class="acl-card" id="aclCard" style="display: none;">
+          <div class="acl-head">
+            <h2>Controller Access</h2>
+            <button id="aclRefresh" type="button">Refresh</button>
+          </div>
+          <div id="aclStatus">Waiting for node authentication...</div>
+          <div class="acl-list" id="aclList"></div>
+        </section>
       </section>
     </main>
     <script type="module" src="../src/runtime/options-ui.ts"></script>

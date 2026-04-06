@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { CommandPayload } from '@telepat/otto-protocol';
-import { listRecipesForRuntime, runRecipeCommand } from './recipe-runtime.js';
+import { listRecipesForRuntime, runRecipeCommand, runRecipeTestCommand } from './recipe-runtime.js';
 import { CommandExecutionError } from './execution-error.js';
 import { createSingleFlight } from './single-flight.js';
 
@@ -14,11 +14,75 @@ export type CommandExecutionResult = {
   data: unknown;
 };
 
+function isMissingTabGroupError(error: unknown): boolean {
+  const candidates: string[] = [];
+
+  if (typeof error === 'string') {
+    candidates.push(error);
+  }
+
+  if (error && typeof error === 'object') {
+    const asRecord = error as Record<string, unknown>;
+    const directMessage = asRecord.message;
+    if (typeof directMessage === 'string') {
+      candidates.push(directMessage);
+    }
+
+    const nestedLastError = asRecord.lastError;
+    if (nestedLastError && typeof nestedLastError === 'object') {
+      const nestedMessage = (nestedLastError as Record<string, unknown>).message;
+      if (typeof nestedMessage === 'string') {
+        candidates.push(nestedMessage);
+      }
+    }
+
+    const nestedCause = asRecord.cause;
+    if (nestedCause && typeof nestedCause === 'object') {
+      const nestedMessage = (nestedCause as Record<string, unknown>).message;
+      if (typeof nestedMessage === 'string') {
+        candidates.push(nestedMessage);
+      }
+    }
+
+    try {
+      candidates.push(JSON.stringify(error));
+    } catch {
+      // Ignore circular or non-serializable objects.
+    }
+  }
+
+  if (candidates.length === 0) {
+    candidates.push(String(error ?? ''));
+  }
+
+  return candidates.some((candidate) => /no group with id/i.test(candidate));
+}
+
+async function clearAutomationGroupId(chromeApi: ChromeLike): Promise<void> {
+  await chromeApi.storage.session.set({ automationGroupId: null });
+}
+
 async function ensureAutomationGroup(chromeApi: ChromeLike, seedTabId: number): Promise<number> {
   return runtimeSingleFlight.run(AUTOMATION_GROUP_SINGLE_FLIGHT_KEY, async () => {
     const existing = await chromeApi.storage.session.get(['automationGroupId']);
-    if (existing.automationGroupId) {
-      return existing.automationGroupId as number;
+    const existingGroupId = typeof existing.automationGroupId === 'number'
+      ? existing.automationGroupId
+      : undefined;
+
+    if (existingGroupId) {
+      try {
+        await chromeApi.tabGroups.update(existingGroupId, {
+          title: 'Otto',
+          color: 'blue',
+          collapsed: true,
+        });
+        return existingGroupId;
+      } catch (error) {
+        if (!isMissingTabGroupError(error)) {
+          throw error;
+        }
+        await clearAutomationGroupId(chromeApi);
+      }
     }
 
     const groupId = await chromeApi.tabs.group({ tabIds: [seedTabId] as [number] });
@@ -30,6 +94,37 @@ async function ensureAutomationGroup(chromeApi: ChromeLike, seedTabId: number): 
     await chromeApi.storage.session.set({ automationGroupId: groupId });
     return groupId as number;
   });
+}
+
+async function applyAutomationGroupPresentation(chromeApi: ChromeLike, groupId: number): Promise<void> {
+  await chromeApi.tabGroups.update(groupId, {
+    title: 'Otto',
+    color: 'blue',
+    collapsed: true,
+  });
+}
+
+async function attachTabToAutomationGroup(chromeApi: ChromeLike, tabId: number): Promise<number> {
+  const maxAttempts = 3;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const groupId = await ensureAutomationGroup(chromeApi, tabId);
+    try {
+      await chromeApi.tabs.group({ groupId, tabIds: [tabId] as [number] });
+      return groupId;
+    } catch (error) {
+      if (!isMissingTabGroupError(error)) {
+        throw error;
+      }
+
+      await clearAutomationGroupId(chromeApi);
+    }
+  }
+
+  const freshGroupId = await chromeApi.tabs.group({ tabIds: [tabId] as [number] });
+  await applyAutomationGroupPresentation(chromeApi, freshGroupId as number);
+  await chromeApi.storage.session.set({ automationGroupId: freshGroupId });
+  return freshGroupId as number;
 }
 
 async function getTabSessions(chromeApi: ChromeLike): Promise<Record<string, number>> {
@@ -74,8 +169,7 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
         throw new CommandExecutionError('Failed to create tab', 'tab_create_failed', 'primitive.tab.open', true);
       }
 
-      const groupId = await ensureAutomationGroup(chromeApi, tab.id);
-      await chromeApi.tabs.group({ groupId, tabIds: [tab.id] as [number] });
+      await attachTabToAutomationGroup(chromeApi, tab.id);
 
       const tabSessionId = `tab_${nanoid(10)}`;
       const tabSessions = await getTabSessions(chromeApi);
@@ -153,13 +247,194 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
         data: { tabSessionId, ...payload },
       };
     }
+    case 'recipe.test': {
+      const tabSessionId = String(command.payload.tabSessionId ?? command.tabSessionId ?? '');
+      const tabId = await resolveTabId(chromeApi, tabSessionId);
+      const data = await runRecipeTestCommand(chromeApi, command, tabId, tabSessionId);
+      const payload = data && typeof data === 'object' && !Array.isArray(data)
+        ? data as Record<string, unknown>
+        : { result: data };
+
+      return {
+        durationMs: Date.now() - start,
+        data: { tabSessionId, ...payload },
+      };
+    }
     case 'listener.subscribe': {
       const listener = String(command.payload.listener ?? '').trim();
       if (!listener) {
         throw new CommandExecutionError('listener is required', 'missing_listener_name', 'validation', false);
       }
 
-      const options = (command.payload.options ?? {}) as Record<string, unknown>;
+      const rawOptions = (command.payload.options ?? {}) as Record<string, unknown>;
+      let options = rawOptions;
+
+      if (listener === 'network.http_intercept') {
+        const tabSessionId = String(rawOptions.tabSessionId ?? command.payload.tabSessionId ?? command.tabSessionId ?? '').trim();
+        if (!tabSessionId) {
+          throw new CommandExecutionError(
+            'network listener requires options.tabSessionId',
+            'missing_tab_session',
+            'validation',
+            false,
+          );
+        }
+
+        const site = String(rawOptions.site ?? '').trim().toLowerCase();
+        if (!site) {
+          throw new CommandExecutionError(
+            'network listener requires options.site',
+            'missing_site',
+            'validation',
+            false,
+          );
+        }
+
+        const mode = String(rawOptions.mode ?? 'network').trim().toLowerCase();
+        if (!['network', 'fetch', 'hybrid'].includes(mode)) {
+          throw new CommandExecutionError(
+            'network listener mode must be network|fetch|hybrid',
+            'invalid_listener_mode',
+            'validation',
+            false,
+          );
+        }
+
+        const maxBodyBytesValue = rawOptions.maxBodyBytes;
+        let normalizedMaxBodyBytes: number | undefined;
+        if (maxBodyBytesValue !== undefined) {
+          const maxBodyBytes = Number(maxBodyBytesValue);
+          if (!Number.isFinite(maxBodyBytes) || maxBodyBytes <= 0) {
+            throw new CommandExecutionError(
+              'network listener maxBodyBytes must be a positive number',
+              'invalid_listener_max_body_bytes',
+              'validation',
+              false,
+            );
+          }
+          normalizedMaxBodyBytes = Math.floor(maxBodyBytes);
+        }
+
+        if (rawOptions.urlPatterns !== undefined && !Array.isArray(rawOptions.urlPatterns)) {
+          throw new CommandExecutionError(
+            'network listener urlPatterns must be an array of strings',
+            'invalid_listener_url_patterns',
+            'validation',
+            false,
+          );
+        }
+
+        if (Array.isArray(rawOptions.urlPatterns) && rawOptions.urlPatterns.some((value) => typeof value !== 'string')) {
+          throw new CommandExecutionError(
+            'network listener urlPatterns must be an array of strings',
+            'invalid_listener_url_patterns',
+            'validation',
+            false,
+          );
+        }
+
+        if (rawOptions.mimeTypes !== undefined && !Array.isArray(rawOptions.mimeTypes)) {
+          throw new CommandExecutionError(
+            'network listener mimeTypes must be an array of strings',
+            'invalid_listener_mime_types',
+            'validation',
+            false,
+          );
+        }
+
+        if (rawOptions.includeBody !== undefined && typeof rawOptions.includeBody !== 'boolean') {
+          throw new CommandExecutionError(
+            'network listener includeBody must be a boolean',
+            'invalid_listener_include_body',
+            'validation',
+            false,
+          );
+        }
+
+        if (rawOptions.includeHeaders !== undefined && typeof rawOptions.includeHeaders !== 'boolean') {
+          throw new CommandExecutionError(
+            'network listener includeHeaders must be a boolean',
+            'invalid_listener_include_headers',
+            'validation',
+            false,
+          );
+        }
+
+        if (Array.isArray(rawOptions.mimeTypes) && rawOptions.mimeTypes.some((value) => typeof value !== 'string')) {
+          throw new CommandExecutionError(
+            'network listener mimeTypes must be an array of strings',
+            'invalid_listener_mime_types',
+            'validation',
+            false,
+          );
+        }
+
+        if (rawOptions.requestHostAllowlist !== undefined && !Array.isArray(rawOptions.requestHostAllowlist)) {
+          throw new CommandExecutionError(
+            'network listener requestHostAllowlist must be an array of strings',
+            'invalid_listener_request_hosts',
+            'validation',
+            false,
+          );
+        }
+
+        if (
+          Array.isArray(rawOptions.requestHostAllowlist)
+          && rawOptions.requestHostAllowlist.some((value) => typeof value !== 'string')
+        ) {
+          throw new CommandExecutionError(
+            'network listener requestHostAllowlist must be an array of strings',
+            'invalid_listener_request_hosts',
+            'validation',
+            false,
+          );
+        }
+
+        const requestHostAllowlist = Array.isArray(rawOptions.requestHostAllowlist)
+          ? Array.from(new Set(
+            rawOptions.requestHostAllowlist
+              .map((value) => String(value).trim().toLowerCase())
+              .filter((value) => value.length > 0),
+          ))
+          : undefined;
+
+        const urlPatterns = Array.isArray(rawOptions.urlPatterns)
+          ? Array.from(new Set(
+            rawOptions.urlPatterns
+              .map((value) => String(value).trim())
+              .filter((value) => value.length > 0),
+          ))
+          : undefined;
+
+        const mimeTypes = Array.isArray(rawOptions.mimeTypes)
+          ? Array.from(new Set(
+            rawOptions.mimeTypes
+              .map((value) => String(value).trim().toLowerCase())
+              .filter((value) => value.length > 0),
+          ))
+          : undefined;
+
+        const includeBody = typeof rawOptions.includeBody === 'boolean'
+          ? rawOptions.includeBody
+          : undefined;
+
+        const includeHeaders = typeof rawOptions.includeHeaders === 'boolean'
+          ? rawOptions.includeHeaders
+          : undefined;
+
+        options = {
+          tabSessionId,
+          site,
+          mode,
+          ...(urlPatterns ? { urlPatterns } : {}),
+          ...(mimeTypes ? { mimeTypes } : {}),
+          ...(normalizedMaxBodyBytes !== undefined ? { maxBodyBytes: normalizedMaxBodyBytes } : {}),
+          ...(includeBody !== undefined ? { includeBody } : {}),
+          ...(includeHeaders !== undefined ? { includeHeaders } : {}),
+          ...(requestHostAllowlist ? { requestHostAllowlist } : {}),
+        };
+      }
+
       return {
         durationMs: Date.now() - start,
         data: {

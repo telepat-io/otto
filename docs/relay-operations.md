@@ -1,6 +1,6 @@
 # Relay Operations
 
-Last Updated: 2026-04-04
+Last Updated: 2026-04-05
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -43,6 +43,8 @@ Environment overrides:
 - `OTTO_TAB_QUEUE_LIMIT`
 - `OTTO_CONTROLLER_QUEUE_LIMIT`
 - `OTTO_DEFAULT_CONTROLLER_SCOPES`
+- `OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION`
+- `OTTO_CONTROLLER_REGISTRATION_SECRET`
 
 ## Endpoints
 
@@ -55,6 +57,32 @@ Pairing and auth:
 - `POST /api/auth/refresh`
 - `POST /api/auth/revoke`
 - `GET /api/nodes/connected` (controller bearer token required)
+
+Controller client registration and ACL:
+
+- `POST /api/controller/register` with `{ name, description, avatarSeed? }`
+- `POST /api/controller/token`
+- `POST /api/controller/remove` with `{ clientId }` (revokes + purges controller client record)
+- `POST /api/controller/remove-all` (revokes + purges all controller client records)
+- `GET /api/controller/access` (node bearer token required)
+- `POST /api/controller/access` (node bearer token required)
+
+ACL enforcement note:
+
+- Node-targeted controller commands without an active grant return deterministic error code `acl_missing_node_grant`.
+
+Related CLI commands:
+
+- `otto client register`
+- `otto client login`
+- `otto client remove [--client-id <id> | --all]`
+- `otto client status`
+- `otto client forget`
+
+Removal semantics notes:
+
+- Single remove and bulk remove both tear down ACL grants, refresh sessions, and active controller sockets for affected clients.
+- Bulk remove is idempotent after purge; subsequent `remove-all` calls return zero removals until new clients are registered.
 
 Logs:
 
@@ -126,7 +154,8 @@ Listener operations:
 - Per-tab command execution is FIFO; cross-tab execution is parallelized.
 - Queue depth and rate limits are enforced to prevent noisy-neighbor starvation.
 - Refresh sessions are persisted in relay runtime storage under `OTTO_LOG_DIR/refresh-sessions.jsonl`, allowing valid refresh tokens to survive relay restarts.
-- Relay startup logs include effective access/refresh TTL configuration and refresh-session store load stats.
+- Refresh tokens are rotated on successful HTTP refresh (`/api/auth/refresh`) and the previous token is invalidated.
+- Relay startup logs include effective access/refresh TTL configuration and load stats for refresh sessions, controller clients, and ACL stores.
 
 Operational troubleshooting checklist:
 

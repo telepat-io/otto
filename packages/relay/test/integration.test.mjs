@@ -30,11 +30,24 @@ async function waitForRelay(baseUrl, timeoutMs = 3000) {
 }
 
 function startRelay(port, env = {}) {
+  const hasCustomLogDir = typeof env.OTTO_LOG_DIR === 'string' && env.OTTO_LOG_DIR.length > 0;
+  const tempLogDir = hasCustomLogDir ? undefined : mkdtempSync(join(tmpdir(), 'otto-relay-it-'));
   const proc = spawn('node', ['dist/index.js'], {
     cwd: PKG_ROOT,
-    env: { ...process.env, OTTO_RELAY_PORT: String(port), ...env },
+    env: {
+      ...process.env,
+      OTTO_RELAY_PORT: String(port),
+      ...(tempLogDir ? { OTTO_LOG_DIR: tempLogDir } : {}),
+      ...env,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+
+  if (tempLogDir) {
+    proc.once('exit', () => {
+      rmSync(tempLogDir, { recursive: true, force: true });
+    });
+  }
 
   return proc;
 }
@@ -177,6 +190,23 @@ async function connectAuthedNodeWs(port, nodeId, requestPrefix, options = {}) {
   await nextWsEnvelope(ws, (msg) => msg.messageType === 'auth_ack' && msg.requestId === `${requestPrefix}_auth`);
 
   return ws;
+}
+
+async function issueNodeAccessToken(nodeId, options = {}) {
+  const {
+    secret = 'dev-only-change-me',
+    issuer = 'otto-relay',
+    audience = 'otto-clients',
+    scopes = ['*'],
+  } = options;
+
+  return new SignJWT({ role: 'node', nodeId, scopes })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(issuer)
+    .setAudience(audience)
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .sign(new TextEncoder().encode(secret));
 }
 
 async function connectAuthedControllerWs(port, accessToken, requestPrefix) {
@@ -737,6 +767,182 @@ test('listener subscribe routes updates and unsubscribe stops further updates', 
   assert.equal(rejected.payload?.code, 'listener_not_found');
 });
 
+test('recipe.test stream events are proxied by recipe request and cancel unsubscribes listeners', async (t) => {
+  const port = 8845;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port, {
+    OTTO_DEFAULT_CONTROLLER_SCOPES: 'recipe.test,listener.subscribe,listener.unsubscribe',
+  });
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const pairing = await requestPairing(base, 'node_recipe_stream_suite');
+  const nodeWs = await connectAuthedNodeWs(port, 'node_recipe_stream_suite', 'recipe_stream_node');
+  const controllerWs = await connectAuthedControllerWs(port, pairing.controllerAccessToken, 'recipe_stream_controller');
+
+  t.after(() => {
+    nodeWs.close();
+    controllerWs.close();
+  });
+
+  const waitController = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(controllerWs, predicate, timeoutMs).catch((error) => {
+    throw new Error(`${label}: ${error.message}`);
+  });
+  const waitNode = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(nodeWs, predicate, timeoutMs).catch((error) => {
+    throw new Error(`${label}: ${error.message}`);
+  });
+
+  controllerWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'recipe_test_stream_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: pairing.nodeId,
+      action: 'recipe.test',
+      replayNonce: 'recipe_stream_nonce_1',
+      tabSessionId: 'recipe_stream_tab_1',
+      timeoutMs: 15000,
+      payload: {
+        site: 'reddit.com',
+        recipe: 'getChatMessages',
+      },
+    },
+  }));
+
+  await waitNode('recipe.test routed to node', (msg) => msg.messageType === 'command' && msg.requestId === 'recipe_test_stream_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'recipe_test_stream_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 8,
+      action: 'recipe.test',
+      data: {
+        stream: {
+          listeners: [
+            {
+              listener: 'network.http_intercept',
+              options: {
+                tabSessionId: 'recipe_stream_tab_1',
+                urlPattern: 'https://chat.reddit.com/sync*',
+              },
+            },
+          ],
+        },
+      },
+    },
+  }));
+
+  await waitController('recipe.test result delivered to controller', (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_test_stream_1');
+
+  controllerWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'recipe_stream_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: pairing.nodeId,
+      action: 'listener.subscribe',
+      replayNonce: 'recipe_stream_nonce_2',
+      tabSessionId: 'recipe_stream_tab_1',
+      payload: {
+        listener: 'network.http_intercept',
+        options: {
+          tabSessionId: 'recipe_stream_tab_1',
+          urlPattern: 'https://chat.reddit.com/sync*',
+        },
+      },
+    },
+  }));
+
+  await waitNode('listener.subscribe routed to node', (msg) => msg.messageType === 'command' && msg.requestId === 'recipe_stream_sub_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'recipe_stream_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 5,
+      action: 'listener.subscribe',
+      data: {
+        listener: 'network.http_intercept',
+        subscribed: true,
+      },
+    },
+  }));
+
+  await waitController('listener.subscribe result delivered to controller', (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_stream_sub_1');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'recipe_stream_sub_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'listener_update',
+      updateType: 'network_event',
+      data: {
+        eventId: 'evt_1',
+      },
+    },
+  }));
+
+  const proxiedUpdate = await waitController(
+    'listener_update proxied to recipe.test request',
+    (msg) => msg.messageType === 'event' && msg.requestId === 'recipe_test_stream_1' && msg.payload?.type === 'listener_update',
+    3000,
+  );
+  assert.equal(proxiedUpdate.payload?.updateType, 'network_event');
+
+  const nodeUnsubscribePromise = waitNode(
+    'relay forwarded listener.unsubscribe to node',
+    (msg) => msg.messageType === 'command' && msg.payload?.action === 'listener.unsubscribe',
+    3000,
+  );
+
+  controllerWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command_cancel',
+    requestId: 'recipe_stream_cancel_req_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetRequestId: 'recipe_test_stream_1',
+    },
+  }));
+
+  const cancelled = await waitController(
+    'cancel terminal result emitted for recipe.test request',
+    (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_test_stream_1',
+    3000,
+  );
+  assert.equal(cancelled.payload?.commandOutcome, 'cancelled');
+
+  const cancelAck = await waitController(
+    'cancel ack emitted',
+    (msg) => msg.messageType === 'event' && msg.requestId === 'recipe_stream_cancel_req_1' && msg.payload?.type === 'cancel_ack',
+    3000,
+  );
+  assert.equal(cancelAck.payload?.status, 'cancelled');
+
+  const nodeUnsubscribe = await nodeUnsubscribePromise;
+  assert.equal(nodeUnsubscribe.payload?.payload?.targetRequestId, 'recipe_stream_sub_1');
+});
+
 test('issued controller tokens include configured claims and are revocable', async (t) => {
   const port = 8800;
   const base = `http://127.0.0.1:${port}`;
@@ -757,6 +963,8 @@ test('issued controller tokens include configured claims and are revocable', asy
   const approval = await requestPairing(base, 'node_claims_suite');
   assert.ok(Array.isArray(approval.scopes));
   assert.ok(approval.scopes.length > 0);
+  assert.ok(approval.scopes.includes('listener.subscribe'));
+  assert.ok(approval.scopes.includes('listener.unsubscribe'));
 
   const verified = await jwtVerify(
     approval.controllerAccessToken,
@@ -767,6 +975,8 @@ test('issued controller tokens include configured claims and are revocable', asy
   assert.equal(verified.payload.role, 'controller');
   assert.equal(verified.payload.nodeId, 'node_claims_suite');
   assert.ok(Array.isArray(verified.payload.scopes));
+  assert.ok(verified.payload.scopes.includes('listener.subscribe'));
+  assert.ok(verified.payload.scopes.includes('listener.unsubscribe'));
 
   const refreshResp = await fetch(`${base}/api/auth/refresh`, {
     method: 'POST',
@@ -774,11 +984,13 @@ test('issued controller tokens include configured claims and are revocable', asy
     body: JSON.stringify({ refreshToken: approval.controllerRefreshToken }),
   });
   assert.equal(refreshResp.status, 200);
+  const refreshBody = await refreshResp.json();
+  assert.equal(typeof refreshBody.refreshToken, 'string');
 
   const revokeResp = await fetch(`${base}/api/auth/revoke`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ refreshToken: approval.controllerRefreshToken }),
+    body: JSON.stringify({ refreshToken: refreshBody.refreshToken }),
   });
   assert.equal(revokeResp.status, 200);
   const revokeBody = await revokeResp.json();
@@ -787,7 +999,7 @@ test('issued controller tokens include configured claims and are revocable', asy
   const refreshAfterRevokeResp = await fetch(`${base}/api/auth/refresh`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ refreshToken: approval.controllerRefreshToken }),
+    body: JSON.stringify({ refreshToken: refreshBody.refreshToken }),
   });
   assert.equal(refreshAfterRevokeResp.status, 401);
 });
@@ -815,6 +1027,8 @@ test('refresh sessions persist across relay restart with shared runtime store', 
     body: JSON.stringify({ refreshToken: approval.controllerRefreshToken }),
   });
   assert.equal(beforeRestartRefreshResp.status, 200);
+  const beforeRestartBody = await beforeRestartRefreshResp.json();
+  assert.equal(typeof beforeRestartBody.refreshToken, 'string');
 
   first.kill();
   await wait(300);
@@ -829,7 +1043,7 @@ test('refresh sessions persist across relay restart with shared runtime store', 
   const afterRestartRefreshResp = await fetch(`${base}/api/auth/refresh`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ refreshToken: approval.controllerRefreshToken }),
+    body: JSON.stringify({ refreshToken: beforeRestartBody.refreshToken }),
   });
   assert.equal(afterRestartRefreshResp.status, 200);
 });
@@ -898,7 +1112,7 @@ test('controller command with disallowed scope returns forbidden_action', async 
   assert.equal(err.payload?.code, 'forbidden_action');
 });
 
-test('recipe.run scope is allowed while other recipe actions are denied', async (t) => {
+test('recipe.run scope is allowed while recipe.test and other recipe actions are denied', async (t) => {
   const port = 8825;
   const base = `http://127.0.0.1:${port}`;
   const proc = startRelay(port, {
@@ -955,6 +1169,30 @@ test('recipe.run scope is allowed while other recipe actions are denied', async 
 
   const deniedErr = await nextWsEnvelope(ws, (msg) => msg.messageType === 'error' && msg.requestId === 'recipe_scope_denied');
   assert.equal(deniedErr.payload?.code, 'forbidden_action');
+
+  ws.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'recipe_scope_test_denied',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: approval.nodeId,
+      action: 'recipe.test',
+      timeoutMs: 1000,
+      replayNonce: 'recipe_scope_nonce_3',
+      payload: {
+        site: 'reddit.com',
+        recipe: 'getFeed',
+      },
+    },
+  }));
+
+  const testDeniedErr = await nextWsEnvelope(
+    ws,
+    (msg) => msg.messageType === 'error' && msg.requestId === 'recipe_scope_test_denied',
+  );
+  assert.equal(testDeniedErr.payload?.code, 'forbidden_action');
 });
 
 test('controller malformed command without targetNodeId is rejected', async (t) => {
@@ -1348,9 +1586,11 @@ test('tab lock lifecycle emits acquire conflict renew and release events', async
     },
   }));
 
-  const conflictErr = await nextWsEnvelope(wsB, (msg) => msg.messageType === 'error' && msg.requestId === 'lock_req_2');
+  // Conflict path emits both an error and a lock_conflict event; collect both concurrently to avoid order races.
+  const conflictErrPromise = nextWsEnvelope(wsB, (msg) => msg.messageType === 'error' && msg.requestId === 'lock_req_2');
+  const conflictEventPromise = nextWsEnvelope(wsB, (msg) => msg.messageType === 'event' && msg.requestId === 'lock_req_2');
+  const [conflictErr, conflictEvent] = await Promise.all([conflictErrPromise, conflictEventPromise]);
   assert.equal(conflictErr.payload?.code, 'tab_locked');
-  const conflictEvent = await nextWsEnvelope(wsB, (msg) => msg.messageType === 'event' && msg.requestId === 'lock_req_2');
   assert.equal(conflictEvent.payload?.type, 'lock_conflict');
   assert.equal(typeof conflictEvent.payload?.lockExpiresAt, 'number');
 
@@ -1632,6 +1872,396 @@ test('accepted command fails terminally when node disconnects', async (t) => {
 
   const disconnected = await nextWsEnvelope(wsController, (msg) => msg.messageType === 'error' && msg.requestId === 'terminal_disconnect_cmd', 3000);
   assert.equal(disconnected.payload?.code, 'node_disconnected');
+});
+
+test('registered controller requires node ACL grant before routing commands', async (t) => {
+  const port = 8813;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port);
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const uniqueName = `CLI A ${Date.now()}`;
+
+  const registerResp = await fetch(`${base}/api/controller/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: uniqueName, description: 'Primary automation CLI' }),
+  });
+  assert.equal(registerResp.status, 200);
+  const registered = await registerResp.json();
+
+  const tokenResp = await fetch(`${base}/api/controller/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      clientId: registered.clientId,
+      clientSecret: registered.clientSecret,
+    }),
+  });
+  assert.equal(tokenResp.status, 200);
+  const tokenBody = await tokenResp.json();
+
+  const ws = await connectAuthedControllerWs(port, tokenBody.accessToken, 'acl_gate_ctl');
+  t.after(() => {
+    ws.close();
+  });
+
+  ws.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'acl_gate_cmd_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: 'node_acl_suite',
+      action: 'primitive.tab.query',
+      timeoutMs: 1000,
+      replayNonce: 'acl_gate_nonce_1',
+      payload: {},
+    },
+  }));
+
+  const denied = await nextWsEnvelope(ws, (msg) => msg.messageType === 'error' && msg.requestId === 'acl_gate_cmd_1');
+  assert.equal(denied.payload?.code, 'acl_missing_node_grant');
+
+  const nodeToken = await issueNodeAccessToken('node_acl_suite');
+  const grantResp = await fetch(`${base}/api/controller/access`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ clientId: registered.clientId, grant: true }),
+  });
+  assert.equal(grantResp.status, 200);
+
+  ws.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'acl_gate_cmd_2',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: 'node_acl_suite',
+      action: 'primitive.tab.query',
+      timeoutMs: 1000,
+      replayNonce: 'acl_gate_nonce_2',
+      payload: {},
+    },
+  }));
+
+  const routedOrOffline = await nextWsEnvelope(ws, (msg) => msg.requestId === 'acl_gate_cmd_2' && msg.messageType === 'error');
+  assert.equal(routedOrOffline.payload?.code, 'node_offline');
+});
+
+test('node-authenticated ACL API lists grants and supports revoke', async (t) => {
+  const port = 8814;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port);
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const uniqueA = `CLI A ${Date.now()}`;
+  const uniqueB = `CLI B ${Date.now()}`;
+
+  const registerA = await fetch(`${base}/api/controller/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: uniqueA, description: 'Main CLI for node ops' }),
+  });
+  assert.equal(registerA.status, 200);
+  const clientA = await registerA.json();
+
+  const registerB = await fetch(`${base}/api/controller/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: uniqueB, description: 'Backup CLI for node ops' }),
+  });
+  assert.equal(registerB.status, 200);
+  const clientB = await registerB.json();
+
+  const nodeToken = await issueNodeAccessToken('node_acl_list_suite');
+
+  const grantResp = await fetch(`${base}/api/controller/access`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ clientId: clientA.clientId, grant: true }),
+  });
+  assert.equal(grantResp.status, 200);
+
+  const listResp1 = await fetch(`${base}/api/controller/access`, {
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+    },
+  });
+  assert.equal(listResp1.status, 200);
+  const listBody1 = await listResp1.json();
+  const rowA1 = listBody1.clients.find((row) => row.clientId === clientA.clientId);
+  const rowB1 = listBody1.clients.find((row) => row.clientId === clientB.clientId);
+  assert.equal(rowA1?.granted, true);
+  assert.equal(rowB1?.granted, false);
+  assert.equal(rowA1?.name, uniqueA);
+  assert.equal(rowA1?.description, 'Main CLI for node ops');
+  assert.equal(typeof rowA1?.avatarSeed, 'string');
+
+  const revokeResp = await fetch(`${base}/api/controller/access`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ clientId: clientA.clientId, grant: false }),
+  });
+  assert.equal(revokeResp.status, 200);
+
+  const listResp2 = await fetch(`${base}/api/controller/access`, {
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+    },
+  });
+  assert.equal(listResp2.status, 200);
+  const listBody2 = await listResp2.json();
+  const rowA2 = listBody2.clients.find((row) => row.clientId === clientA.clientId);
+  assert.equal(rowA2?.granted, false);
+});
+
+test('controller registration rejects normalized name collisions', async (t) => {
+  const port = 8815;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port);
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const uniqueBase = `CLI Alpha ${Date.now()}`;
+  const collisionVariant = uniqueBase
+    .toLowerCase()
+    .replace(/\s+/g, '    ');
+
+  const first = await fetch(`${base}/api/controller/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: uniqueBase, description: 'First controller' }),
+  });
+  assert.equal(first.status, 200);
+
+  const second = await fetch(`${base}/api/controller/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: collisionVariant, description: 'Second controller' }),
+  });
+  assert.equal(second.status, 409);
+  const body = await second.json();
+  assert.equal(body.error, 'controller_name_conflict');
+  assert.equal(body.code, 'controller_name_conflict');
+});
+
+test('controller removal immediately cuts ACL access and disconnects active sessions', async (t) => {
+  const port = 8816;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port);
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+
+  const registerResp = await fetch(`${base}/api/controller/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: `CLI Remove ${Date.now()}`, description: 'controller to remove' }),
+  });
+  assert.equal(registerResp.status, 200);
+  const registered = await registerResp.json();
+
+  const tokenResp = await fetch(`${base}/api/controller/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ clientId: registered.clientId, clientSecret: registered.clientSecret }),
+  });
+  assert.equal(tokenResp.status, 200);
+  const tokenBody = await tokenResp.json();
+
+  const nodeToken = await issueNodeAccessToken('node_remove_suite');
+  const grantResp = await fetch(`${base}/api/controller/access`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ clientId: registered.clientId, grant: true }),
+  });
+  assert.equal(grantResp.status, 200);
+
+  const ws = await connectAuthedControllerWs(port, tokenBody.accessToken, 'remove_ctl');
+  t.after(() => {
+    ws.close();
+  });
+
+  const closePromise = new Promise((resolve) => {
+    ws.once('close', resolve);
+  });
+
+  const removeResp = await fetch(`${base}/api/controller/remove`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ clientId: registered.clientId }),
+  });
+  assert.equal(removeResp.status, 200);
+  const removeBody = await removeResp.json();
+  assert.equal(removeBody.ok, true);
+  assert.equal(removeBody.clientId, registered.clientId);
+  assert.equal(removeBody.aclRevokedCount, 1);
+  assert.equal(removeBody.refreshRevokedCount, 1);
+  assert.equal(removeBody.disconnectedSessions, 1);
+
+  await Promise.race([
+    closePromise,
+    wait(2500).then(() => {
+      throw new Error('controller websocket did not close after removal');
+    }),
+  ]);
+
+  const listResp = await fetch(`${base}/api/controller/access`, {
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+    },
+  });
+  assert.equal(listResp.status, 200);
+  const listBody = await listResp.json();
+  const row = listBody.clients.find((entry) => entry.clientId === registered.clientId);
+  assert.equal(Boolean(row?.revoked), true);
+  assert.equal(Boolean(row?.granted), false);
+
+  const refreshResp = await fetch(`${base}/api/auth/refresh`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ refreshToken: tokenBody.refreshToken }),
+  });
+  assert.equal(refreshResp.status, 401);
+});
+
+test('controller remove-all revokes every client and active session', async (t) => {
+  const port = 8817;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port);
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+
+  const nodeToken = await issueNodeAccessToken('node_remove_all_suite');
+  const removedTargets = [];
+
+  for (let idx = 0; idx < 2; idx += 1) {
+    const registerResp = await fetch(`${base}/api/controller/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: `CLI Remove All ${Date.now()} ${idx}`,
+        description: `controller ${idx}`,
+      }),
+    });
+    assert.equal(registerResp.status, 200);
+    const registered = await registerResp.json();
+
+    const tokenResp = await fetch(`${base}/api/controller/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ clientId: registered.clientId, clientSecret: registered.clientSecret }),
+    });
+    assert.equal(tokenResp.status, 200);
+    const tokenBody = await tokenResp.json();
+
+    const grantResp = await fetch(`${base}/api/controller/access`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${nodeToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ clientId: registered.clientId, grant: true }),
+    });
+    assert.equal(grantResp.status, 200);
+
+    const ws = await connectAuthedControllerWs(port, tokenBody.accessToken, `remove_all_ctl_${idx}`);
+    t.after(() => {
+      ws.close();
+    });
+    const closePromise = new Promise((resolve) => {
+      ws.once('close', resolve);
+    });
+
+    removedTargets.push({
+      clientId: registered.clientId,
+      refreshToken: tokenBody.refreshToken,
+      closePromise,
+    });
+  }
+
+  const removeAllResp = await fetch(`${base}/api/controller/remove-all`, {
+    method: 'POST',
+  });
+  assert.equal(removeAllResp.status, 200);
+  const removeAllBody = await removeAllResp.json();
+  assert.equal(removeAllBody.ok, true);
+  assert.equal(removeAllBody.removedCount, 2);
+  assert.equal(removeAllBody.aclRevokedCount, 2);
+  assert.equal(removeAllBody.refreshRevokedCount, 2);
+  assert.equal(removeAllBody.disconnectedSessions, 2);
+
+  for (const target of removedTargets) {
+    assert.equal(removeAllBody.removedClientIds.includes(target.clientId), true);
+    await Promise.race([
+      target.closePromise,
+      wait(2500).then(() => {
+        throw new Error(`controller websocket did not close after remove-all for ${target.clientId}`);
+      }),
+    ]);
+
+    const refreshResp = await fetch(`${base}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken: target.refreshToken }),
+    });
+    assert.equal(refreshResp.status, 401);
+  }
+
+  const listResp = await fetch(`${base}/api/controller/access`, {
+    headers: {
+      authorization: `Bearer ${nodeToken}`,
+    },
+  });
+  assert.equal(listResp.status, 200);
+  const listBody = await listResp.json();
+  for (const target of removedTargets) {
+    const row = listBody.clients.find((entry) => entry.clientId === target.clientId);
+    assert.equal(row, undefined);
+  }
+
+  const removeAllAgainResp = await fetch(`${base}/api/controller/remove-all`, {
+    method: 'POST',
+  });
+  assert.equal(removeAllAgainResp.status, 200);
+  const removeAllAgainBody = await removeAllAgainResp.json();
+  assert.equal(removeAllAgainBody.ok, true);
+  assert.equal(removeAllAgainBody.removedCount, 0);
+  assert.equal(Array.isArray(removeAllAgainBody.removedClientIds), true);
+  assert.equal(removeAllAgainBody.removedClientIds.length, 0);
 });
 
 test('queued accepted command can be cancelled with terminal cancelled response', async (t) => {

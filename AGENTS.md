@@ -10,8 +10,12 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Apply pre-ingress redaction for logs.
 - Keep `chrome.debugger` features behind explicit opt-in flags.
 - Keep recipe execution site-scoped and validate tab URL before running recipe logic.
+- Keep `recipe.test` streaming recipe-native via returned stream listener manifests; avoid site-specific runtime listener managers.
+- Validate declared recipe input metadata before command execution; recipe handlers should receive sanitized input.
+- For `otto test`, support optional recipe-level test hooks with execute fallback for simple recipes.
 - Never automate user credential submission; use explicit manual login handoff (`manual_login_required`).
 - Keep listener lifecycle deterministic: `listener.subscribe` and `listener.unsubscribe` are terminal commands, while async `listener_update` events are correlated by the original subscribe `requestId`.
+- Keep controller-to-node authorization node-owned: registered controller clients require explicit per-node ACL grants from the authenticated node before command routing.
 
 ## Canonical Commands
 - Install deps: `npm install`
@@ -42,6 +46,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Relay routing and locks: `packages/relay/src/index.ts`
 - CLI UX and command entrypoint: `packages/cli/src/index.ts`
 - Extension SW/offscreen runtime: `extension/entrypoints/background.ts`, `extension/src/runtime/offscreen-client.ts`
+- Extension network interception listeners: `extension/src/runtime/network-intercept-listener.ts`, `extension/src/runtime/listener-managers.ts`
 - Extension popup onboarding UI: `extension/entrypoints/popup.html`, `extension/src/runtime/popup-ui.ts`, `extension/src/runtime/onboarding-ui.ts`
 - Extension recipe runtime orchestration: `extension/src/runtime/recipe-runtime.ts`
 - Extension recipe bundles and registry: `extension/src/recipes/**`

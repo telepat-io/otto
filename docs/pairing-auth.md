@@ -1,6 +1,6 @@
 # Pairing and Auth
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-05
 Owner: Security
 
 ## Source-of-Truth Code Paths
@@ -52,6 +52,62 @@ Setup workflow integration:
 - `otto setup` does not write extension runtime settings directly.
 - Extension node relay URL and node tokens remain extension-owned in `chrome.storage.*`.
 
+## Independent Controller Client Flow
+
+Controller clients can now register independently of node pairing.
+
+1. Register controller client identity:
+
+- `POST /api/controller/register`
+- Payload: `{ name: string, description: string, avatarSeed?: string }`
+- Response includes one-time `clientSecret`, stable `clientId`, and normalized metadata fields.
+- Registration rejects normalized name collisions with `controller_name_conflict`.
+
+2. Exchange client credentials for controller token pair:
+
+- `POST /api/controller/token`
+- Payload: `{ clientId, clientSecret }`
+- Response: `{ accessToken, refreshToken, scopes, controllerId, clientId }`
+
+CLI onboarding commands for this flow:
+
+- `otto client register [--name <name>] [--description <description>] [--avatar-seed <seed>]`
+- `otto client login [--client-id <id>] [--client-secret <secret>]`
+- `otto client remove [--client-id <id> | --all]`
+- `otto client status`
+- `otto client forget`
+
+Controller removal behavior:
+
+- `POST /api/controller/remove` with `{ clientId }` revokes and purges the controller record from relay controller-client storage.
+- `POST /api/controller/remove-all` revokes and purges all controller records.
+- Relay immediately removes all ACL grants for that client, revokes its refresh sessions, and disconnects active controller websocket sessions for that client.
+- Bulk removal applies the same ACL/session revocation semantics to every registered controller client.
+- Repeating bulk removal after a full purge is idempotent and reports `removedCount: 0`.
+
+Secret handling behavior:
+
+- CLI stores controller client secrets in OS keychain when available (via cross-platform keytar integration).
+- Environment variable fallback: `OTTO_CONTROLLER_CLIENT_SECRET`.
+- `OTTO_CONTROLLER_CLIENT_SECRET` takes precedence over keychain lookup.
+
+3. Node-owned ACL grant controls target-node access:
+
+- `GET /api/controller/access` (node bearer token required)
+- `POST /api/controller/access` with `{ clientId, grant, expiresAt? }` (node bearer token required)
+
+Default behavior is least privilege: newly registered controller clients start with no node grants.
+Relay enforces ACL on every node-targeted command and returns `acl_missing_node_grant` when denied.
+
+Pairing flow for extension onboarding remains supported and backward-compatible.
+
+Test-flow cleanup behavior:
+
+- `otto test` auto self-registers a controller only when no local controller identity/tokens are present.
+- Auto-registration now defaults to `name=otto-tester` and description `Auto-registered controller for otto test flows.` and does not prompt interactively when defaults are used.
+- That auto-registered controller is removed automatically at the end of the test run by default.
+- Use `--no-cleanup-test-controller` to keep the auto-registered controller for follow-up debugging.
+
 Extension onboarding UI (v1):
 
 - Users open the Otto toolbar popup after loading the extension.
@@ -92,6 +148,7 @@ Scope behavior:
 - WebSocket: `refresh` frame (same token payload)
 
 Refresh returns new access token without changing current refresh token.
+HTTP refresh now also rotates refresh token and invalidates the previous token.
 Refresh sessions are persisted by relay runtime storage so valid refresh tokens survive relay process restarts.
 
 Default token lifetimes:
