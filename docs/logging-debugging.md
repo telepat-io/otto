@@ -171,7 +171,8 @@ Relevant environment variables:
 4. If reliability is required for narrow patterns, use `--mode hybrid` or `--mode fetch`.
 5. If traffic appears stalled in fetch/hybrid mode, verify the node is healthy and that update stream still advances (runtime always continues paused requests in `finally`).
 6. If attach fails, inspect error for debugger conflicts (for example DevTools already attached to target tab).
-7. Use node logs for isolation:
+7. For `otto test reddit.com getChatMessages`, expected stream scope is Reddit Matrix v3 (`https://matrix.redditspace.com/_matrix/client/v3/*`) in `hybrid` mode so both `Network` and `Fetch` domain paths can surface updates.
+8. Use node logs for isolation:
 
 `otto logs list --request-id <subscribeRequestId> --source node --latest 200`
 

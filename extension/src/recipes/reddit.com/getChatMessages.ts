@@ -7,12 +7,32 @@ type GetChatMessagesInput = {
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
+const REDDIT_MATRIX_V3_PATTERN = 'https://matrix.redditspace.com/_matrix/client/v3/*';
 
 function clampLimit(input: number | undefined): number {
   if (!input || Number.isNaN(input)) {
     return DEFAULT_LIMIT;
   }
   return Math.max(1, Math.min(MAX_LIMIT, Math.floor(input)));
+}
+
+function extractMessageText(event: Record<string, unknown>): string | undefined {
+  const content = event.content;
+  if (!content || typeof content !== 'object') {
+    return undefined;
+  }
+
+  const body = (content as { body?: unknown }).body;
+  if (typeof body === 'string' && body.trim().length > 0) {
+    return body;
+  }
+
+  const formattedBody = (content as { formatted_body?: unknown }).formatted_body;
+  if (typeof formattedBody === 'string' && formattedBody.trim().length > 0) {
+    return formattedBody;
+  }
+
+  return undefined;
 }
 
 export const getChatMessagesRecipe: SiteRecipe = {
@@ -184,9 +204,7 @@ export const getChatMessagesRecipe: SiteRecipe = {
       .map((event) => ({
         eventId: typeof event.event_id === 'string' ? event.event_id : undefined,
         roomId: typeof event.roomId === 'string' ? event.roomId : roomId,
-        text: event.content && typeof event.content === 'object' && typeof (event.content as { body?: unknown }).body === 'string'
-          ? (event.content as { body: string }).body
-          : undefined,
+        text: extractMessageText(event),
         sender: typeof event.sender === 'string' ? event.sender : undefined,
         createdAt: typeof event.origin_server_ts === 'number'
           ? new Date(event.origin_server_ts).toISOString()
@@ -274,10 +292,10 @@ export const getChatMessagesRecipe: SiteRecipe = {
             options: {
               tabSessionId: ctx.tabSessionId,
               site: 'reddit.com',
-              mode: 'fetch',
+              mode: 'hybrid',
               includeBody: true,
               includeHeaders: false,
-              urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/sync*'],
+              urlPatterns: [REDDIT_MATRIX_V3_PATTERN],
               requestHostAllowlist: ['matrix.redditspace.com'],
               mimeTypes: ['application/json', 'text/plain'],
               maxBodyBytes: 1_000_000,

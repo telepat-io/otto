@@ -587,6 +587,75 @@ test('recipe.run getChatMessages fetches across rooms when roomId is omitted', a
   });
 });
 
+test('recipe.run getChatMessages falls back to formatted_body when body is missing', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        chunk: [
+          {
+            type: 'm.room.message',
+            event_id: 'evt_3',
+            sender: '@t2_xyz:reddit.com',
+            origin_server_ts: 1710000002000,
+            content: { formatted_body: '<p>hello html</p>' },
+          },
+          {
+            type: 'm.room.message',
+            event_id: 'evt_4',
+            sender: '@t2_xyz:reddit.com',
+            origin_server_ts: 1710000003000,
+            content: { body: '   ' },
+          },
+        ],
+      },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    input: {
+      roomId: 'room_1',
+      limit: 20,
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    recipe: 'getChatMessages',
+    scope: 'room',
+    roomId: 'room_1',
+    totalCount: 1,
+    roomCount: 1,
+    rooms: [
+      {
+        roomId: 'room_1',
+        count: 1,
+        messages: [
+          {
+            eventId: 'evt_3',
+            roomId: 'room_1',
+            text: '<p>hello html</p>',
+            sender: '@t2_xyz:reddit.com',
+            createdAt: '2024-03-09T16:00:02.000Z',
+          },
+        ],
+      },
+    ],
+  });
+});
+
 test('recipe.test getChatMessages returns stream listener metadata', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
@@ -626,10 +695,10 @@ test('recipe.test getChatMessages returns stream listener metadata', async () =>
           options: {
             tabSessionId: 'tab_alpha',
             site: 'reddit.com',
-            mode: 'fetch',
+            mode: 'hybrid',
             includeBody: true,
             includeHeaders: false,
-            urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/sync*'],
+            urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/*'],
             requestHostAllowlist: ['matrix.redditspace.com'],
             mimeTypes: ['application/json', 'text/plain'],
             maxBodyBytes: 1_000_000,

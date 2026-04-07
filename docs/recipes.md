@@ -93,6 +93,7 @@ Reddit recipe notes:
 - `checkLogin` now uses Reddit API session probe (`/api/me.json`) with selector fallback to reduce false `manual_login_required` outcomes when the user is already authenticated.
 - `sendChatMessage` supports either existing `roomId` or room creation via `username`, then sends text through Reddit chat composer.
 - `getChatMessages` supports two modes: with `roomId`, it loads room-scoped history from Matrix `/rooms/{roomId}/messages`; without `roomId`, it loads a bounded recent multi-room snapshot from Matrix `/sync` timeline events. Output is grouped by room (`rooms[]`) with per-room message lists and counts.
+- `getChatMessages` recipe test streaming now subscribes in `hybrid` mode to Reddit Matrix v3 responses (`https://matrix.redditspace.com/_matrix/client/v3/*`) so CLI streams remain visible whether traffic is surfaced by Chrome Debugger `Network` or `Fetch` domains.
 - `getUserInfo` supports lookup by `username` or account id and returns normalized profile metadata plus enrollment-relevant flags when available.
 - `sendChatMessage` includes a recipe-level `test` hook used by `otto test` for non-side-effect readiness checks, while `recipe.run` still performs message delivery.
 - `getChatMessages` `test` returns a recipe-native stream manifest with listener subscription details so CLI can stream updates until interrupted.
