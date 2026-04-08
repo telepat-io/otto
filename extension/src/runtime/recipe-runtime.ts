@@ -271,12 +271,12 @@ function buildContext(
       await chromeApi.tabs.update(tabId, { url });
     },
     async executeScript(func, args) {
-      const result = await chromeApi.scripting.executeScript({
-        target: { tabId },
+      return await executeScriptWithRetry(
+        chromeApi,
+        tabId,
         func,
         args,
-      });
-      return result[0]?.result as Awaited<ReturnType<typeof func>>;
+      ) as Awaited<ReturnType<typeof func>>;
     },
     async startNetworkInterception(options = {}) {
       const networkInterceptListenerManager = getNetworkInterceptListenerManager(chromeApi);
@@ -358,6 +358,51 @@ function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
   });
+}
+
+function isTransientFrameExecutionError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const message = 'message' in error && typeof (error as { message?: unknown }).message === 'string'
+    ? (error as { message: string }).message
+    : '';
+  if (!message) {
+    return false;
+  }
+
+  return message.includes('Frame with ID 0 was removed')
+    || message.includes('No frame with id 0')
+    || message.includes('The tab was closed');
+}
+
+async function executeScriptWithRetry<T>(
+  chromeApi: ChromeLike,
+  tabId: number,
+  func: (...args: unknown[]) => T,
+  args: unknown[],
+): Promise<T> {
+  const maxAttempts = 4;
+  const retryDelayMs = 150;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const result = await chromeApi.scripting.executeScript({
+        target: { tabId },
+        func,
+        args,
+      });
+      return result[0]?.result as T;
+    } catch (error) {
+      if (!isTransientFrameExecutionError(error) || attempt >= maxAttempts) {
+        throw error;
+      }
+      await wait(retryDelayMs);
+    }
+  }
+
+  throw new Error('execute_script_retry_exhausted');
 }
 
 async function waitForCommittedTabUrl(chromeApi: ChromeLike, tabId: number): Promise<TabUrlProbe> {

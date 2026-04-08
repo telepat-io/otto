@@ -27,6 +27,22 @@ type MatrixMessage = {
   createdAt?: string;
 };
 
+type RedditRecipeListenerData = {
+  roomId?: unknown;
+  eventId?: unknown;
+  text?: unknown;
+  createdAt?: unknown;
+  sender?: unknown;
+  senderId?: unknown;
+  from?: unknown;
+  peerId?: unknown;
+  peerUsername?: unknown;
+  userIds?: unknown;
+  peerIds?: unknown;
+  stateKey?: unknown;
+  redacts?: unknown;
+};
+
 type ColorToken = 'dim' | 'cyan' | 'green' | 'yellow' | 'red' | 'blue';
 
 const ANSI_BY_TOKEN: Record<ColorToken, string> = {
@@ -205,6 +221,49 @@ function normalizeSender(sender?: string): string {
   return name || 'unknown-sender';
 }
 
+function inferRecipient(data: RedditRecipeListenerData): string {
+  if (data.from === 'peer') {
+    return 'creator';
+  }
+  if (data.from === 'creator') {
+    return 'peer';
+  }
+  if (typeof data.peerId === 'string' && data.peerId.length > 0) {
+    return data.peerId;
+  }
+  return 'unknown-recipient';
+}
+
+function normalizeUserId(userId: string): string {
+  if (!userId) {
+    return 'unknown-sender';
+  }
+
+  const trimmed = userId.startsWith('@') ? userId.slice(1) : userId;
+  const [name] = trimmed.split(':');
+  return name || 'unknown-sender';
+}
+
+function inferActor(data: RedditRecipeListenerData): string {
+  if (typeof data.sender === 'string' && data.sender.length > 0) {
+    return normalizeUserId(data.sender);
+  }
+
+  if (typeof data.senderId === 'string' && data.senderId.length > 0) {
+    return data.senderId;
+  }
+
+  if (typeof data.peerId === 'string' && data.peerId.length > 0) {
+    return data.peerId;
+  }
+
+  if (typeof data.stateKey === 'string' && data.stateKey.length > 0) {
+    return normalizeUserId(data.stateKey);
+  }
+
+  return 'unknown-sender';
+}
+
 function summarizeUnknownData(data: unknown): string {
   if (data === undefined) {
     return 'no-data';
@@ -259,6 +318,8 @@ export function createRecipeTestStreamRenderer(context: RendererContext): {
 } {
   const colorEnabled = supportsColor(context.useColor);
   const seenMessageIds = new Set<string>();
+  const roomPeerLabels = new Map<string, Map<string, string>>();
+  const roomUserIds = new Map<string, Set<string>>();
 
   const renderResultStatus = (status: string): string => {
     if (status === 'completed') {
@@ -275,6 +336,59 @@ export function createRecipeTestStreamRenderer(context: RendererContext): {
       return [];
     }
     return [jsonLine(msg)];
+  };
+
+  const rememberRoomPeer = (roomId: string | undefined, peerId: string | undefined, peerUsername: string | undefined): void => {
+    if (!roomId || !peerId || !peerUsername) {
+      return;
+    }
+
+    const byPeerId = roomPeerLabels.get(roomId) ?? new Map<string, string>();
+    byPeerId.set(peerId, peerUsername);
+    roomPeerLabels.set(roomId, byPeerId);
+  };
+
+  const resolveRoomPeerLabel = (roomId: string | undefined, senderId: string | undefined): string | undefined => {
+    if (!roomId || !senderId) {
+      return undefined;
+    }
+
+    const byPeerId = roomPeerLabels.get(roomId);
+    if (!byPeerId) {
+      return undefined;
+    }
+
+    return byPeerId.get(senderId);
+  };
+
+  const rememberRoomUserId = (roomId: string | undefined, userId: string | undefined): void => {
+    if (!roomId || !userId) {
+      return;
+    }
+
+    const ids = roomUserIds.get(roomId) ?? new Set<string>();
+    ids.add(userId);
+    roomUserIds.set(roomId, ids);
+  };
+
+  const resolveRoomPrimaryPeerLabel = (roomId: string | undefined): string | undefined => {
+    if (!roomId) {
+      return undefined;
+    }
+
+    const byPeerId = roomPeerLabels.get(roomId);
+    if (!byPeerId || byPeerId.size === 0) {
+      return undefined;
+    }
+
+    const userIds = roomUserIds.get(roomId) ?? new Set<string>();
+    for (const [peerId, peerName] of byPeerId.entries()) {
+      if (!userIds.has(peerId)) {
+        return peerName;
+      }
+    }
+
+    return byPeerId.values().next().value as string | undefined;
   };
 
   return {
@@ -352,6 +466,96 @@ export function createRecipeTestStreamRenderer(context: RendererContext): {
         const time = colorize(colorEnabled, 'dim', `[${shortTimestamp(emittedAt)}]`);
         const summary = summarizeUnknownData(data);
         return [`${time} [update:${updateType}] ${summary}`];
+      }
+
+      const recipeData = data as RedditRecipeListenerData;
+      const hasRecipeNativeShape = [
+        'new_message',
+        'typing',
+        'room_member',
+        'message_deleted',
+      ].includes(updateType);
+      if (hasRecipeNativeShape) {
+        const emittedAt = typeof extracted.payload.emittedAt === 'string' ? extracted.payload.emittedAt : msg.timestamp;
+        const time = colorize(colorEnabled, 'dim', `[${shortTimestamp(emittedAt)}]`);
+        const roomId = typeof recipeData.roomId === 'string' ? recipeData.roomId : undefined;
+        const roomPart = roomId ? ` ${colorize(colorEnabled, 'dim', `(${roomId})`)}` : '';
+
+        if (updateType === 'new_message') {
+          const senderId = typeof recipeData.senderId === 'string' ? recipeData.senderId : undefined;
+          const fromRole = typeof recipeData.from === 'string' ? recipeData.from : undefined;
+          const eventTime = typeof recipeData.createdAt === 'string' && recipeData.createdAt.length > 0
+            ? recipeData.createdAt
+            : emittedAt;
+          const messageTime = colorize(colorEnabled, 'dim', `[${shortTimestamp(eventTime)}]`);
+          const senderRaw = typeof recipeData.sender === 'string'
+            ? recipeData.sender
+            : (senderId ? `@${senderId}:reddit.com` : undefined);
+          const roomPeerLabel = resolveRoomPeerLabel(roomId, senderId);
+          if (fromRole === 'creator') {
+            rememberRoomUserId(roomId, senderId);
+          }
+
+          const senderLabel = fromRole === 'creator'
+            ? 'user'
+            : (roomPeerLabel ?? normalizeSender(senderRaw));
+          const sender = colorize(colorEnabled, 'cyan', senderLabel);
+
+          const inferredRecipient = inferRecipient(recipeData);
+          const primaryPeerLabel = resolveRoomPrimaryPeerLabel(roomId);
+          let recipientLabel = inferredRecipient === 'creator' ? 'user' : inferredRecipient;
+          if (fromRole === 'creator') {
+            recipientLabel = primaryPeerLabel ?? (recipientLabel === 'peer' ? 'peer' : recipientLabel);
+          } else if (fromRole === 'peer') {
+            recipientLabel = 'user';
+          }
+          const recipient = colorize(colorEnabled, 'yellow', recipientLabel);
+          const text = typeof recipeData.text === 'string' ? oneLine(recipeData.text) : '';
+          const message = text || '(empty message)';
+          return [
+            `${messageTime} ${colorize(colorEnabled, 'blue', '[chat:new_message]')} ${sender} -> ${recipient}: ${shorten(message, 240)}${roomPart}`,
+          ];
+        }
+
+        if (updateType === 'typing') {
+          const peerIds = Array.isArray(recipeData.peerIds)
+            ? recipeData.peerIds.filter((value): value is string => typeof value === 'string')
+            : (Array.isArray(recipeData.userIds)
+              ? recipeData.userIds.filter((value): value is string => typeof value === 'string')
+              : []);
+          const actorList = peerIds.map((userId) => normalizeUserId(userId));
+          const who = actorList.length > 0 ? actorList.join(', ') : inferActor(recipeData);
+          const inferredRecipient = inferRecipient(recipeData);
+          const recipient = inferredRecipient === 'unknown-recipient' && actorList.length > 0
+            ? 'user'
+            : (inferredRecipient === 'creator' ? 'user' : inferredRecipient);
+          return [
+            `${time} ${colorize(colorEnabled, 'blue', '[chat:typing]')} ${who} -> ${recipient}${roomPart}`,
+          ];
+        }
+
+        if (updateType === 'room_member') {
+          const peerId = typeof recipeData.peerId === 'string' && recipeData.peerId.length > 0
+            ? recipeData.peerId
+            : undefined;
+          const peerName = typeof recipeData.peerUsername === 'string' && recipeData.peerUsername.length > 0
+            ? recipeData.peerUsername
+            : inferActor(recipeData);
+          rememberRoomPeer(roomId, peerId, typeof recipeData.peerUsername === 'string' ? recipeData.peerUsername : undefined);
+          const recipient = inferRecipient(recipeData);
+          return [
+            `${time} ${colorize(colorEnabled, 'blue', '[chat:room_member]')} ${peerName} -> ${recipient === 'creator' || recipient === 'unknown-recipient' ? 'user' : recipient} joined${roomPart}`,
+          ];
+        }
+
+        if (updateType === 'message_deleted') {
+          const actor = inferActor(recipeData);
+          const recipient = inferRecipient(recipeData);
+          const redacts = typeof recipeData.redacts === 'string' ? recipeData.redacts : 'unknown-event';
+          return [
+            `${time} ${colorize(colorEnabled, 'blue', '[chat:message_deleted]')} ${actor} -> ${recipient === 'creator' ? 'user' : recipient} deleted ${redacts}${roomPart}`,
+          ];
+        }
       }
 
       const net = data as Partial<NetworkInterceptListenerUpdate>;

@@ -441,13 +441,29 @@ export function createRedditChatListenerManager(
   const listeners = new Map<string, RedditListenerState>();
 
   const emitUpdate = async (requestId: string, updateType: string, data: unknown): Promise<void> => {
+    const emittedAt = new Date().toISOString();
+
+    try {
+      await chromeApi.runtime.sendMessage({
+        type: 'otto.offscreen.emitListenerUpdate',
+        payload: {
+          requestId,
+          updateType,
+          emittedAt,
+          data,
+        },
+      });
+    } catch {
+      // Avoid listener crash on transient offscreen bridge failures.
+    }
+
     try {
       await chromeApi.runtime.sendMessage({
         type: 'otto.listenerUpdate',
         payload: {
           requestId,
           updateType,
-          emittedAt: new Date().toISOString(),
+          emittedAt,
           data,
         },
       });
@@ -653,7 +669,7 @@ export function createRedditChatListenerManager(
     const options: NetworkInterceptListenerOptions = {
       tabSessionId: state.tabSessionId,
       site: 'reddit.com',
-      mode: 'fetch',
+      mode: 'network',
       includeBody: true,
       includeHeaders: false,
       urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/sync*'],
@@ -670,21 +686,25 @@ export function createRedditChatListenerManager(
           return;
         }
 
-        if (updateType === 'network.response') {
-          await handleInterceptResponse(current, rawData as NetworkInterceptListenerUpdate);
-          return;
-        }
-
-        if (updateType === 'network.detached') {
-          await fallbackToPolling(current, 'intercept_detached');
-          return;
-        }
-
-        if (updateType === 'network.error') {
-          current.interceptErrors += 1;
-          if (current.interceptErrors >= MAX_INTERCEPT_ERRORS_BEFORE_FALLBACK) {
-            await fallbackToPolling(current, 'intercept_network_error');
+        try {
+          if (updateType === 'network.response') {
+            await handleInterceptResponse(current, rawData as NetworkInterceptListenerUpdate);
+            return;
           }
+
+          if (updateType === 'network.detached') {
+            await fallbackToPolling(current, 'intercept_detached');
+            return;
+          }
+
+          if (updateType === 'network.error') {
+            current.interceptErrors += 1;
+            if (current.interceptErrors >= MAX_INTERCEPT_ERRORS_BEFORE_FALLBACK) {
+              await fallbackToPolling(current, 'intercept_network_error');
+            }
+          }
+        } catch {
+          await fallbackToPolling(current, 'intercept_callback_failed');
         }
       },
     });
