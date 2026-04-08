@@ -139,7 +139,7 @@ Unauthenticated clients cannot send command, lock, or subscription frames.
 Scope behavior:
 
 - Controller command authorization is action-based.
-- Default scopes include primitive actions and recipe actions (`recipe.list`, `recipe.run`).
+- Default scopes include primitive actions and command actions (`command.list`, `command.run`).
 - Narrow scope tokens are supported and enforced deterministically (`forbidden_action`).
 
 ## Refresh Flow
@@ -183,8 +183,8 @@ CLI support: run `otto revoke` to revoke the stored refresh token and clear loca
 - Token claims enforce role and node/controller scope.
 - Extension-origin checks apply to browser-originated node WebSocket upgrades.
 
-Recipe auth note:
+Command auth note:
 
-- Recipe-level website login state is separate from relay token authentication.
-- Relay auth controls API access; recipe `requiresAuth` controls website session prerequisites.
+- Command-level website login state is separate from relay token authentication.
+- Relay auth controls API access; command `requiresAuth` controls website session prerequisites.
 

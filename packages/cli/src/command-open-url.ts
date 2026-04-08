@@ -1,4 +1,4 @@
-type RecipeDescriptorLike = {
+type CommandDescriptorLike = {
   site?: string;
   id?: string;
   preloadHost?: string;
@@ -26,13 +26,13 @@ function toHttpsUrl(value: string): string {
   return `https://${trimmed}`;
 }
 
-export function resolveRecipeAutoOpenUrl(
+export function resolveCommandAutoOpenUrl(
   siteArg: string,
-  recipeId: string,
-  descriptors: RecipeDescriptorLike[],
+  commandId: string,
+  descriptors: CommandDescriptorLike[],
 ): string {
   const defaultUrl = toHttpsUrl(siteArg);
-  const matchedDescriptor = resolveRecipeDescriptor(siteArg, recipeId, descriptors);
+  const matchedDescriptor = resolveCommandDescriptor(siteArg, commandId, descriptors);
 
   const preloadHost = String(matchedDescriptor?.preloadHost ?? '').trim();
   if (!preloadHost) {
@@ -42,16 +42,16 @@ export function resolveRecipeAutoOpenUrl(
   return toHttpsUrl(preloadHost);
 }
 
-export function resolveRecipeDescriptor(
+export function resolveCommandDescriptor(
   siteArg: string,
-  recipeId: string,
-  descriptors: RecipeDescriptorLike[],
-): RecipeDescriptorLike | undefined {
+  commandId: string,
+  descriptors: CommandDescriptorLike[],
+): CommandDescriptorLike | undefined {
   const normalizedSite = normalizeHostLike(siteArg);
 
   return descriptors.find((descriptor) => {
     const descriptorSite = normalizeHostLike(String(descriptor.site ?? ''));
     const descriptorId = String(descriptor.id ?? '').trim();
-    return descriptorSite === normalizedSite && descriptorId === recipeId;
+    return descriptorSite === normalizedSite && descriptorId === commandId;
   });
 }

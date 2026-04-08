@@ -1,20 +1,20 @@
-# Recipes
+# Commands
 
 Last Updated: 2026-04-07
 Owner: Browser Runtime
 
 ## Source-of-Truth Code Paths
 
-- Extension command execution and recipe dispatch: `extension/src/runtime/command-executor.ts`
-- Extension recipe runtime orchestration: `extension/src/runtime/recipe-runtime.ts`
-- Extension site recipe registry and modules: `extension/src/recipes/**`
+- Extension command execution and command dispatch: `extension/src/runtime/command-executor.ts`
+- Extension command runtime orchestration: `extension/src/runtime/command-runtime.ts`
+- Extension site command registry and modules: `extension/src/commands/**`
 - Shared action contracts: `packages/shared-protocol/src/index.ts`
 - Relay command routing and terminalization: `packages/relay/src/index.ts`
 
 ## Design Goals
 
-- Keep recipe authoring simple and local to extension runtime.
-- Make recipes discoverable and testable by humans and agents.
+- Keep command authoring simple and local to extension runtime.
+- Make commands discoverable and testable by humans and agents.
 - Support website-specific auth preflight without credential automation.
 - Preserve relay invariants (target node, queueing, terminal outcomes).
 
@@ -28,36 +28,36 @@ Primitive actions:
 - `primitive.tab.query`
 - `primitive.dom.extract_text`
 
-Recipe actions:
+Command actions:
 
-- `recipe.list`
-- `recipe.run`
-- `recipe.test`
-- `recipe.reddit_feed` (legacy alias)
+- `command.list`
+- `command.run`
+- `command.test`
+- `command.reddit_feed` (legacy alias)
 
 CLI entrypoints:
 
-- `otto recipes list [--site <site>]`
-- `otto test <site> <recipe> [--payload <json>] [--timeout <ms>] [--auth-mode auto|strict_fail|skip] [--json]`
+- `otto commands list [--site <site>]`
+- `otto test <site> <command> [--payload <json>] [--timeout <ms>] [--auth-mode auto|strict_fail|skip] [--json]`
 
-Site-scoped recipe model:
+Site-scoped command model:
 
-- Recipes are grouped by website in `extension/src/recipes/<site>/`.
+- Commands are grouped by website in `extension/src/commands/<site>/`.
 - Each site bundle must provide built-ins: `checkLogin` and `gotoLogin`.
-- Custom recipes export metadata plus an `execute(ctx, input, authMode)` function.
-- Recipes can optionally export `test(ctx, input, helpers)` for `otto test` setup/assertion flows.
-- `recipe.run` payload carries `site`, `recipe`, optional `input`, and `authMode` (`auto|strict_fail|skip`).
-- `recipe.test` payload carries the same fields and runs recipe-specific test logic when present.
+- Custom commands export metadata plus an `execute(ctx, input, authMode)` function.
+- Commands can optionally export `test(ctx, input, helpers)` for `otto test` setup/assertion flows.
+- `command.run` payload carries `site`, `command`, optional `input`, and `authMode` (`auto|strict_fail|skip`).
+- `command.test` payload carries the same fields and runs command-specific test logic when present.
 
-Recipe file shape:
+Command file shape:
 
 - `metadata`: identity, display fields, tags, and `requiresAuth`.
 - `metadata.inputFields` (optional): declarative command inputs with field `name`, `type`, `description`, `optional`.
-- `metadata.preloadHost` (optional): host that must be loaded before recipe `execute` runs.
+- `metadata.preloadHost` (optional): host that must be loaded before command `execute` runs.
 - `metadata.inputAtLeastOneOf` (optional): list of input field names where at least one must be provided.
 - `execute(ctx, input, authMode)`: implementation logic.
-- `test(ctx, input, helpers)` (optional): programmatic test entrypoint used by `recipe.test`.
-- Site bundle exports: `checkLogin`, `gotoLogin`, `recipes[]`.
+- `test(ctx, input, helpers)` (optional): programmatic test entrypoint used by `command.test`.
+- Site bundle exports: `checkLogin`, `gotoLogin`, `commands[]`.
 
 Input field type support (v1):
 
@@ -69,52 +69,52 @@ Input field type support (v1):
 
 Framework input validation behavior:
 
-- When `metadata.inputFields` is present, runtime validates payload input before recipe logic.
+- When `metadata.inputFields` is present, runtime validates payload input before command logic.
 - Required fields (default) must exist unless `optional=true`.
 - Declared types must match exactly (no coercion).
 - `inputAtLeastOneOf` enforces cross-field minimum presence for conditional input contracts.
 - Unknown extra input keys are rejected.
-- Runtime passes a sanitized object with only declared fields to recipe logic.
-- Recipes without `metadata.inputFields` remain permissive for backward compatibility.
+- Runtime passes a sanitized object with only declared fields to command logic.
+- Commands without `metadata.inputFields` remain permissive for backward compatibility.
 
 Auth-required flow:
 
-- If recipe metadata declares `requiresAuth`, runtime executes `checkLogin` first.
+- If command metadata declares `requiresAuth`, runtime executes `checkLogin` first.
 - In `auto` mode, failed login checks trigger `gotoLogin` and return deterministic `manual_login_required`.
-- End users complete authentication manually in the browser, then rerun the recipe.
+- End users complete authentication manually in the browser, then rerun the command.
 
 Current bundled sites:
 
 - `reddit.com` (`getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`)
 - `news.ycombinator.com` (`getFrontPage`)
 
-Reddit recipe notes:
+Reddit command notes:
 
 - `checkLogin` now uses Reddit API session probe (`/api/me.json`) with selector fallback to reduce false `manual_login_required` outcomes when the user is already authenticated.
 - `sendChatMessage` supports either existing `roomId` or room creation via `username`, then sends text through Reddit chat composer.
 - `getChatMessages` supports two modes: with `roomId`, it loads room-scoped history from Matrix `/rooms/{roomId}/messages`; without `roomId`, it loads a bounded recent multi-room snapshot from Matrix `/sync` timeline events. Output is grouped by room (`rooms[]`) with per-room message lists and counts.
-- `getChatMessages` recipe test streaming now subscribes in `hybrid` mode to Reddit Matrix v3 responses (`https://matrix.redditspace.com/_matrix/client/v3/*`) so CLI streams remain visible whether traffic is surfaced by Chrome Debugger `Network` or `Fetch` domains.
+- `getChatMessages` command test streaming now subscribes in `hybrid` mode to Reddit Matrix v3 responses (`https://matrix.redditspace.com/_matrix/client/v3/*`) so CLI streams remain visible whether traffic is surfaced by Chrome Debugger `Network` or `Fetch` domains.
 - `getUserInfo` supports lookup by `username` or account id and returns normalized profile metadata plus enrollment-relevant flags when available.
-- `sendChatMessage` includes a recipe-level `test` hook used by `otto test` for non-side-effect readiness checks, while `recipe.run` still performs message delivery.
-- `getChatMessages` `test` returns a recipe-native stream manifest with listener subscription details so CLI can stream updates until interrupted.
+- `sendChatMessage` includes a command-level `test` hook used by `otto test` for non-side-effect readiness checks, while `command.run` still performs message delivery.
+- `getChatMessages` `test` returns a command-native stream manifest with listener subscription details so CLI can stream updates until interrupted.
 
 ## Runtime Execution Lifecycle
 
-1. Parse `recipe.run`/`recipe.test` payload or alias mapping (`recipe.reddit_feed`).
-2. Resolve site bundle and recipe id.
+1. Parse `command.run`/`command.test` payload or alias mapping (`command.reddit_feed`).
+2. Resolve site bundle and command id.
 3. Resolve and validate `tabSessionId`.
 4. Ensure active tab URL matches target site bundle.
-5. Validate and sanitize recipe input from metadata when declared.
+5. Validate and sanitize command input from metadata when declared.
 6. Run auth preflight if required (`checkLogin` then optional `gotoLogin`).
-7. Run recipe execution path:
-- `recipe.run`: call `execute` directly.
-- `recipe.test`: call `test` when defined, otherwise fall back to `execute`.
-- For recipes returning `stream.listeners` from `test`, CLI subscribes to listener updates and stays active until `Ctrl+C`; cancellation targets the original `recipe.test` request so relay can deterministically close stream sessions.
+7. Run command execution path:
+- `command.run`: call `execute` directly.
+- `command.test`: call `test` when defined, otherwise fall back to `execute`.
+- For commands returning `stream.listeners` from `test`, CLI subscribes to listener updates and stays active until `Ctrl+C`; cancellation targets the original `command.test` request so relay can deterministically close stream sessions.
 - `otto test` defaults to human-readable stream lines for easier debugging; use `--json` to print full raw envelope objects for every command and stream frame.
-- For streaming recipes, `otto test --timeout` bounds only the initial `recipe.test` response window; once stream listeners are active, relay does not enforce a stream duration timeout.
+- For streaming commands, `otto test --timeout` bounds only the initial `command.test` response window; once stream listeners are active, relay does not enforce a stream duration timeout.
 - Long-running controller sessions should send heartbeat `ping` frames and expect relay `pong` responses.
 8. Enforce `metadata.preloadHost` before any call into `execute`.
-9. Return normalized recipe result object.
+9. Return normalized command result object.
 
 Preload host notes:
 
@@ -122,23 +122,23 @@ Preload host notes:
 - Runtime auto-navigates to `preloadHost` before `execute` when needed.
 - If navigation finishes on a different host, runtime returns `preload_host_mismatch`.
 
-## Recipe Network Interception API
+## Command Network Interception API
 
-Recipes can start response interception within the currently managed `tabSessionId` using the runtime context helper:
+Commands can start response interception within the currently managed `tabSessionId` using the runtime context helper:
 
 - `ctx.startNetworkInterception(options?)`
 
 Context API behavior:
 
-- Interception is always bound to the recipe's managed `tabSessionId`.
-- Site scope is enforced from the resolved recipe bundle site.
+- Interception is always bound to the command's managed `tabSessionId`.
+- Site scope is enforced from the resolved command bundle site.
 - Returned handle exposes bounded pull-style event consumption.
-- Runtime automatically stops all active recipe-started interceptions when recipe execution completes or throws.
+- Runtime automatically stops all active command-started interceptions when command execution completes or throws.
 
 Type-level contract (simplified):
 
 ```ts
-type RecipeNetworkInterceptionOptions = {
+type CommandNetworkInterceptionOptions = {
 	urlPatterns?: string[];
 	mode?: 'network' | 'fetch' | 'hybrid';
 	includeBody?: boolean;
@@ -147,20 +147,20 @@ type RecipeNetworkInterceptionOptions = {
 	mimeTypes?: string[];
 };
 
-type RecipeNetworkInterceptionEvent = {
+type CommandNetworkInterceptionEvent = {
 	updateType: string;
 	emittedAt: string;
 	data: unknown;
 };
 
-type RecipeNetworkInterceptionHandle = {
+type CommandNetworkInterceptionHandle = {
 	requestId: string;
-	takeUpdates: () => RecipeNetworkInterceptionEvent[];
+	takeUpdates: () => CommandNetworkInterceptionEvent[];
 	stop: () => Promise<void>;
 };
 ```
 
-Recommended usage pattern inside a recipe:
+Recommended usage pattern inside a command:
 
 ```ts
 const stream = await ctx.startNetworkInterception({
@@ -206,13 +206,13 @@ Operational limits and caveats:
 Common deterministic codes:
 
 - `unknown_site`
-- `unknown_recipe`
+- `unknown_command`
 - `site_mismatch`
 - `missing_tab_session`
 - `unknown_tab_session`
 - `manual_login_required`
 
-Reddit-specific execution errors (recipe-level messages/codes):
+Reddit-specific execution errors (command-level messages/codes):
 
 - `reddit_user_not_found`
 - `reddit_user_unmessageable`
@@ -221,7 +221,7 @@ Reddit-specific execution errors (recipe-level messages/codes):
 
 ## Authoring Guidelines
 
-1. Keep recipe execution bounded in time and payload size.
+1. Keep command execution bounded in time and payload size.
 2. Do not include secrets or credentials in returned data.
 3. Prefer stable selectors and null-safe extraction.
 4. Return structured objects with predictable fields.
@@ -229,35 +229,35 @@ Reddit-specific execution errors (recipe-level messages/codes):
 
 Developer test flow:
 
-- Use `otto test <site> <recipe>` for local execution.
+- Use `otto test <site> <command>` for local execution.
 - If `targetNodeId` is missing or stale and exactly one node is connected, CLI auto-selects that connected node.
 - If multiple nodes are connected, CLI requires explicit `--node-id`.
-- If `--tab-session` is omitted, CLI auto-opens recipe `preloadHost` when metadata provides it, otherwise falls back to `https://<site>`.
+- If `--tab-session` is omitted, CLI auto-opens command `preloadHost` when metadata provides it, otherwise falls back to `https://<site>`.
 - Auto-opened test tabs are closed automatically when the command completes; pass `--keep-tab-open` to keep the tab for manual inspection.
 - Non-TTY mode emits JSON and returns non-zero exit code on terminal errors for automation.
-- Use `otto recipes list [--site <site>]` to inspect available metadata exposed by the node runtime.
-- `otto test` now sends `recipe.test` action.
-- If a recipe does not define `test`, runtime automatically falls back to `execute`.
+- Use `otto commands list [--site <site>]` to inspect available metadata exposed by the node runtime.
+- `otto test` now sends `command.test` action.
+- If a command does not define `test`, runtime automatically falls back to `execute`.
 
-Recipe test hook contract:
+Command test hook contract:
 
 - `test(ctx, input, helpers)` is optional.
 - `helpers.authMode` mirrors the command payload auth mode.
-- `helpers.execute(inputOverride?)` runs the normal recipe execute path with preload validation.
+- `helpers.execute(inputOverride?)` runs the normal command execute path with preload validation.
 - Recommended pattern: do deterministic setup/assertions in `test`, then call `helpers.execute()`.
 
 Recommended setup prerequisites:
 
 1. Run `otto setup` to prepare controller config and extension import path.
 2. Load extension in Chrome and set node relay URL in extension options if needed.
-3. Complete pairing (`otto authcode`, `otto pair <code>`) before recipe commands.
+3. Complete pairing (`otto authcode`, `otto pair <code>`) before command commands.
 
 Ownership boundary reminder:
 
 - `otto settings` affects controller defaults only.
 - Extension runtime configuration for node connectivity is managed in extension options.
 
-Recipe constraints:
+Command constraints:
 
 - Bounded runtime and payload size
 - Clear warning/error return schema

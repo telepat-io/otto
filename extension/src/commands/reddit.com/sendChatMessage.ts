@@ -1,4 +1,4 @@
-import type { SiteRecipe } from '../types.js';
+import type { SiteCommand } from '../types.js';
 
 type SendChatMessageInput = {
   username?: string;
@@ -8,7 +8,7 @@ type SendChatMessageInput = {
 
 const CHAT_HOME_URL = 'https://chat.reddit.com/';
 
-export const sendChatMessageRecipe: SiteRecipe = {
+export const sendChatMessageCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
     id: 'sendChatMessage',

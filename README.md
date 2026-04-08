@@ -108,7 +108,7 @@ Notes:
 6. Smoke test:
 
 ```bash
-otto recipes list
+otto commands list
 ```
 
 ### Monorepo Dev Path
@@ -146,7 +146,7 @@ npm run dev -- setup
 Argument pass-through supports any CLI command, for example:
 
 ```bash
-npm run dev -- recipes list
+npm run dev -- commands list
 ```
 
 4. Configure CLI:
@@ -174,10 +174,10 @@ node packages/cli/dist/index.js pair 123-456
 node packages/cli/dist/index.js cmd --action primitive.tab.query --node-id <nodeId>
 ```
 
-8. Discover and run recipes:
+8. Discover and run commands:
 
 ```bash
-node packages/cli/dist/index.js recipes list
+node packages/cli/dist/index.js commands list
 node packages/cli/dist/index.js test reddit.com getFeed
 ```
 
@@ -243,26 +243,26 @@ Release artifact contract used by setup:
 - Expected checksum asset: `otto-extension-<version>-chrome-mv3.zip.sha256`
 - Checksum file can be `sha256sum` style (`<hash> <filename>`) or OpenSSL style (`SHA256(...) = <hash>`)
 
-## Recipe Framework
+## Command Framework
 
-Recipe model:
+Command model:
 
-- Site-scoped bundles live in `extension/src/recipes/<site>/`.
+- Site-scoped bundles live in `extension/src/commands/<site>/`.
 - Each site bundle provides built-ins `checkLogin` and `gotoLogin`.
-- Main runtime actions are `recipe.list`, `recipe.run`, and `recipe.test`.
-- Legacy alias `recipe.reddit_feed` is still supported for migration.
+- Main runtime actions are `command.list`, `command.run`, and `command.test`.
+- Legacy alias `command.reddit_feed` is still supported for migration.
 
-Recipe metadata and validation:
+Command metadata and validation:
 
-- Recipes can declare `inputFields` for strict type/required validation.
-- Recipes can declare `inputAtLeastOneOf` for conditional contracts (for example `username` or `roomId`).
-- Recipes can declare `preloadHost`; runtime auto-navigates to that host before `execute` when needed.
-- `otto test` auto-opens `preloadHost` when available from `recipe.list`, then runs `recipe.test` (with fallback to `execute` when no test hook exists).
-- `otto test` prints human-readable stream output by default to make recipe events easier to follow; add `--json` to see full raw envelope objects.
+- Commands can declare `inputFields` for strict type/required validation.
+- Commands can declare `inputAtLeastOneOf` for conditional contracts (for example `username` or `roomId`).
+- Commands can declare `preloadHost`; runtime auto-navigates to that host before `execute` when needed.
+- `otto test` auto-opens `preloadHost` when available from `command.list`, then runs `command.test` (with fallback to `execute` when no test hook exists).
+- `otto test` prints human-readable stream output by default to make command events easier to follow; add `--json` to see full raw envelope objects.
 
 Auth-aware behavior:
 
-- Recipes can declare `requiresAuth` in metadata.
+- Commands can declare `requiresAuth` in metadata.
 - In `authMode=auto`, runtime checks login and navigates to login page if needed.
 - Automation never submits credentials; users authenticate manually and rerun.
 
@@ -282,7 +282,7 @@ npm run -ws --if-present test
 - Protocol: `docs/protocol.md`
 - Pairing and auth: `docs/pairing-auth.md`
 - Extension runtime: `docs/extension-runtime.md`
-- Recipes: `docs/recipes.md`
+- Commands: `docs/commands.md`
 - Relay ops: `docs/relay-operations.md`
 - Security: `docs/security.md`
 - Testing: `docs/testing.md`

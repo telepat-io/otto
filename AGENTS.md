@@ -9,10 +9,10 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Keep per-tab session execution serial and cross-tab execution parallel.
 - Apply pre-ingress redaction for logs.
 - Keep `chrome.debugger` features behind explicit opt-in flags.
-- Keep recipe execution site-scoped and validate tab URL before running recipe logic.
-- Keep `recipe.test` streaming recipe-native via returned stream listener manifests; avoid site-specific runtime listener managers.
-- Validate declared recipe input metadata before command execution; recipe handlers should receive sanitized input.
-- For `otto test`, support optional recipe-level test hooks with execute fallback for simple recipes.
+- Keep command execution site-scoped and validate tab URL before running command logic.
+- Keep `command.test` streaming command-native via returned stream listener manifests; avoid site-specific runtime listener managers.
+- Validate declared command input metadata before command execution; command handlers should receive sanitized input.
+- For `otto test`, support optional command-level test hooks with execute fallback for simple commands.
 - Never automate user credential submission; use explicit manual login handoff (`manual_login_required`).
 - Keep listener lifecycle deterministic: `listener.subscribe` and `listener.unsubscribe` are terminal commands, while async `listener_update` events are correlated by the original subscribe `requestId`.
 - Keep controller-to-node authorization node-owned: registered controller clients require explicit per-node ACL grants from the authenticated node before command routing.
@@ -50,16 +50,16 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Extension SW/offscreen runtime: `extension/entrypoints/background.ts`, `extension/src/runtime/offscreen-client.ts`
 - Extension network interception listeners: `extension/src/runtime/network-intercept-listener.ts`, `extension/src/runtime/listener-managers.ts`
 - Extension popup onboarding UI: `extension/entrypoints/popup.html`, `extension/src/runtime/popup-ui.ts`, `extension/src/runtime/onboarding-ui.ts`
-- Extension recipe runtime orchestration: `extension/src/runtime/recipe-runtime.ts`
-- Extension recipe bundles and registry: `extension/src/recipes/**`
+- Extension command runtime orchestration: `extension/src/runtime/command-runtime.ts`
+- Extension command bundles and registry: `extension/src/commands/**`
 - Extension settings UI: `extension/entrypoints/options.html`, `extension/src/runtime/options-ui.ts`
 
 ## Safety
 - Do not add remote code execution paths.
 - Do not log tokens/cookies/raw sensitive payloads by default.
 - Enforce auth and role checks before routing commands.
-- Keep recipe input handling bounded and deterministic; avoid unbounded page scraping loops.
-- Preserve legacy recipe compatibility aliases only when explicitly documented and tested.
+- Keep command input handling bounded and deterministic; avoid unbounded page scraping loops.
+- Preserve legacy command compatibility aliases only when explicitly documented and tested.
 
 ## Local Dev Log Streaming (Extension -> Relay)
 - In local development flows, extension runtime can stream structured extension logs to relay when `localDevLogStreamingEnabled` is set in extension storage.
@@ -75,15 +75,15 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Validate that early extension logs appear before `authenticated_connected` transitions during relay URL + pairing workflows.
 - For autonomous/CI agents, prefer non-TTY invocation and `--json` output for machine parsing.
 - Treat `otto logs follow` as unbounded: enforce a caller-side timeout window for live capture sessions.
-- For long-running controller stream sessions (for example `otto test` streaming recipes), keep websocket heartbeat `ping`/`pong` active; stale controllers should be treated as disconnected and cleaned up by relay.
+- For long-running controller stream sessions (for example `otto test` streaming commands), keep websocket heartbeat `ping`/`pong` active; stale controllers should be treated as disconnected and cleaned up by relay.
 - Correlate failures by `requestId` first, then narrow by source (`all` -> `node` or `relay`) to isolate root cause.
 
 ## Debugging Tools That Worked Best
 - `otto listener subscribe-network`
-	- Use case: prove raw network capture before debugging recipe stream plumbing.
+	- Use case: prove raw network capture before debugging command stream plumbing.
 	- Example: `otto listener subscribe-network --tab-session <id> --site reddit.com --request-host matrix.redditspace.com --pattern 'https://matrix.redditspace.com/_matrix/client/v3/*' --mode network --max-body-bytes 200000`
-- `otto test <site> <recipe> --json`
-	- Use case: validate recipe-level stream manifests and controller-visible frames.
+- `otto test <site> <command> --json`
+	- Use case: validate command-level stream manifests and controller-visible frames.
 	- Example: `otto test reddit.com getChatMessages --stream-follow-ms 45000 --json`
 - `otto test ... --stream-probe`
 	- Use case: force immediate traffic after subscribe to validate listener wiring.
@@ -97,9 +97,9 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - `otto cmd --action primitive.tab.open`
 	- Use case: mint a fresh managed `tabSessionId` after reloads and avoid stale-session false negatives.
 	- Example: `otto cmd --action primitive.tab.open --payload '{"url":"https://chat.reddit.com"}'`
-- `otto recipes list`
+- `otto commands list`
 	- Use case: quick health check for auth, routing, and node reachability before deeper debugging.
-	- Example: `otto recipes list`
+	- Example: `otto commands list`
 
 ## CLI TUI Guidance
 - For any CLI TUI updates, prefer `@inkjs/ui` components and patterns over bespoke terminal rendering.

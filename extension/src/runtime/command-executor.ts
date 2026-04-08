@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { CommandPayload } from '@telepat/otto-protocol';
-import { listRecipesForRuntime, runRecipeCommand, runRecipeTestCommand } from './recipe-runtime.js';
+import { listCommandsForRuntime, runCommandAction, runCommandTestAction } from './command-runtime.js';
 import { CommandExecutionError } from './execution-error.js';
 import { createSingleFlight } from './single-flight.js';
 
@@ -360,17 +360,17 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
         data: { tabSessionId, selector, text: result[0]?.result ?? null },
       };
     }
-    case 'recipe.list': {
+    case 'command.list': {
       return {
         durationMs: Date.now() - start,
-        data: { recipes: listRecipesForRuntime() },
+        data: { commands: listCommandsForRuntime() },
       };
     }
-    case 'recipe.run':
-    case 'recipe.reddit_feed': {
+    case 'command.run':
+    case 'command.reddit_feed': {
       const tabSessionId = String(command.payload.tabSessionId ?? command.tabSessionId ?? '');
       const tabId = await resolveTabId(chromeApi, tabSessionId);
-      const data = await runRecipeCommand(chromeApi, command, tabId, tabSessionId);
+      const data = await runCommandAction(chromeApi, command, tabId, tabSessionId);
       const payload = data && typeof data === 'object' && !Array.isArray(data)
         ? data as Record<string, unknown>
         : { result: data };
@@ -380,10 +380,10 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
         data: { tabSessionId, ...payload },
       };
     }
-    case 'recipe.test': {
+    case 'command.test': {
       const tabSessionId = String(command.payload.tabSessionId ?? command.tabSessionId ?? '');
       const tabId = await resolveTabId(chromeApi, tabSessionId);
-      const data = await runRecipeTestCommand(chromeApi, command, tabId, tabSessionId);
+      const data = await runCommandTestAction(chromeApi, command, tabId, tabSessionId);
       const payload = data && typeof data === 'object' && !Array.isArray(data)
         ? data as Record<string, unknown>
         : { result: data };

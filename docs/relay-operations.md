@@ -127,11 +127,11 @@ Extension-originated log ingestion:
 - Relay applies redaction before persistence and stream fan-out.
 - Controller subscribers can filter stream delivery via `logs_subscribe` source filter.
 
-Recipe-related routing:
+Command-related routing:
 
-- Routes `recipe.list` and `recipe.run` like any other command action.
-- Enforces action-scope auth before routing recipe actions.
-- Preserves queue and timeout semantics for recipe commands.
+- Routes `command.list` and `command.run` like any other command action.
+- Enforces action-scope auth before routing command actions.
+- Preserves queue and timeout semantics for command commands.
 
 Operational goals:
 
@@ -154,7 +154,7 @@ Listener operations:
 Controller disconnect behavior:
 
 - Relay marks a controller stale when no authenticated frames are received for `OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS * OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT`.
-- On disconnect/timeout, relay removes that controller's listener and recipe stream state.
+- On disconnect/timeout, relay removes that controller's listener and command stream state.
 - Relay drops queued commands owned by the disconnected controller immediately (without waiting for queue timeout).
 - Relay dispatches internal `primitive.tab.close_owned` commands to connected nodes with the disconnected controller `clientId`.
 - Node runtime closes only tabs owned by that controller identity.

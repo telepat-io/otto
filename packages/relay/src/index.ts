@@ -49,10 +49,10 @@ const DEFAULT_CONTROLLER_SCOPES =
     'primitive.tab.navigate',
     'primitive.tab.query',
     'primitive.dom.extract_text',
-    'recipe.list',
-    'recipe.run',
-    'recipe.test',
-    'recipe.reddit_feed',
+    'command.list',
+    'command.run',
+    'command.test',
+    'command.reddit_feed',
     'listener.subscribe',
     'listener.unsubscribe',
   ];
@@ -101,13 +101,13 @@ type PendingCommand = {
   timeoutHandle: ReturnType<typeof setTimeout>;
 };
 
-type RecipeStreamListenerBinding = {
+type CommandStreamListenerBinding = {
   listener: string;
   options: Record<string, unknown>;
   subscribeRequestId?: string;
 };
 
-type RecipeTestStreamSession = {
+type CommandTestStreamSession = {
   requestId: string;
   controllerId: string;
   nodeId: string;
@@ -115,7 +115,7 @@ type RecipeTestStreamSession = {
   createdAt: number;
   tabKey?: string;
   timeoutHandle?: ReturnType<typeof setTimeout>;
-  listeners: RecipeStreamListenerBinding[];
+  listeners: CommandStreamListenerBinding[];
 };
 
 type ListenerSubscription = {
@@ -284,8 +284,8 @@ const nodeClients = new Map<string, Client>();
 const locks = new Map<string, LockState>();
 const pendingCommands = new Map<string, PendingCommand>();
 const listenerSubscriptions = new Map<string, ListenerSubscription>();
-const listenerToRecipeStreamSession = new Map<string, string>();
-const recipeTestStreamSessions = new Map<string, RecipeTestStreamSession>();
+const listenerToCommandStreamSession = new Map<string, string>();
+const commandTestStreamSessions = new Map<string, CommandTestStreamSession>();
 const queuedByTab = new Map<string, QueuedCommand[]>();
 const inflightByTab = new Set<string>();
 const pairingByCode = new Map<string, PairingChallenge>();
@@ -1084,7 +1084,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function extractRecipeStreamListeners(payload: unknown): RecipeStreamListenerBinding[] {
+function extractCommandStreamListeners(payload: unknown): CommandStreamListenerBinding[] {
   const resultPayload = asRecord(payload);
   const data = asRecord(resultPayload?.data);
   const stream = asRecord(data?.stream);
@@ -1093,7 +1093,7 @@ function extractRecipeStreamListeners(payload: unknown): RecipeStreamListenerBin
     return [];
   }
 
-  const listeners: RecipeStreamListenerBinding[] = [];
+  const listeners: CommandStreamListenerBinding[] = [];
   for (const entry of listenersRaw) {
     const listenerRecord = asRecord(entry);
     const listener = listenerRecord?.listener;
@@ -1110,13 +1110,13 @@ function extractRecipeStreamListeners(payload: unknown): RecipeStreamListenerBin
   return listeners;
 }
 
-function findCandidateRecipeStreamSession(
+function findCandidateCommandStreamSession(
   controllerId: string,
   nodeId: string,
   tabKey: string | undefined,
   listener: string,
-): RecipeTestStreamSession | undefined {
-  for (const session of recipeTestStreamSessions.values()) {
+): CommandTestStreamSession | undefined {
+  for (const session of commandTestStreamSessions.values()) {
     if (session.controllerId !== controllerId || session.nodeId !== nodeId) {
       continue;
     }
@@ -1303,9 +1303,9 @@ function clearInflightAndRunNext(tabKey?: string): void {
     const stillPending = pendingCommands.get(next.message.requestId);
     if (!stillPending) return;
     if (stillPending.action === 'listener.subscribe') {
-      const sessionRequestId = listenerToRecipeStreamSession.get(stillPending.requestId);
+      const sessionRequestId = listenerToCommandStreamSession.get(stillPending.requestId);
       if (sessionRequestId) {
-        const streamSession = recipeTestStreamSessions.get(sessionRequestId);
+        const streamSession = commandTestStreamSessions.get(sessionRequestId);
         const streamOwner = streamSession ? clients.get(streamSession.controllerId) : undefined;
         if (streamSession && streamOwner) {
           send(streamOwner.ws, buildEnvelope('result', 'relay', streamSession.requestId, {
@@ -1319,7 +1319,7 @@ function clearInflightAndRunNext(tabKey?: string): void {
             },
           }));
         }
-        clearRecipeTestStreamSession(sessionRequestId);
+        clearCommandTestStreamSession(sessionRequestId);
       }
     }
     const controller = clients.get(stillPending.controllerId);
@@ -1356,9 +1356,9 @@ function clearInflightAndRunNext(tabKey?: string): void {
 }
 
 function removeListenerSubscription(requestId: string): void {
-  const sessionRequestId = listenerToRecipeStreamSession.get(requestId);
+  const sessionRequestId = listenerToCommandStreamSession.get(requestId);
   if (sessionRequestId) {
-    const session = recipeTestStreamSessions.get(sessionRequestId);
+    const session = commandTestStreamSessions.get(sessionRequestId);
     if (session) {
       for (const listener of session.listeners) {
         if (listener.subscribeRequestId === requestId) {
@@ -1366,7 +1366,7 @@ function removeListenerSubscription(requestId: string): void {
         }
       }
     }
-    listenerToRecipeStreamSession.delete(requestId);
+    listenerToCommandStreamSession.delete(requestId);
   }
   listenerSubscriptions.delete(requestId);
 }
@@ -1375,7 +1375,7 @@ function removeListenerSubscriptionsForController(controllerId: string): void {
   for (const [requestId, subscription] of listenerSubscriptions.entries()) {
     if (subscription.controllerId === controllerId) {
       listenerSubscriptions.delete(requestId);
-      listenerToRecipeStreamSession.delete(requestId);
+      listenerToCommandStreamSession.delete(requestId);
     }
   }
 }
@@ -1384,13 +1384,13 @@ function removeListenerSubscriptionsForNode(nodeId: string): void {
   for (const [requestId, subscription] of listenerSubscriptions.entries()) {
     if (subscription.nodeId === nodeId) {
       listenerSubscriptions.delete(requestId);
-      listenerToRecipeStreamSession.delete(requestId);
+      listenerToCommandStreamSession.delete(requestId);
     }
   }
 }
 
-function clearRecipeTestStreamSession(sessionRequestId: string): void {
-  const session = recipeTestStreamSessions.get(sessionRequestId);
+function clearCommandTestStreamSession(sessionRequestId: string): void {
+  const session = commandTestStreamSessions.get(sessionRequestId);
   if (!session) {
     return;
   }
@@ -1401,25 +1401,25 @@ function clearRecipeTestStreamSession(sessionRequestId: string): void {
 
   for (const listener of session.listeners) {
     if (listener.subscribeRequestId) {
-      listenerToRecipeStreamSession.delete(listener.subscribeRequestId);
+      listenerToCommandStreamSession.delete(listener.subscribeRequestId);
     }
   }
 
-  recipeTestStreamSessions.delete(sessionRequestId);
+  commandTestStreamSessions.delete(sessionRequestId);
 }
 
-function clearRecipeTestStreamSessionsForController(controllerId: string): void {
-  for (const [requestId, session] of recipeTestStreamSessions.entries()) {
+function clearCommandTestStreamSessionsForController(controllerId: string): void {
+  for (const [requestId, session] of commandTestStreamSessions.entries()) {
     if (session.controllerId === controllerId) {
-      clearRecipeTestStreamSession(requestId);
+      clearCommandTestStreamSession(requestId);
     }
   }
 }
 
-function clearRecipeTestStreamSessionsForNode(nodeId: string): void {
-  for (const [requestId, session] of recipeTestStreamSessions.entries()) {
+function clearCommandTestStreamSessionsForNode(nodeId: string): void {
+  for (const [requestId, session] of commandTestStreamSessions.entries()) {
     if (session.nodeId === nodeId) {
-      clearRecipeTestStreamSession(requestId);
+      clearCommandTestStreamSession(requestId);
     }
   }
 }
@@ -2828,7 +2828,7 @@ wss.on('connection', (ws) => {
         const subscribePayload = asRecord(payload.payload);
         const listener = subscribePayload?.listener;
         if (typeof listener === 'string' && listener.length > 0) {
-          const streamSession = findCandidateRecipeStreamSession(
+          const streamSession = findCandidateCommandStreamSession(
             client.id,
             payload.targetNodeId,
             queueKey,
@@ -2843,7 +2843,7 @@ wss.on('connection', (ws) => {
             });
             if (declaredListener) {
               declaredListener.subscribeRequestId = msg.requestId;
-              listenerToRecipeStreamSession.set(msg.requestId, streamSession.requestId);
+              listenerToCommandStreamSession.set(msg.requestId, streamSession.requestId);
             }
           }
         }
@@ -2855,9 +2855,9 @@ wss.on('connection', (ws) => {
         const stillPending = pendingCommands.get(msg.requestId);
         if (!stillPending) return;
         if (stillPending.action === 'listener.subscribe') {
-          const sessionRequestId = listenerToRecipeStreamSession.get(stillPending.requestId);
+          const sessionRequestId = listenerToCommandStreamSession.get(stillPending.requestId);
           if (sessionRequestId) {
-            const streamSession = recipeTestStreamSessions.get(sessionRequestId);
+            const streamSession = commandTestStreamSessions.get(sessionRequestId);
             const streamOwner = streamSession ? clients.get(streamSession.controllerId) : undefined;
             if (streamSession && streamOwner) {
               send(streamOwner.ws, buildEnvelope('result', 'relay', streamSession.requestId, {
@@ -2871,7 +2871,7 @@ wss.on('connection', (ws) => {
                 },
               }));
             }
-            clearRecipeTestStreamSession(sessionRequestId);
+            clearCommandTestStreamSession(sessionRequestId);
           }
         }
         const owner = clients.get(stillPending.controllerId);
@@ -2985,13 +2985,13 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        const streamSession = recipeTestStreamSessions.get(payload.targetRequestId);
+        const streamSession = commandTestStreamSessions.get(payload.targetRequestId);
         if (streamSession) {
           if (streamSession.controllerId !== client.id) {
             send(ws, buildError(msg.requestId, 'relay', {
               category: 'auth',
               code: 'command_owner_mismatch',
-              message: 'Cannot cancel a recipe test stream owned by another controller',
+              message: 'Cannot cancel a command test stream owned by another controller',
               nodeId: streamSession.nodeId,
               action: streamSession.action,
             }));
@@ -3026,7 +3026,7 @@ wss.on('connection', (ws) => {
               streamCancelled: true,
             },
           }));
-          clearRecipeTestStreamSession(streamSession.requestId);
+          clearCommandTestStreamSession(streamSession.requestId);
           send(ws, buildEnvelope('event', 'relay', msg.requestId, {
             type: 'cancel_ack',
             targetRequestId: payload.targetRequestId,
@@ -3080,10 +3080,10 @@ wss.on('connection', (ws) => {
             removeListenerSubscription(pending.unsubscribeTargetRequestId);
           }
 
-          if (resultPayload.ok === true && pending.action === 'recipe.test') {
-            const listeners = extractRecipeStreamListeners(msg.payload);
+          if (resultPayload.ok === true && pending.action === 'command.test') {
+            const listeners = extractCommandStreamListeners(msg.payload);
             if (listeners.length > 0) {
-              recipeTestStreamSessions.set(msg.requestId, {
+              commandTestStreamSessions.set(msg.requestId, {
                 requestId: msg.requestId,
                 controllerId: pending.controllerId,
                 nodeId: pending.nodeId,
@@ -3097,11 +3097,11 @@ wss.on('connection', (ws) => {
         }
 
         if (pending.action === 'listener.subscribe') {
-          const sessionRequestId = listenerToRecipeStreamSession.get(msg.requestId);
+          const sessionRequestId = listenerToCommandStreamSession.get(msg.requestId);
           const listenerSubscribeFailed = msg.messageType === 'error'
             || (msg.messageType === 'result' && (msg.payload as { ok?: boolean }).ok !== true);
           if (sessionRequestId && listenerSubscribeFailed) {
-            const streamSession = recipeTestStreamSessions.get(sessionRequestId);
+            const streamSession = commandTestStreamSessions.get(sessionRequestId);
             const streamOwner = streamSession ? clients.get(streamSession.controllerId) : undefined;
             if (streamSession && streamOwner) {
               send(streamOwner.ws, buildEnvelope('result', 'relay', streamSession.requestId, {
@@ -3115,7 +3115,7 @@ wss.on('connection', (ws) => {
                 },
               }));
             }
-            clearRecipeTestStreamSession(sessionRequestId);
+            clearCommandTestStreamSession(sessionRequestId);
           }
         }
 
@@ -3178,7 +3178,7 @@ wss.on('connection', (ws) => {
       nodeClients.delete(client.nodeId);
       removeListenerSubscriptionsForNode(client.nodeId);
 
-      for (const [sessionRequestId, session] of recipeTestStreamSessions.entries()) {
+      for (const [sessionRequestId, session] of commandTestStreamSessions.entries()) {
         if (session.nodeId !== client.nodeId) {
           continue;
         }
@@ -3196,7 +3196,7 @@ wss.on('connection', (ws) => {
           }));
         }
       }
-      clearRecipeTestStreamSessionsForNode(client.nodeId);
+      clearCommandTestStreamSessionsForNode(client.nodeId);
 
       for (const [requestId, pending] of pendingCommands.entries()) {
         if (pending.nodeId === client.nodeId) {
@@ -3220,7 +3220,7 @@ wss.on('connection', (ws) => {
 
     if (client.role === 'controller') {
       removeListenerSubscriptionsForController(client.id);
-      clearRecipeTestStreamSessionsForController(client.id);
+      clearCommandTestStreamSessionsForController(client.id);
       removeQueuedCommandsForController(client.id);
       requestOwnedTabCleanupForController(client);
     }

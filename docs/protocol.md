@@ -84,7 +84,7 @@ Validation and normalization rules for `network.http_intercept` options:
 
 Network interception behavior notes:
 
-- Runtime is scoped to recipe-managed tabs only; `tabSessionId` must resolve to an active session.
+- Runtime is scoped to command-managed tabs only; `tabSessionId` must resolve to an active session.
 - Runtime validates the tab URL against `site` before attaching debugger session state.
 - `network` mode retrieves bodies only after `Network.loadingFinished` to reduce empty-body failures.
 - `fetch` and `hybrid` modes use `Fetch.requestPaused` at response stage; paused requests are always continued by runtime.
@@ -113,17 +113,17 @@ Network listener update types:
 - `network.error`
 - `network.detached`
 
-Recipe test streaming:
+Command test streaming:
 
-- `recipe.test` can return a `stream` object in `result.payload.data`.
+- `command.test` can return a `stream` object in `result.payload.data`.
 - `stream.listeners` is an array of listener manifests with `listener` and optional `options`.
-- CLI treats this as recipe-native streaming intent and subscribes until interrupted.
-- Controller implementations should keep `recipe.test`, follow-up `listener.subscribe`, stream updates, and optional `command_cancel` on the same authenticated websocket session so relay stream ownership and correlation remain valid.
-- `timeoutMs` on `recipe.test` applies to the initial command response window only.
-- After a successful `recipe.test` response activates streaming listeners, stream lifetime is unbounded at relay and ends via explicit `command_cancel`, unsubscribe/teardown, or socket disconnect cleanup.
+- CLI treats this as command-native streaming intent and subscribes until interrupted.
+- Controller implementations should keep `command.test`, follow-up `listener.subscribe`, stream updates, and optional `command_cancel` on the same authenticated websocket session so relay stream ownership and correlation remain valid.
+- `timeoutMs` on `command.test` applies to the initial command response window only.
+- After a successful `command.test` response activates streaming listeners, stream lifetime is unbounded at relay and ends via explicit `command_cancel`, unsubscribe/teardown, or socket disconnect cleanup.
 - Controllers should send periodic heartbeat frames (`ping`) during long-lived sessions and handle relay `pong` responses.
-- Relay may proxy `listener_update` events to the original `recipe.test` `requestId` for active stream sessions.
-- `command_cancel` targeting the original `recipe.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled`).
+- Relay may proxy `listener_update` events to the original `command.test` `requestId` for active stream sessions.
+- `command_cancel` targeting the original `command.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled`).
 
 ## Command Payload
 
@@ -138,41 +138,41 @@ Recipe test streaming:
 - `idempotencyKey` (optional)
 - `replayNonce` (required for command acceptance)
 
-## Recipe Commands
+## Command Commands
 
-- `recipe.list` returns available recipe metadata advertised by the node runtime.
-- Recipe metadata now optionally includes:
-- `preloadHost`: required host before recipe execute logic runs.
+- `command.list` returns available command metadata advertised by the node runtime.
+- Command metadata now optionally includes:
+- `preloadHost`: required host before command execute logic runs.
 - `inputFields`: declarative input field descriptors (`name`, `type`, `description`, `optional`).
 - `inputAtLeastOneOf`: list of field names where at least one key must be present in payload input.
-- `recipe.run` executes a site-scoped recipe using payload:
+- `command.run` executes a site-scoped command using payload:
 - `site`: website domain (for example `reddit.com`)
-- `recipe`: recipe id (for example `getFeed`)
-- `input`: optional JSON object passed to recipe execution
+- `command`: command id (for example `getFeed`)
+- `input`: optional JSON object passed to command execution
 - `authMode`: `auto`, `strict_fail`, or `skip`
-- `recipe.test` executes recipe test path with the same payload shape as `recipe.run`.
-- Runtime behavior for `recipe.test`:
-- If recipe defines `test` hook, runtime executes it.
+- `command.test` executes command test path with the same payload shape as `command.run`.
+- Runtime behavior for `command.test`:
+- If command defines `test` hook, runtime executes it.
 - If no `test` hook is defined, runtime falls back to `execute`.
-- Legacy `recipe.reddit_feed` remains as a compatibility alias mapped to `recipe.run` (`site=reddit.com`, `recipe=getFeed`).
+- Legacy `command.reddit_feed` remains as a compatibility alias mapped to `command.run` (`site=reddit.com`, `command=getFeed`).
 
-Current Reddit recipe ids:
+Current Reddit command ids:
 
 - `getFeed`
 - `getUserInfo`
 - `sendChatMessage`
 - `getChatMessages`
 
-Recipe result/error behavior:
+Command result/error behavior:
 
-- Successful `recipe.run` returns normalized metadata fields (`site`, `recipe`) plus recipe output.
-- Successful `recipe.test` returns the same result envelope shape as `recipe.run`.
+- Successful `command.run` returns normalized metadata fields (`site`, `command`) plus command output.
+- Successful `command.test` returns the same result envelope shape as `command.run`.
 - If tab URL is not yet committed during immediate post-open execution, runtime returns transient execution error (`tab_url_not_ready`, `retryable=true`).
 - Site mismatch after URL commit returns deterministic execution error (`site_mismatch`, `retryable=false`).
-- If a recipe declares `preloadHost`, runtime auto-navigates to that host before execute and returns `preload_host_mismatch` only when post-navigation host still does not match.
-- If a recipe declares `inputFields`, runtime validates required/typed input and rejects unknown keys before recipe logic (`missing_recipe_input`, `invalid_recipe_input_type`, `unexpected_recipe_input`).
-- If a recipe declares `inputAtLeastOneOf`, runtime rejects missing cross-field requirements before recipe logic (`missing_recipe_input_one_of`).
-- Unauthenticated website session on `requiresAuth` recipe returns `manual_login_required` after optional login navigation.
+- If a command declares `preloadHost`, runtime auto-navigates to that host before execute and returns `preload_host_mismatch` only when post-navigation host still does not match.
+- If a command declares `inputFields`, runtime validates required/typed input and rejects unknown keys before command logic (`missing_command_input`, `invalid_command_input_type`, `unexpected_command_input`).
+- If a command declares `inputAtLeastOneOf`, runtime rejects missing cross-field requirements before command logic (`missing_command_input_one_of`).
+- Unauthenticated website session on `requiresAuth` command returns `manual_login_required` after optional login navigation.
 
 ## Routing Rules
 
@@ -220,4 +220,4 @@ Additive changes are preferred; breaking changes require a new major protocol ve
 
 Current additive compatibility:
 
-- `recipe.reddit_feed` alias is maintained during migration to `recipe.run`.
+- `command.reddit_feed` alias is maintained during migration to `command.run`.

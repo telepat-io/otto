@@ -2,14 +2,14 @@ import { nanoid } from 'nanoid';
 import type {
   CommandPayload,
   NetworkInterceptListenerOptions,
-  RecipeAuthMode,
-  RecipeDescriptor,
-  RecipeInputFieldDescriptor,
-  RecipeInputFieldType,
-  RecipeRunPayload,
+  CommandAuthMode,
+  CommandDescriptor,
+  CommandInputFieldDescriptor,
+  CommandInputFieldType,
+  CommandRunPayload,
 } from '@telepat/otto-protocol';
-import { findSiteBundle, findSiteRecipe, isSiteMatch, listRecipeDescriptors } from '../recipes/index.js';
-import type { RecipeExecutionContext } from '../recipes/types.js';
+import { findSiteBundle, findSiteCommand, isSiteMatch, listCommandDescriptors } from '../commands/index.js';
+import type { CommandExecutionContext } from '../commands/types.js';
 import { CommandExecutionError } from './execution-error.js';
 import { getNetworkInterceptListenerManager } from './listener-managers.js';
 
@@ -18,38 +18,38 @@ type ChromeLike = typeof chrome;
 const TAB_URL_READY_TIMEOUT_MS = 1200;
 const TAB_URL_POLL_INTERVAL_MS = 75;
 
-type RecipeRun = {
+type CommandRun = {
   site: string;
-  recipe: string;
+  commandId: string;
   input: Record<string, unknown>;
-  authMode: RecipeAuthMode;
+  authMode: CommandAuthMode;
 };
 
-const RECIPE_INPUT_TYPES: RecipeInputFieldType[] = ['string', 'number', 'boolean', 'object', 'array'];
+const COMMAND_INPUT_TYPES: CommandInputFieldType[] = ['string', 'number', 'boolean', 'object', 'array'];
 
-type RecipeCommandMode = 'run' | 'test';
+type CommandMode = 'run' | 'test';
 
-function parseRecipeRunPayload(command: CommandPayload): RecipeRun {
-  if (command.action === 'recipe.reddit_feed') {
+function parseCommandRunPayload(command: CommandPayload): CommandRun {
+  if (command.action === 'command.reddit_feed') {
     return {
       site: 'reddit.com',
-      recipe: 'getFeed',
+      commandId: 'getFeed',
       input: {},
       authMode: 'auto',
     };
   }
 
-  const payload = command.payload as Partial<RecipeRunPayload>;
-  const actionName = command.action === 'recipe.test' ? 'recipe.test' : 'recipe.run';
+  const payload = command.payload as Partial<CommandRunPayload>;
+  const actionName = command.action === 'command.test' ? 'command.test' : 'command.run';
   const site = String(payload.site ?? '');
-  const recipe = String(payload.recipe ?? '');
+  const commandId = String(payload.command ?? '');
   const authMode = payload.authMode ?? 'auto';
 
   if (!site) {
     throw new CommandExecutionError(`${actionName} requires payload.site`, 'missing_site', 'validation', false);
   }
-  if (!recipe) {
-    throw new CommandExecutionError(`${actionName} requires payload.recipe`, 'missing_recipe', 'validation', false);
+  if (!commandId) {
+    throw new CommandExecutionError(`${actionName} requires payload.command`, 'missing_command', 'validation', false);
   }
   if (!['auto', 'strict_fail', 'skip'].includes(authMode)) {
     throw new CommandExecutionError(
@@ -64,18 +64,18 @@ function parseRecipeRunPayload(command: CommandPayload): RecipeRun {
     ? (payload.input as Record<string, unknown>)
     : {};
 
-  return { site, recipe, input, authMode };
+  return { site, commandId, input, authMode };
 }
 
-function normalizeRecipeInputFieldName(name: string): string {
+function normalizeCommandInputFieldName(name: string): string {
   return name.trim();
 }
 
-function isSupportedRecipeInputType(value: string): value is RecipeInputFieldType {
-  return RECIPE_INPUT_TYPES.includes(value as RecipeInputFieldType);
+function isSupportedCommandInputType(value: string): value is CommandInputFieldType {
+  return COMMAND_INPUT_TYPES.includes(value as CommandInputFieldType);
 }
 
-function isTypeMatch(value: unknown, expectedType: RecipeInputFieldType): boolean {
+function isTypeMatch(value: unknown, expectedType: CommandInputFieldType): boolean {
   switch (expectedType) {
     case 'string':
       return typeof value === 'string';
@@ -92,12 +92,12 @@ function isTypeMatch(value: unknown, expectedType: RecipeInputFieldType): boolea
   }
 }
 
-function validateAndSanitizeRecipeInput(
-  metadata: RecipeDescriptor,
+function validateAndSanitizeCommandInput(
+  metadata: CommandDescriptor,
   input: Record<string, unknown>,
-  inputFields: RecipeInputFieldDescriptor[] | undefined,
+  inputFields: CommandInputFieldDescriptor[] | undefined,
 ): Record<string, unknown> {
-  const recipeId = metadata.id;
+  const commandId = metadata.id;
 
   if (!inputFields) {
     return input;
@@ -105,31 +105,31 @@ function validateAndSanitizeRecipeInput(
 
   const normalizedFields = inputFields.map((field) => ({
     ...field,
-    name: normalizeRecipeInputFieldName(field.name),
+    name: normalizeCommandInputFieldName(field.name),
   }));
 
-  const fieldByName = new Map<string, RecipeInputFieldDescriptor>();
+  const fieldByName = new Map<string, CommandInputFieldDescriptor>();
   for (const field of normalizedFields) {
     if (!field.name) {
       throw new CommandExecutionError(
-        `Recipe ${recipeId} has an input field with an empty name`,
-        'invalid_recipe_input_schema',
+        `Command ${commandId} has an input field with an empty name`,
+        'invalid_command_input_schema',
         'validation',
         false,
       );
     }
-    if (!isSupportedRecipeInputType(field.type)) {
+    if (!isSupportedCommandInputType(field.type)) {
       throw new CommandExecutionError(
-        `Recipe ${recipeId} has unsupported input type "${field.type}" for field ${field.name}`,
-        'invalid_recipe_input_schema',
+        `Command ${commandId} has unsupported input type "${field.type}" for field ${field.name}`,
+        'invalid_command_input_schema',
         'validation',
         false,
       );
     }
     if (fieldByName.has(field.name)) {
       throw new CommandExecutionError(
-        `Recipe ${recipeId} has duplicated input field ${field.name}`,
-        'invalid_recipe_input_schema',
+        `Command ${commandId} has duplicated input field ${field.name}`,
+        'invalid_command_input_schema',
         'validation',
         false,
       );
@@ -140,8 +140,8 @@ function validateAndSanitizeRecipeInput(
   const unknownFields = Object.keys(input).filter((key) => !fieldByName.has(key));
   if (unknownFields.length > 0) {
     throw new CommandExecutionError(
-      `Recipe ${recipeId} does not support input field(s): ${unknownFields.join(', ')}`,
-      'unexpected_recipe_input',
+      `Command ${commandId} does not support input field(s): ${unknownFields.join(', ')}`,
+      'unexpected_command_input',
       'validation',
       false,
     );
@@ -154,8 +154,8 @@ function validateAndSanitizeRecipeInput(
     if (!hasValue) {
       if (!fieldOptional) {
         throw new CommandExecutionError(
-          `Recipe ${recipeId} requires input.${field.name}`,
-          'missing_recipe_input',
+          `Command ${commandId} requires input.${field.name}`,
+          'missing_command_input',
           'validation',
           false,
         );
@@ -166,8 +166,8 @@ function validateAndSanitizeRecipeInput(
     const value = input[field.name];
     if (!isTypeMatch(value, field.type)) {
       throw new CommandExecutionError(
-        `Recipe ${recipeId} expects input.${field.name} to be ${field.type}`,
-        'invalid_recipe_input_type',
+        `Command ${commandId} expects input.${field.name} to be ${field.type}`,
+        'invalid_command_input_type',
         'validation',
         false,
       );
@@ -177,7 +177,7 @@ function validateAndSanitizeRecipeInput(
 
   const atLeastOneOf = Array.isArray(metadata.inputAtLeastOneOf)
     ? metadata.inputAtLeastOneOf
-      .map((name) => normalizeRecipeInputFieldName(String(name ?? '')))
+      .map((name) => normalizeCommandInputFieldName(String(name ?? '')))
       .filter((name) => name.length > 0)
     : [];
 
@@ -185,8 +185,8 @@ function validateAndSanitizeRecipeInput(
     const hasAny = atLeastOneOf.some((name) => Object.prototype.hasOwnProperty.call(sanitized, name));
     if (!hasAny) {
       throw new CommandExecutionError(
-        `Recipe ${recipeId} requires at least one of: ${atLeastOneOf.join(', ')}`,
-        'missing_recipe_input_one_of',
+        `Command ${commandId} requires at least one of: ${atLeastOneOf.join(', ')}`,
+        'missing_command_input_one_of',
         'validation',
         false,
       );
@@ -196,10 +196,10 @@ function validateAndSanitizeRecipeInput(
   return sanitized;
 }
 
-async function ensureRecipePreloadHost(
+async function ensureCommandPreloadHost(
   chromeApi: ChromeLike,
   tabId: number,
-  recipeId: string,
+  commandId: string,
   preloadHost: string | undefined,
 ): Promise<void> {
   if (!preloadHost) {
@@ -243,7 +243,7 @@ async function ensureRecipePreloadHost(
 
   if (!isSiteMatch(postNavigationUrl, expectedHost)) {
     throw new CommandExecutionError(
-      `Recipe ${recipeId} requires tab host ${expectedHost} before execution: ${postNavigationUrl}`,
+      `Command ${commandId} requires tab host ${expectedHost} before execution: ${postNavigationUrl}`,
       'preload_host_mismatch',
       'validation',
       false,
@@ -256,10 +256,10 @@ function buildContext(
   tabId: number,
   tabSessionId: string,
   site: string,
-): { context: RecipeExecutionContext; cleanup: () => Promise<void> } {
+): { context: CommandExecutionContext; cleanup: () => Promise<void> } {
   const interceptionStops = new Map<string, () => Promise<void>>();
 
-  const context: RecipeExecutionContext = {
+  const context: CommandExecutionContext = {
     chromeApi,
     tabId,
     tabSessionId,
@@ -280,7 +280,7 @@ function buildContext(
     },
     async startNetworkInterception(options = {}) {
       const networkInterceptListenerManager = getNetworkInterceptListenerManager(chromeApi);
-      const requestId = `recipe_listener_${nanoid(10)}`;
+      const requestId = `command_listener_${nanoid(10)}`;
       const updates: Array<{ updateType: string; emittedAt: string; data: unknown }> = [];
       let stopped = false;
 
@@ -420,27 +420,27 @@ async function waitForCommittedTabUrl(chromeApi: ChromeLike, tabId: number): Pro
   return lastProbe;
 }
 
-export function listRecipesForRuntime() {
-  return listRecipeDescriptors();
+export function listCommandsForRuntime() {
+  return listCommandDescriptors();
 }
 
-async function executeRecipeCommand(
+async function executeCommandAction(
   chromeApi: ChromeLike,
-  command: CommandPayload,
+  commandPayload: CommandPayload,
   tabId: number,
   tabSessionId: string,
-  mode: RecipeCommandMode,
+  mode: CommandMode,
 ): Promise<unknown> {
-  const run = parseRecipeRunPayload(command);
+  const run = parseCommandRunPayload(commandPayload);
   const bundle = findSiteBundle(run.site);
-  const actionName = mode === 'test' ? 'recipe.test' : 'recipe.run';
+  const actionName = mode === 'test' ? 'command.test' : 'command.run';
   if (!bundle) {
-    throw new CommandExecutionError(`Unknown recipe site: ${run.site}`, 'unknown_site', actionName, false);
+    throw new CommandExecutionError(`Unknown command site: ${run.site}`, 'unknown_site', actionName, false);
   }
 
-  const recipe = findSiteRecipe(bundle, run.recipe);
-  if (!recipe) {
-    throw new CommandExecutionError(`Unknown recipe: ${run.site}/${run.recipe}`, 'unknown_recipe', actionName, false);
+  const command = findSiteCommand(bundle, run.commandId);
+  if (!command) {
+    throw new CommandExecutionError(`Unknown command: ${run.site}/${run.commandId}`, 'unknown_command', actionName, false);
   }
 
   const { context: ctx, cleanup } = buildContext(chromeApi, tabId, tabSessionId, bundle.site);
@@ -465,9 +465,9 @@ async function executeRecipeCommand(
     );
   }
 
-  const sanitizedInput = validateAndSanitizeRecipeInput(recipe.metadata, run.input, recipe.metadata.inputFields);
+  const sanitizedInput = validateAndSanitizeCommandInput(command.metadata, run.input, command.metadata.inputFields);
 
-  if (recipe.metadata.requiresAuth && run.authMode !== 'skip') {
+  if (command.metadata.requiresAuth && run.authMode !== 'skip') {
     const check = await bundle.checkLogin.execute(ctx, sanitizedInput, run.authMode);
     const authenticated = Boolean((check as { authenticated?: unknown }).authenticated);
     if (!authenticated) {
@@ -475,55 +475,55 @@ async function executeRecipeCommand(
         await bundle.gotoLogin.execute(ctx, sanitizedInput, run.authMode);
       }
       throw new CommandExecutionError(
-        `Manual login required for ${bundle.site}; complete login and rerun ${run.recipe}`,
+        `Manual login required for ${bundle.site}; complete login and rerun ${run.commandId}`,
         'manual_login_required',
-        'recipe.auth',
+        'command.auth',
         false,
       );
     }
   }
 
   try {
-    const executeRecipe = (inputOverride?: Record<string, unknown>) => ensureRecipePreloadHost(
+    const executeCommand = (inputOverride?: Record<string, unknown>) => ensureCommandPreloadHost(
       chromeApi,
       tabId,
-      recipe.metadata.id,
-      recipe.metadata.preloadHost,
-    ).then(() => recipe.execute(ctx, inputOverride ?? sanitizedInput, run.authMode));
+      command.metadata.id,
+      command.metadata.preloadHost,
+    ).then(() => command.execute(ctx, inputOverride ?? sanitizedInput, run.authMode));
 
-    const recipeResult = mode === 'test' && recipe.test
-      ? await recipe.test(ctx, sanitizedInput, {
+    const commandResult = mode === 'test' && command.test
+      ? await command.test(ctx, sanitizedInput, {
         authMode: run.authMode,
-        execute: executeRecipe,
+        execute: executeCommand,
       })
-      : await executeRecipe();
+      : await executeCommand();
 
     return {
       site: bundle.site,
-      recipe: recipe.metadata.id,
-      ...((recipeResult && typeof recipeResult === 'object' && !Array.isArray(recipeResult))
-        ? recipeResult as Record<string, unknown>
-        : { result: recipeResult }),
+      command: command.metadata.id,
+      ...((commandResult && typeof commandResult === 'object' && !Array.isArray(commandResult))
+        ? commandResult as Record<string, unknown>
+        : { result: commandResult }),
     };
   } finally {
     await cleanup();
   }
 }
 
-export async function runRecipeCommand(
+export async function runCommandAction(
   chromeApi: ChromeLike,
-  command: CommandPayload,
+  commandPayload: CommandPayload,
   tabId: number,
   tabSessionId: string,
 ): Promise<unknown> {
-  return executeRecipeCommand(chromeApi, command, tabId, tabSessionId, 'run');
+  return executeCommandAction(chromeApi, commandPayload, tabId, tabSessionId, 'run');
 }
 
-export async function runRecipeTestCommand(
+export async function runCommandTestAction(
   chromeApi: ChromeLike,
-  command: CommandPayload,
+  commandPayload: CommandPayload,
   tabId: number,
   tabSessionId: string,
 ): Promise<unknown> {
-  return executeRecipeCommand(chromeApi, command, tabId, tabSessionId, 'test');
+  return executeCommandAction(chromeApi, commandPayload, tabId, tabSessionId, 'test');
 }

@@ -141,13 +141,13 @@ Relevant environment variables:
 - Lock lifecycle events (`lock_acquired`, `lock_conflict`, `lock_released`, `lock_expired`) are emitted for troubleshooting concurrency issues.
 - For autonomous debugging, prefer non-TTY + JSON output and bounded log pulls before starting long-lived follow sessions.
 
-## Recipe Debugging Playbook
+## Command Debugging Playbook
 
-1. List runtime recipes:
+1. List runtime commands:
 
-`otto recipes list`
+`otto commands list`
 
-2. Run recipe directly:
+2. Run command directly:
 
 `otto test reddit.com getFeed`
 
@@ -157,7 +157,7 @@ Relevant environment variables:
 
 5. If `tab_url_not_ready`, rerun once after a brief delay; this is a transient post-open timing state where tab URL has not committed yet.
 
-6. If `forbidden_action`, confirm controller token scope includes `recipe.run`.
+6. If `forbidden_action`, confirm controller token scope includes `command.run`.
 
 7. If `acl_missing_node_grant`, open extension popup -> Controller Access and grant that controller client for the node before retrying.
 
@@ -175,7 +175,7 @@ Force a deterministic probe request after listener subscribe (helpful when passi
 
 1. Confirm subscription result first.
 2. Keep the `listener.subscribe` `requestId`; it is the correlation key for all `listener_update` events.
-3. In `otto test ...` stream sessions, expect listener updates to be keyed by the subscribe `requestId` (not the `recipe.test` command `requestId`).
+3. In `otto test ...` stream sessions, expect listener updates to be keyed by the subscribe `requestId` (not the `command.test` command `requestId`).
 4. If no body is present in `network` mode, verify that request reached `Network.loadingFinished` and response is not redirect/cache-evicted.
 5. If reliability is required for narrow patterns, use `--mode hybrid` or `--mode fetch`.
 6. If traffic appears stalled in fetch/hybrid mode, verify the node is healthy and that update stream still advances (runtime always continues paused requests in `finally`).

@@ -51,18 +51,18 @@ export interface CommandPayload {
   payload: Record<string, unknown>;
 }
 
-export type RecipeAuthMode = 'auto' | 'strict_fail' | 'skip';
+export type CommandAuthMode = 'auto' | 'strict_fail' | 'skip';
 
-export type RecipeInputFieldType = 'string' | 'number' | 'boolean' | 'object' | 'array';
+export type CommandInputFieldType = 'string' | 'number' | 'boolean' | 'object' | 'array';
 
-export interface RecipeInputFieldDescriptor {
+export interface CommandInputFieldDescriptor {
   name: string;
-  type: RecipeInputFieldType;
+  type: CommandInputFieldType;
   description: string;
   optional?: boolean;
 }
 
-export interface RecipeDescriptor {
+export interface CommandDescriptor {
   site: string;
   id: string;
   displayName: string;
@@ -70,26 +70,26 @@ export interface RecipeDescriptor {
   tags: string[];
   requiresAuth: boolean;
   preloadHost?: string;
-  inputFields?: RecipeInputFieldDescriptor[];
+  inputFields?: CommandInputFieldDescriptor[];
   inputAtLeastOneOf?: string[];
 }
 
-export type RecipeCommandAction = 'recipe.list' | 'recipe.run' | 'recipe.test' | 'recipe.reddit_feed';
+export type CommandAction = 'command.list' | 'command.run' | 'command.test' | 'command.reddit_feed';
 
-export interface RecipeRunPayload {
+export interface CommandRunPayload {
   site: string;
-  recipe: string;
+  command: string;
   input?: Record<string, unknown>;
-  authMode?: RecipeAuthMode;
+  authMode?: CommandAuthMode;
 }
 
-export interface RecipeTestStreamListener {
+export interface CommandTestStreamListener {
   listener: ListenerName | string;
   options?: Record<string, unknown>;
 }
 
-export interface RecipeTestStream {
-  listeners: RecipeTestStreamListener[];
+export interface CommandTestStream {
+  listeners: CommandTestStreamListener[];
 }
 
 export type CommandOutcome = 'completed' | 'failed' | 'timed_out' | 'cancelled';

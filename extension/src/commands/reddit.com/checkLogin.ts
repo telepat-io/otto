@@ -1,6 +1,6 @@
-import type { SiteRecipe } from '../types.js';
+import type { SiteCommand } from '../types.js';
 
-export const checkLoginRecipe: SiteRecipe = {
+export const checkLoginCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
     id: 'checkLogin',

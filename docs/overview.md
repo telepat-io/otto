@@ -16,8 +16,8 @@ Primary architecture:
 ## Current Capabilities
 
 - Primitive browser actions (`primitive.tab.*`, `primitive.dom.extract_text`).
-- Site-scoped recipe execution (`recipe.run`) with runtime discovery (`recipe.list`) and test-path execution (`recipe.test`).
-- Legacy recipe alias support (`recipe.reddit_feed` -> `reddit.com/getFeed`).
+- Site-scoped command execution (`command.run`) with runtime discovery (`command.list`) and test-path execution (`command.test`).
+- Legacy command alias support (`command.reddit_feed` -> `reddit.com/getFeed`).
 - Deterministic terminal outcomes and replay-safe command handling.
 - CLI onboarding setup flow (`otto setup`) for relay daemon readiness, extension artifact retrieval, and Chrome import handoff.
 
@@ -29,15 +29,15 @@ Primary architecture:
 4. Node executes command and returns result/error.
 5. Relay forwards terminal outcome back to original controller.
 
-Recipe-specific path:
+Command-specific path:
 
-1. Controller invokes `recipe.run` or `recipe.test` with `site`, `recipe`, `input`, and optional `authMode`.
-2. Extension recipe runtime resolves site bundle and recipe metadata.
+1. Controller invokes `command.run` or `command.test` with `site`, `command`, `input`, and optional `authMode`.
+2. Extension command runtime resolves site bundle and command metadata.
 3. Runtime validates active tab domain against target site.
-4. Runtime validates recipe metadata input contracts (`inputFields`, optional `inputAtLeastOneOf`).
-5. If recipe requires auth, runtime runs `checkLogin` and optional `gotoLogin`.
+4. Runtime validates command metadata input contracts (`inputFields`, optional `inputAtLeastOneOf`).
+5. If command requires auth, runtime runs `checkLogin` and optional `gotoLogin`.
 6. Runtime ensures `preloadHost` before `execute` (auto-navigation when needed).
-7. Runtime executes recipe and returns structured data.
+7. Runtime executes command and returns structured data.
 
 ## Extension Runtime Model
 
@@ -48,11 +48,11 @@ Otto extension uses MV3 split runtime:
 
 This split avoids relying on persistent Service Worker uptime while keeping connectivity stable.
 
-Recipe implementation location:
+Command implementation location:
 
-- Site bundles: `extension/src/recipes/<site>/`
-- Registry: `extension/src/recipes/index.ts`
-- Runtime orchestration: `extension/src/runtime/recipe-runtime.ts`
+- Site bundles: `extension/src/commands/<site>/`
+- Registry: `extension/src/commands/index.ts`
+- Runtime orchestration: `extension/src/runtime/command-runtime.ts`
 
 ## Key Invariants
 
@@ -61,12 +61,12 @@ Recipe implementation location:
 - Per-tab operations are serialized; cross-tab operations are parallelizable.
 - Sensitive values are redacted before logs are persisted or streamed.
 
-Recipe invariants:
+Command invariants:
 
-- Recipe execution must run on a site-matching tab URL.
-- Declared recipe metadata inputs are validated before execution and sanitized before handler invocation.
+- Command execution must run on a site-matching tab URL.
+- Declared command metadata inputs are validated before execution and sanitized before handler invocation.
 - Optional `inputAtLeastOneOf` constraints are enforced before execution.
-- `requiresAuth` recipes never automate credential submission.
+- `requiresAuth` commands never automate credential submission.
 - Manual authentication handoff is explicit via `manual_login_required`.
 
 ## Source-of-Truth Code Paths

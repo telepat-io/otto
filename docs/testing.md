@@ -30,9 +30,9 @@ Owner: Platform
 - Relay sustained mixed-load fairness tests for FIFO preservation across controllers targeting the same tab while other tabs continue routing
 - Relay queue limit tests for per-tab queue depth rejection and per-controller queued-depth rejection across tabs
 - Relay burst fairness tests to verify same-tab queued command drain order remains FIFO across controllers under sustained load
-- Relay recipe-action scope tests (`recipe.run` allow and `recipe.list` deny under scoped tokens)
-- Relay recipe-action scope tests (`recipe.run` allow and `recipe.test`/`recipe.list` deny under scoped tokens)
-- Relay recipe queue invariants tests for same-tab FIFO under `recipe.run`
+- Relay command-action scope tests (`command.run` allow and `command.list` deny under scoped tokens)
+- Relay command-action scope tests (`command.run` allow and `command.test`/`command.list` deny under scoped tokens)
+- Relay command queue invariants tests for same-tab FIFO under `command.run`
 - Extension runtime tests for reconnect backoff, outbound replay queue bounds, and bootstrap keep-warm recovery flow
 - Extension local-dev log queue tests for bounded pre-connect buffering and timestamp normalization
 - Extension pairing-state tests for challenge issuance and approved-token hydration paths
@@ -40,11 +40,11 @@ Owner: Platform
 - Extension restart reconciliation tests for stale tab-session pruning and automation tab-group rebuild after worker restart
 - Extension keep-warm pairing recovery tests for expired challenge cleanup and next-cycle challenge reissuance
 - Extension primitive execution tests for deterministic unknown/closed tabSessionId error mapping and stale tabSessionId mapping cleanup
-- Extension recipe tests for site mismatch, auth preflight redirect, authenticated execution, legacy alias routing, metadata input validation, preload-host checks, and `recipe.test` fallback/hook execution
+- Extension command tests for site mismatch, auth preflight redirect, authenticated execution, legacy alias routing, metadata input validation, preload-host checks, and `command.test` fallback/hook execution
 - Extension listener validation tests for `network.http_intercept` option normalization and deterministic validation errors
 - Extension network interception manager tests for `Network.loadingFinished` body capture and `Fetch.continueRequest` safety guarantees
-- Extension network interception manager tests for recipe-local callback buffering without relay emission
-- Extension Reddit recipe tests for `getUserInfo`, `sendChatMessage`, and `getChatMessages` payload normalization
+- Extension network interception manager tests for command-local callback buffering without relay emission
+- Extension Reddit command tests for `getUserInfo`, `sendChatMessage`, and `getChatMessages` payload normalization
 - Extension Reddit auth regression tests for API-backed `checkLogin` behavior
 - Extension Reddit chat listener tests for interception `data:` payload parsing, error-threshold fallback to polling, and interception-unavailable polling fallback
 - CLI setup command checks for release download/extract/checksum verification path
@@ -77,32 +77,32 @@ Run in this order after any code change:
 - `OTTO_E2E_OPEN_URL` default `https://www.reddit.com/`
 - `OTTO_E2E_EXTRACT_SELECTOR` default `title`
 - `OTTO_E2E_COMMAND_TIMEOUT_MS` default `10000`
-- `OTTO_E2E_RUN_RECIPE=1` includes `recipe.run`
-- `OTTO_E2E_RECIPE_SITE` default `reddit.com`
-- `OTTO_E2E_RECIPE_ID` default `getFeed`
+- `OTTO_E2E_RUN_COMMAND=1` includes `command.run`
+- `OTTO_E2E_COMMAND_SITE` default `reddit.com`
+- `OTTO_E2E_COMMAND_ID` default `getFeed`
 - `OTTO_CONTROLLER_ACCESS_TOKEN` skips automatic pairing approval
 
-## Recipe Developer Testing
+## Command Developer Testing
 
-- Local recipe execution command: `otto test <site> <recipe>`
+- Local command execution command: `otto test <site> <command>`
 - Example: `otto test reddit.com getFeed`
 - Example: `otto test reddit.com getUserInfo --payload '{"username":"spez"}'`
 - Example: `otto test reddit.com sendChatMessage --payload '{"username":"example_user","message":"hello"}'`
 - Example: `otto test reddit.com getChatMessages --payload '{"roomId":"!abc123:reddit.com","limit":50}'`
 - Example: `otto test reddit.com getChatMessages --payload '{"limit":50}'`
-- Discovery command: `otto recipes list` (optionally `--site reddit.com`)
+- Discovery command: `otto commands list` (optionally `--site reddit.com`)
 - Target node resolution defaults to the single connected node when `targetNodeId` is missing or stale.
 - If multiple nodes are connected, pass `--node-id <id>` explicitly.
 - Defaults:
-- Auto-opens recipe `preloadHost` when available from `recipe.list` metadata, otherwise falls back to `https://<site>` if `--tab-session` is omitted
+- Auto-opens command `preloadHost` when available from `command.list` metadata, otherwise falls back to `https://<site>` if `--tab-session` is omitted
 - Auto-opened tabs are closed automatically after command completion (pass `--keep-tab-open` to retain)
-- Uses `recipe.test` action with `authMode=auto`
-- Automatically falls back to recipe `execute` when a recipe does not define a `test` hook
+- Uses `command.test` action with `authMode=auto`
+- Automatically falls back to command `execute` when a command does not define a `test` hook
 - `otto test` prefers a single controller websocket for open/test/subscribe/follow; if that socket closes before cleanup close, CLI reconnects and still attempts `primitive.tab.close` for auto-opened tabs.
-- For streaming recipes, `--timeout` applies to initial `recipe.test` response only; active listener follow remains open until explicit stop.
-- Recipes returning `stream.listeners` from `recipe.test` keep `otto test` active and stream listener updates until `Ctrl+C` on that same controller connection
-- Streaming test mode sends `command_cancel` targeting the original `recipe.test` request on `Ctrl+C`; relay owns stream teardown and terminal outcome emission
-- `Ctrl+C`/`SIGTERM` during open/test/probe/follow triggers a shared teardown path: cancel active `recipe.test` stream, unsubscribe listener fallback, then close auto-opened tab (unless `--keep-tab-open`).
+- For streaming commands, `--timeout` applies to initial `command.test` response only; active listener follow remains open until explicit stop.
+- Commands returning `stream.listeners` from `command.test` keep `otto test` active and stream listener updates until `Ctrl+C` on that same controller connection
+- Streaming test mode sends `command_cancel` targeting the original `command.test` request on `Ctrl+C`; relay owns stream teardown and terminal outcome emission
+- `Ctrl+C`/`SIGTERM` during open/test/probe/follow triggers a shared teardown path: cancel active `command.test` stream, unsubscribe listener fallback, then close auto-opened tab (unless `--keep-tab-open`).
 - Long-running `otto test` streams send periodic controller heartbeat pings; custom controllers should do the same.
 - Non-TTY output is JSON and exits non-zero on terminal command error
 - In TTY mode, `otto test` terminal errors also print a final high-visibility alert footer after the JSON/error hints (including operation errors such as `primitive.tab.open`/`primitive.tab.close`).
@@ -118,18 +118,18 @@ TTY failure-surface behavior:
 
 - `otto test` emits consistent footer alerts for terminal failures across all major stages:
 - auto-open stage (`primitive.tab.open`)
-- recipe execution stage (`recipe.test`)
+- command execution stage (`command.test`)
 - auto-close cleanup stage (`primitive.tab.close`)
 - ACL denials (`acl_missing_node_grant`) include both structured JSON payload data and a footer alert in TTY mode.
 
-Recipe test hook guidance:
+Command test hook guidance:
 
-- For complex recipes, define optional `test(ctx, input, helpers)` to perform deterministic setup/assertion steps and then call `helpers.execute()`.
-- For simple recipes, skip test hook and rely on automatic execute fallback.
+- For complex commands, define optional `test(ctx, input, helpers)` to perform deterministic setup/assertion steps and then call `helpers.execute()`.
+- For simple commands, skip test hook and rely on automatic execute fallback.
 - Keep setup bounded and deterministic; avoid unbounded polling loops.
 - Prefer asserting preconditions in test hook and keep business extraction logic in execute.
 - Prefer test hooks for side-effecting commands (for example chat send) so `otto test` can validate readiness without mutating user data.
-- For streaming recipes, return `stream.listeners` from `test` with listener name and options.
+- For streaming commands, return `stream.listeners` from `test` with listener name and options.
 
 Input metadata guidance:
 
@@ -138,17 +138,17 @@ Input metadata guidance:
 
 Suggested local sequence:
 
-1. `otto recipes list`
-2. `otto test <site> <recipe>`
+1. `otto commands list`
+2. `otto test <site> <command>`
 3. If `manual_login_required`, authenticate in the opened browser tab.
-4. If validation fails (`unexpected_recipe_input`, `missing_recipe_input`, `missing_recipe_input_one_of`, or `invalid_recipe_input_type`), correct payload using `recipe.list` metadata and rerun.
-5. Rerun `otto test <site> <recipe>` and verify result payload.
+4. If validation fails (`unexpected_command_input`, `missing_command_input`, `missing_command_input_one_of`, or `invalid_command_input_type`), correct payload using `command.list` metadata and rerun.
+5. Rerun `otto test <site> <command>` and verify result payload.
 
 ## CI and Agent Automation Notes
 
 - Prefer non-TTY mode for deterministic JSON output and exit codes.
 - Parse command `requestId` and correlate with relay logs when diagnosing failures.
-- Keep recipe test payloads small and stable to reduce flaky selector behavior.
+- Keep command test payloads small and stable to reduce flaky selector behavior.
 - For logs automation patterns (bounded historical pulls, TTY-sensitive follow behavior, and JSON streaming guidance), use `docs/logging-debugging.md` -> Agent Automation Patterns.
 
 ## Setup Command Validation

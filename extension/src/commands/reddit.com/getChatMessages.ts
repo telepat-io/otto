@@ -1,4 +1,4 @@
-import type { SiteRecipe } from '../types.js';
+import type { SiteCommand } from '../types.js';
 
 type GetChatMessagesInput = {
   roomId?: string;
@@ -34,7 +34,7 @@ function extractMessageText(event: Record<string, unknown>): string | undefined 
   return undefined;
 }
 
-export const getChatMessagesRecipe: SiteRecipe = {
+export const getChatMessagesCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
     id: 'getChatMessages',

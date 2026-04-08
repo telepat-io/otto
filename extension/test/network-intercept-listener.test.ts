@@ -270,7 +270,7 @@ test('fetch mode always continues paused request when body lookup fails', async 
   assert.ok(errorUpdate);
 });
 
-test('recipe-local interception can receive callback updates without relay emission', async () => {
+test('command-local interception can receive callback updates without relay emission', async () => {
   const mock = createMockChrome();
   const manager = createNetworkInterceptListenerManager(mock.chromeApi);
   const callbackUpdates: Array<{ updateType: string; data: unknown }> = [];

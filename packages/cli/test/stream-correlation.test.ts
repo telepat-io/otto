@@ -18,8 +18,8 @@ test('matches listener_update events for subscribe request id', () => {
   assert.equal(isListenerUpdateForSubscription(event, 'subscribe-req-1'), true);
 });
 
-test('does not match listener_update events tied to recipe.test request id', () => {
-  const event = envelope('event', 'recipe-test-req-1', {
+test('does not match listener_update events tied to command.test request id', () => {
+  const event = envelope('event', 'command-test-req-1', {
     type: 'listener_update',
     updateType: 'network.response',
     data: { status: 200 },

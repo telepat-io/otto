@@ -1,8 +1,8 @@
-import type { SiteRecipe } from '../types.js';
+import type { SiteCommand } from '../types.js';
 
 const REDDIT_LOGIN_URL = 'https://www.reddit.com/login/';
 
-export const gotoLoginRecipe: SiteRecipe = {
+export const gotoLoginCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
     id: 'gotoLogin',

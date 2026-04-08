@@ -6,7 +6,7 @@ import { Command } from 'commander';
 import { nanoid } from 'nanoid';
 import WebSocket from 'ws';
 import { createEnvelope, type CommandPayload, type Envelope } from '@telepat/otto-protocol';
-import type { NetworkInterceptListenerOptions, RecipeTestStream } from '@telepat/otto-protocol';
+import type { NetworkInterceptListenerOptions, CommandTestStream } from '@telepat/otto-protocol';
 import {
   DEFAULT_CONTROLLER_RELAY_URL,
   deriveHttpUrl,
@@ -30,8 +30,8 @@ import {
   type LogEntry,
   type LogSource,
 } from './logs-options.js';
-import { createRecipeTestStreamRenderer } from './test-stream-format.js';
-import { resolveRecipeAutoOpenUrl } from './recipe-open-url.js';
+import { createCommandTestStreamRenderer } from './test-stream-format.js';
+import { resolveCommandAutoOpenUrl } from './command-open-url.js';
 import { shouldAttemptAccessTokenRefreshOnAuthError } from './auth-retry.js';
 import { isListenerUpdateForSubscription } from './stream-correlation.js';
 import {
@@ -42,13 +42,13 @@ import {
 } from './client-secret-store.js';
 import { resolveCleanupSocketStrategy } from './test-cleanup.js';
 
-type RecipeDescriptorLike = {
+type CommandDescriptorLike = {
   site?: string;
   id?: string;
   preloadHost?: string;
 };
 
-type RecipeTestInfo = {
+type CommandTestInfo = {
   openUrl: string;
 };
 
@@ -686,21 +686,21 @@ async function resolveTestInfo(
   config: OttoConfig,
   targetNodeId: string,
   site: string,
-  recipe: string,
+  command: string,
   timeoutMs: number,
   ws?: WebSocket,
-): Promise<RecipeTestInfo> {
+): Promise<CommandTestInfo> {
   const fallback = site.startsWith('http://') || site.startsWith('https://') ? site : `https://${site}`;
 
   try {
     const response = ws
       ? await runCommandWithSocket(ws, targetNodeId, {
-        action: 'recipe.list',
+        action: 'command.list',
         payload: {},
         timeoutMs,
       })
       : await runCommandOnce(config, targetNodeId, {
-      action: 'recipe.list',
+      action: 'command.list',
       payload: {},
       timeoutMs,
     });
@@ -713,13 +713,13 @@ async function resolveTestInfo(
 
     const payload = response.payload as {
       data?: {
-        recipes?: RecipeDescriptorLike[];
+        commands?: CommandDescriptorLike[];
       };
     };
 
-    const descriptors = payload.data?.recipes ?? [];
+    const descriptors = payload.data?.commands ?? [];
     return {
-      openUrl: resolveRecipeAutoOpenUrl(site, recipe, descriptors),
+      openUrl: resolveCommandAutoOpenUrl(site, command, descriptors),
     };
   } catch {
     return {
@@ -765,7 +765,7 @@ async function subscribeListenerAndFollow(
   ws: WebSocket,
   targetNodeId: string,
   site: string,
-  recipe: string,
+  command: string,
   listener: string,
   options: Record<string, unknown>,
   timeoutMs: number,
@@ -775,9 +775,9 @@ async function subscribeListenerAndFollow(
   onInterrupt?: () => Promise<void>,
   handleSignals = true,
 ): Promise<void> {
-  const renderer = createRecipeTestStreamRenderer({
+  const renderer = createCommandTestStreamRenderer({
     site,
-    recipe,
+    command,
     jsonOutput,
     useColor: process.stdout.isTTY,
   });
@@ -1271,13 +1271,13 @@ program
       extension: nextConfig.extension,
       pairingReady: Boolean(nextConfig.controllerAccessToken),
       nextSteps: nextConfig.controllerAccessToken
-        ? ['Open extension popup to confirm node status', 'otto recipes list', 'otto test reddit.com getFeed']
+        ? ['Open extension popup to confirm node status', 'otto commands list', 'otto test reddit.com getFeed']
         : [
             'Open extension popup and confirm pairing code is visible',
             'otto authcode',
             'otto pair <code>',
             'Re-open extension popup and confirm status = Connected',
-            'otto recipes list',
+            'otto commands list',
           ],
     };
 
@@ -1741,12 +1741,12 @@ program
 
 program
   .command('test')
-  .description('Run a website recipe for local developer testing')
+  .description('Run a website command for local developer testing')
   .argument('<site>', 'Website domain, for example reddit.com')
-  .argument('<recipe>', 'Recipe id, for example getFeed')
+  .argument('<command>', 'Command id, for example getFeed')
   .option('--node-id <id>', 'Override target node id')
   .option('--tab-session <id>', 'Use an existing tabSessionId instead of auto-opening a tab')
-  .option('--payload <json>', 'Recipe input JSON object', '{}')
+  .option('--payload <json>', 'Command input JSON object', '{}')
   .option('--timeout <ms>', 'Command timeout in milliseconds', '30000')
   .option('--auth-mode <mode>', 'auto|strict_fail|skip', 'auto')
   .option('--controller-name <name>', 'Controller name for auto self-registration when identity is missing')
@@ -1756,10 +1756,10 @@ program
   .option('--keep-tab-open', 'Keep auto-opened tab instead of closing it after test', false)
   .option('--json', 'Output full JSON envelopes for command and stream frames', false)
   .option('--stream-follow-ms <ms>', 'Auto-stop listener stream follow after N milliseconds (for unattended debugging)')
-  .option('--stream-probe', 'After listener subscribe, run recipe.run once to force network traffic for stream diagnostics', false)
+  .option('--stream-probe', 'After listener subscribe, run command.run once to force network traffic for stream diagnostics', false)
   .option('--stream-listener-mode <mode>', 'Override stream listener mode when supported (for example intercept|poll)')
   .option('--stream-poll-interval-ms <ms>', 'Override stream listener poll interval in milliseconds when supported')
-  .action(async (site: string, recipe: string, opts) => {
+  .action(async (site: string, command: string, opts) => {
     const registration = await maybeSelfRegisterControllerForTest(loadConfig(), opts);
     const config = registration.config;
     const targetNodeId = await resolveTargetNodeId(config, opts.nodeId);
@@ -1776,12 +1776,12 @@ program
       ? parsePositiveNumberOption(opts.streamPollIntervalMs, '--stream-poll-interval-ms')
       : undefined;
     const jsonOutput = Boolean(opts.json) || isJsonOutput(config);
-    const recipeInput = parseJsonObject(opts.payload, '--payload');
+    const commandInput = parseJsonObject(opts.payload, '--payload');
     const ws = await openControllerSocket(config);
     const stopHeartbeat = startControllerHeartbeat(ws);
-    const renderer = createRecipeTestStreamRenderer({
+    const renderer = createCommandTestStreamRenderer({
       site,
-      recipe,
+      command,
       jsonOutput,
       useColor: process.stdout.isTTY,
     });
@@ -1790,7 +1790,7 @@ program
     let openedTabSessionId: string | undefined;
 
     let testExecutionError: unknown;
-    let activeRecipeTestRequestId: string | undefined;
+    let activeCommandTestRequestId: string | undefined;
     let tabCloseAttempted = false;
     let teardownPromise: Promise<void> | undefined;
     let receivedSignal: 'SIGINT' | 'SIGTERM' | undefined;
@@ -1850,12 +1850,12 @@ program
       }
 
       teardownPromise = (async () => {
-        if (activeRecipeTestRequestId) {
+        if (activeCommandTestRequestId) {
           try {
-            await sendCommandCancelWithSocket(ws, activeRecipeTestRequestId);
+            await sendCommandCancelWithSocket(ws, activeCommandTestRequestId);
           } catch (cancelError) {
             console.error(
-              `[otto] failed to cancel in-flight recipe.test during ${reason}: ${cancelError instanceof Error ? cancelError.message : String(cancelError)}`,
+              `[otto] failed to cancel in-flight command.test during ${reason}: ${cancelError instanceof Error ? cancelError.message : String(cancelError)}`,
             );
           }
         }
@@ -1900,7 +1900,7 @@ program
     process.once('SIGTERM', onSigterm);
 
     try {
-      const testInfo = await resolveTestInfo(config, targetNodeId, site, recipe, timeoutMs, ws);
+      const testInfo = await resolveTestInfo(config, targetNodeId, site, command, timeoutMs, ws);
 
       if (!tabSessionId) {
         const openResponse = await runCommandWithSocket(ws, targetNodeId, {
@@ -1941,23 +1941,23 @@ program
       }
 
       const testCommand = sendCommandWithSocket(ws, targetNodeId, {
-        action: 'recipe.test',
+        action: 'command.test',
         tabSession: tabSessionId,
         payload: {
           tabSessionId,
           site,
-          recipe,
-          input: recipeInput,
+          command,
+          input: commandInput,
           authMode: opts.authMode,
         },
         timeoutMs,
         signal: commandAbortController.signal,
       });
-      activeRecipeTestRequestId = testCommand.requestId;
+      activeCommandTestRequestId = testCommand.requestId;
 
       const testResponse = await testCommand.response;
 
-      for (const line of renderer.renderCommandResponse(testResponse, 'recipe.test')) {
+      for (const line of renderer.renderCommandResponse(testResponse, 'command.test')) {
         console.log(line);
       }
       if (testResponse.messageType === 'error') {
@@ -1977,11 +1977,11 @@ program
         }
         if (
           errorPayload?.code === 'forbidden_action'
-          && errorPayload?.action === 'recipe.test'
+          && errorPayload?.action === 'command.test'
         ) {
           const nodeSuffix = errorPayload.nodeId ? ` for node ${errorPayload.nodeId}` : '';
           console.error(
-            `[otto] controller token is missing recipe.test scope${nodeSuffix}. Re-pair to issue a token with updated scopes.`,
+            `[otto] controller token is missing command.test scope${nodeSuffix}. Re-pair to issue a token with updated scopes.`,
           );
           console.error('[otto] suggested fix: otto revoke && otto authcode && otto pair <code>');
         }
@@ -1992,14 +1992,14 @@ program
 
       const resultPayload = testResponse.payload as {
         data?: {
-          stream?: RecipeTestStream;
+          stream?: CommandTestStream;
         };
       };
 
       const listeners = resultPayload.data?.stream?.listeners ?? [];
       if (listeners.length > 1) {
         throw new Error(
-          `recipe.test stream currently supports exactly one listener for ${site}/${recipe}`,
+          `command.test stream currently supports exactly one listener for ${site}/${command}`,
         );
       }
 
@@ -2007,7 +2007,7 @@ program
       if (streamListener) {
         if (!streamListener.listener || typeof streamListener.listener !== 'string') {
           throw new Error(
-            `recipe.test stream requires stream.listeners[0].listener for ${site}/${recipe}`,
+            `command.test stream requires stream.listeners[0].listener for ${site}/${command}`,
           );
         }
 
@@ -2032,20 +2032,20 @@ program
             }
 
             const probeResponse = await runCommandWithSocket(ws, targetNodeId, {
-              action: 'recipe.run',
+              action: 'command.run',
               tabSession: tabSessionId,
               payload: {
                 tabSessionId,
                 site,
-                recipe,
-                input: recipeInput,
+                command,
+                input: commandInput,
                 authMode: opts.authMode,
               },
               timeoutMs,
               signal: commandAbortController.signal,
             });
 
-            for (const line of renderer.renderCommandResponse(probeResponse, 'recipe.run')) {
+            for (const line of renderer.renderCommandResponse(probeResponse, 'command.run')) {
               console.log(line);
             }
           }
@@ -2055,7 +2055,7 @@ program
           ws,
           targetNodeId,
           site,
-          recipe,
+          command,
           streamListener.listener,
           streamOptions,
           timeoutMs,
@@ -2063,17 +2063,17 @@ program
           streamFollowMs,
           probe,
           async () => {
-            if (!activeRecipeTestRequestId) {
+            if (!activeCommandTestRequestId) {
               return;
             }
-            await sendCommandCancelWithSocket(ws, activeRecipeTestRequestId);
+            await sendCommandCancelWithSocket(ws, activeCommandTestRequestId);
           },
           false,
         );
 
-        activeRecipeTestRequestId = undefined;
+        activeCommandTestRequestId = undefined;
       } else {
-        activeRecipeTestRequestId = undefined;
+        activeCommandTestRequestId = undefined;
       }
     } catch (error) {
       testExecutionError = error;
@@ -2119,11 +2119,11 @@ program
     }
   });
 
-const recipes = program.command('recipes').description('Discover available recipes from target node');
+const commands = program.command('commands').description('Discover available commands from target node');
 
-recipes
+commands
   .command('list')
-  .description('List available recipes')
+  .description('List available commands')
   .option('--node-id <id>', 'Override target node id')
   .option('--site <site>', 'Filter by site, for example reddit.com')
   .option('--timeout <ms>', 'Command timeout in milliseconds', '30000')
@@ -2132,7 +2132,7 @@ recipes
     const targetNodeId = await resolveTargetNodeId(config, opts.nodeId);
 
     const response = await runCommandOnce(config, targetNodeId, {
-      action: 'recipe.list',
+      action: 'command.list',
       payload: {},
       timeoutMs: Number(opts.timeout),
     });
@@ -2145,14 +2145,14 @@ recipes
 
     const payload = response.payload as {
       data?: {
-        recipes?: Array<{ site?: string }>;
+        commands?: Array<{ site?: string }>;
       };
     };
 
-    const recipes = payload.data?.recipes ?? [];
+    const commandsList = payload.data?.commands ?? [];
     const filtered = opts.site
-      ? recipes.filter((recipe) => String(recipe.site ?? '').toLowerCase() === String(opts.site).toLowerCase())
-      : recipes;
+      ? commandsList.filter((commandEntry) => String(commandEntry.site ?? '').toLowerCase() === String(opts.site).toLowerCase())
+      : commandsList;
 
     const output = {
       ...response,
@@ -2160,7 +2160,7 @@ recipes
         ...(response.payload as Record<string, unknown>),
         data: {
           ...(payload.data ?? {}),
-          recipes: filtered,
+          commands: filtered,
         },
       },
     };

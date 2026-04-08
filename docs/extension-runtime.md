@@ -9,10 +9,10 @@ Owner: Browser Runtime
 - `entrypoints/popup.html`: primary end-user onboarding surface from toolbar icon
 - `src/runtime/background-bootstrap.ts`: startup, pairing checks, keep-warm reconciliation
 - `src/runtime/offscreen-client.ts`: persistent relay WebSocket and heartbeat
-- `src/runtime/command-executor.ts`: primitive and recipe command execution
-- `src/runtime/recipe-runtime.ts`: site recipe resolution, auth preflight, and execution orchestration
+- `src/runtime/command-executor.ts`: primitive and command command execution
+- `src/runtime/command-runtime.ts`: site command resolution, auth preflight, and execution orchestration
 - `src/runtime/network-intercept-listener.ts`: per-tab debugger session management for response interception
-- `src/runtime/listener-managers.ts`: singleton listener-manager access for background and recipe runtime
+- `src/runtime/listener-managers.ts`: singleton listener-manager access for background and command runtime
 - `src/runtime/options-ui.ts`: relay URL configuration UI logic
 
 ## Source-of-Truth Code Paths
@@ -22,8 +22,8 @@ Owner: Browser Runtime
 - Offscreen transport owner: `extension/src/runtime/offscreen-client.ts`
 - Command execution/runtime errors: `extension/src/runtime/command-executor.ts`
 - Replay ledger: `extension/src/runtime/command-replay.ts`
-- Recipe registry: `extension/src/recipes/index.ts`
-- Recipe bundles: `extension/src/recipes/**`
+- Command registry: `extension/src/commands/index.ts`
+- Command bundles: `extension/src/commands/**`
 
 ## Pairing + Auth Behavior
 
@@ -89,14 +89,14 @@ Listener infrastructure:
 - `network.http_intercept` emits update types: `network.response`, `network.error`, and `network.detached`.
 - Network listener manager waits for `Network.loadingFinished` before `Network.getResponseBody`, supports optional `Fetch` fallback modes, and always continues paused fetch requests.
 - Network listener manager redacts sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`) before emitting updates.
-- Listener manager instances are shared through runtime singleton getters so command-driven listeners and recipe-driven listeners operate on one coherent per-tab debugger state map.
+- Listener manager instances are shared through runtime singleton getters so command-driven listeners and command-driven listeners operate on one coherent per-tab debugger state map.
 
-Recipe-started interception behavior:
+Command-started interception behavior:
 
-- Recipe runtime context now exposes `startNetworkInterception(options?)`.
-- Recipe-started interception is local to the active recipe execution and does not forward updates to relay listener streams.
-- Recipe code consumes buffered updates via handle `takeUpdates()`.
-- Runtime guarantees deterministic teardown by unsubscribing all recipe-started interception handles in `finally`, including on recipe throw.
+- Command runtime context now exposes `startNetworkInterception(options?)`.
+- Command-started interception is local to the active command execution and does not forward updates to relay listener streams.
+- Command code consumes buffered updates via handle `takeUpdates()`.
+- Runtime guarantees deterministic teardown by unsubscribing all command-started interception handles in `finally`, including on command throw.
 - Any extension component can emit listener JSON updates by sending runtime message `type=otto.listenerUpdate` with:
 - `requestId` (original subscribe requestId)
 - `data` (JSON payload)
@@ -105,31 +105,31 @@ Recipe-started interception behavior:
 - Background rejects updates for unknown/inactive listener request ids.
 - Accepted updates are forwarded to offscreen via `otto.offscreen.emitListenerUpdate` and emitted to relay as `event` with `payload.type=listener_update`.
 
-Recipe commands:
+Command commands:
 
-- `recipe.list` returns runtime-advertised recipe metadata.
-- `recipe.run` executes site-scoped recipes using payload `site`, `recipe`, `input`, and `authMode`.
-- `recipe.test` executes recipe test hooks for `otto test` while preserving recipe context/auth behavior.
-- `recipe.reddit_feed` is supported as a migration alias.
+- `command.list` returns runtime-advertised command metadata.
+- `command.run` executes site-scoped commands using payload `site`, `command`, `input`, and `authMode`.
+- `command.test` executes command test hooks for `otto test` while preserving command context/auth behavior.
+- `command.reddit_feed` is supported as a migration alias.
 
-Recipe metadata surfaced by `recipe.list`:
+Command metadata surfaced by `command.list`:
 
-- `inputFields` (optional) declarative recipe input contract.
+- `inputFields` (optional) declarative command input contract.
 - `inputAtLeastOneOf` (optional) cross-field minimum presence contract.
-- `preloadHost` (optional) host requirement enforced before recipe execute path.
+- `preloadHost` (optional) host requirement enforced before command execute path.
 
-Recipe auth flow:
+Command auth flow:
 
-1. Resolve site bundle and recipe metadata.
+1. Resolve site bundle and command metadata.
 2. Wait briefly for tab URL commit when a tab was just opened, then validate URL belongs to target site.
-3. If recipe metadata declares `inputFields`, validate required fields, strict types, and reject unknown keys.
-4. If recipe metadata declares `inputAtLeastOneOf`, validate at least one field from that set is provided.
+3. If command metadata declares `inputFields`, validate required fields, strict types, and reject unknown keys.
+4. If command metadata declares `inputAtLeastOneOf`, validate at least one field from that set is provided.
 5. If `requiresAuth` and `authMode` is not `skip`, run `checkLogin`.
 6. If unauthenticated and `authMode=auto`, run `gotoLogin` then return `manual_login_required`.
-7. Invoke recipe mode:
-- `recipe.run`: execute recipe `execute` function.
-- `recipe.test`: invoke optional recipe `test` hook; if absent, run `execute` directly.
-8. Ensure `preloadHost` before every call into recipe `execute` (auto-navigate when current host does not match).
+7. Invoke command mode:
+- `command.run`: execute command `execute` function.
+- `command.test`: invoke optional command `test` hook; if absent, run `execute` directly.
+8. Ensure `preloadHost` before every call into command `execute` (auto-navigate when current host does not match).
 9. User logs in manually and reruns command when required.
 
 Reddit auth details:
@@ -139,10 +139,10 @@ Reddit auth details:
 
 URL readiness behavior:
 
-- Recipe runtime applies a short bounded poll window before site validation to avoid false negatives immediately after `primitive.tab.open`.
+- Command runtime applies a short bounded poll window before site validation to avoid false negatives immediately after `primitive.tab.open`.
 - If committed tab URL remains unavailable after the window, runtime returns transient execution error `tab_url_not_ready` (`retryable=true`).
-- If committed URL is present but does not match recipe site, runtime returns `site_mismatch` (`retryable=false`).
-- Runtime still never executes recipe logic before site validation succeeds.
+- If committed URL is present but does not match command site, runtime returns `site_mismatch` (`retryable=false`).
+- Runtime still never executes command logic before site validation succeeds.
 - When `preloadHost` is configured, runtime auto-navigates to the host before execute and returns `preload_host_mismatch` only if the committed URL host still does not match.
 
 ## MV3 Resilience

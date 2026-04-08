@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEnvelope, type Envelope } from '@telepat/otto-protocol';
-import { createRecipeTestStreamRenderer } from '../src/test-stream-format.js';
+import { createCommandTestStreamRenderer } from '../src/test-stream-format.js';
 
 function envelope(messageType: Envelope['messageType'], payload: unknown, requestId = 'req-1'): Envelope {
   return createEnvelope(messageType, 'controller', requestId, payload);
 }
 
 test('generic listener updates render readable summary lines', () => {
-  const renderer = createRecipeTestStreamRenderer({
+  const renderer = createCommandTestStreamRenderer({
     site: 'example.com',
-    recipe: 'getData',
+    command: 'getData',
     jsonOutput: false,
     useColor: false,
   });
@@ -25,7 +25,7 @@ test('generic listener updates render readable summary lines', () => {
         status: 200,
         url: 'https://example.com/api/messages',
       },
-    }, 'recipe-req-1'),
+    }, 'command-req-1'),
   );
 
   assert.equal(lines.length, 1);
@@ -35,9 +35,9 @@ test('generic listener updates render readable summary lines', () => {
 });
 
 test('reddit getChatMessages update renders network and chat lines with sender and text', () => {
-  const renderer = createRecipeTestStreamRenderer({
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: false,
     useColor: false,
   });
@@ -82,7 +82,7 @@ test('reddit getChatMessages update renders network and chat lines with sender a
       tabId: 1,
       requestId: 'req-abc',
     },
-  }, 'recipe-req-2');
+  }, 'command-req-2');
 
   const first = renderer.renderListenerUpdate(updateFrame);
   assert.equal(first.length, 2);
@@ -95,10 +95,10 @@ test('reddit getChatMessages update renders network and chat lines with sender a
   assert.match(second[0], /net:network\.response/);
 });
 
-test('reddit getChatMessages recipe-native new_message renders sender recipient and text', () => {
-  const renderer = createRecipeTestStreamRenderer({
+test('reddit getChatMessages command-native new_message renders sender recipient and text', () => {
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: false,
     useColor: false,
   });
@@ -116,7 +116,7 @@ test('reddit getChatMessages recipe-native new_message renders sender recipient 
       from: 'peer',
       createdAt: '2026-04-08T16:25:10.687Z',
     },
-  }, 'recipe-req-native-1');
+  }, 'command-req-native-1');
 
   const lines = renderer.renderListenerUpdate(frame);
   assert.equal(lines.length, 1);
@@ -124,10 +124,10 @@ test('reddit getChatMessages recipe-native new_message renders sender recipient 
   assert.match(lines[0], /t2_wpm42hjrj -> user: poate acum\?/);
 });
 
-test('reddit getChatMessages recipe-native typing renders actor and recipient', () => {
-  const renderer = createRecipeTestStreamRenderer({
+test('reddit getChatMessages command-native typing renders actor and recipient', () => {
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: false,
     useColor: false,
   });
@@ -140,7 +140,7 @@ test('reddit getChatMessages recipe-native typing renders actor and recipient', 
       roomId: '!room-a:reddit.com',
       peerIds: ['wpm42hjrj'],
     },
-  }, 'recipe-req-native-typing-1');
+  }, 'command-req-native-typing-1');
 
   const lines = renderer.renderListenerUpdate(frame);
   assert.equal(lines.length, 1);
@@ -148,10 +148,10 @@ test('reddit getChatMessages recipe-native typing renders actor and recipient', 
   assert.match(lines[0], /wpm42hjrj -> user/);
 });
 
-test('reddit getChatMessages recipe-native room_member renders actor and recipient', () => {
-  const renderer = createRecipeTestStreamRenderer({
+test('reddit getChatMessages command-native room_member renders actor and recipient', () => {
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: false,
     useColor: false,
   });
@@ -166,7 +166,7 @@ test('reddit getChatMessages recipe-native room_member renders actor and recipie
       peerUsername: 'CozyMantis',
       from: 'peer',
     },
-  }, 'recipe-req-native-room-member-1');
+  }, 'command-req-native-room-member-1');
 
   const lines = renderer.renderListenerUpdate(frame);
   assert.equal(lines.length, 1);
@@ -174,10 +174,10 @@ test('reddit getChatMessages recipe-native room_member renders actor and recipie
   assert.match(lines[0], /CozyMantis -> user joined/);
 });
 
-test('reddit getChatMessages recipe-native message_deleted renders actor recipient and target id', () => {
-  const renderer = createRecipeTestStreamRenderer({
+test('reddit getChatMessages command-native message_deleted renders actor recipient and target id', () => {
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: false,
     useColor: false,
   });
@@ -192,7 +192,7 @@ test('reddit getChatMessages recipe-native message_deleted renders actor recipie
       from: 'peer',
       redacts: '$evt-3',
     },
-  }, 'recipe-req-native-message-deleted-1');
+  }, 'command-req-native-message-deleted-1');
 
   const lines = renderer.renderListenerUpdate(frame);
   assert.equal(lines.length, 1);
@@ -201,9 +201,9 @@ test('reddit getChatMessages recipe-native message_deleted renders actor recipie
 });
 
 test('reddit getChatMessages uses room_member username for subsequent new_message sender label', () => {
-  const renderer = createRecipeTestStreamRenderer({
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: false,
     useColor: false,
   });
@@ -217,7 +217,7 @@ test('reddit getChatMessages uses room_member username for subsequent new_messag
       peerId: 'wpm42hjrj',
       peerUsername: 'CozyMantis',
     },
-  }, 'recipe-req-native-seed-1');
+  }, 'command-req-native-seed-1');
 
   const messageFrame = envelope('event', {
     type: 'listener_update',
@@ -230,7 +230,7 @@ test('reddit getChatMessages uses room_member username for subsequent new_messag
       senderId: 'wpm42hjrj',
       from: 'peer',
     },
-  }, 'recipe-req-native-seed-2');
+  }, 'command-req-native-seed-2');
 
   renderer.renderListenerUpdate(memberFrame);
   const lines = renderer.renderListenerUpdate(messageFrame);
@@ -239,9 +239,9 @@ test('reddit getChatMessages uses room_member username for subsequent new_messag
 });
 
 test('reddit getChatMessages creator message renders as user to known peer', () => {
-  const renderer = createRecipeTestStreamRenderer({
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: false,
     useColor: false,
   });
@@ -255,7 +255,7 @@ test('reddit getChatMessages creator message renders as user to known peer', () 
       peerId: 'wpm42hjrj',
       peerUsername: 'CozyMantis',
     },
-  }, 'recipe-req-native-seed-creator-1');
+  }, 'command-req-native-seed-creator-1');
 
   const creatorMessage = envelope('event', {
     type: 'listener_update',
@@ -269,7 +269,7 @@ test('reddit getChatMessages creator message renders as user to known peer', () 
       sender: '@t2_14f0tp:reddit.com',
       from: 'creator',
     },
-  }, 'recipe-req-native-seed-creator-2');
+  }, 'command-req-native-seed-creator-2');
 
   renderer.renderListenerUpdate(memberFrame);
   const lines = renderer.renderListenerUpdate(creatorMessage);
@@ -278,23 +278,23 @@ test('reddit getChatMessages creator message renders as user to known peer', () 
 });
 
 test('json output mode preserves full frame object output', () => {
-  const renderer = createRecipeTestStreamRenderer({
+  const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     jsonOutput: true,
     useColor: false,
   });
 
   const frame = envelope('result', {
     ok: true,
-    action: 'recipe.test',
+    action: 'command.test',
     durationMs: 50,
     commandOutcome: 'completed',
-  }, 'recipe-req-3');
+  }, 'command-req-3');
 
   const lines = renderer.renderTerminalResponse(frame);
   assert.equal(lines.length, 1);
   const parsed = JSON.parse(lines[0]) as { messageType: string; requestId: string };
   assert.equal(parsed.messageType, 'result');
-  assert.equal(parsed.requestId, 'recipe-req-3');
+  assert.equal(parsed.requestId, 'command-req-3');
 });

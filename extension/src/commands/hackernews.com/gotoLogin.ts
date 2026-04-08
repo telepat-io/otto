@@ -1,8 +1,8 @@
-import type { SiteRecipe } from '../types.js';
+import type { SiteCommand } from '../types.js';
 
 const HN_LOGIN_URL = 'https://news.ycombinator.com/login';
 
-export const gotoLoginRecipe: SiteRecipe = {
+export const gotoLoginCommand: SiteCommand = {
   metadata: {
     site: 'news.ycombinator.com',
     id: 'gotoLogin',

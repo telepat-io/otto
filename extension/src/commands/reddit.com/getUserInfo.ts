@@ -1,4 +1,4 @@
-import type { SiteRecipe } from '../types.js';
+import type { SiteCommand } from '../types.js';
 
 type UserInfoInput = {
   username?: string;
@@ -13,7 +13,7 @@ function normalizeId(input: string): string {
   return `t2_${trimmed}`;
 }
 
-export const getUserInfoRecipe: SiteRecipe = {
+export const getUserInfoCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
     id: 'getUserInfo',

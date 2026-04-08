@@ -230,7 +230,7 @@ test('navigate prunes stale mapping and returns tab_session_closed when tab is g
   assert.deepEqual(sessionStore.tabSessions, {});
 });
 
-test('recipe.run rejects site mismatch for current tab URL', async () => {
+test('command.run rejects site mismatch for current tab URL', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -242,10 +242,10 @@ test('recipe.run rejects site mismatch for current tab URL', async () => {
   });
 
   await assert.rejects(
-    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+    () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      recipe: 'getFeed',
+      command: 'getFeed',
       input: {},
       authMode: 'auto',
     })),
@@ -258,7 +258,7 @@ test('recipe.run rejects site mismatch for current tab URL', async () => {
   );
 });
 
-test('recipe.run waits for committed tab URL before site validation', async () => {
+test('command.run waits for committed tab URL before site validation', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -273,10 +273,10 @@ test('recipe.run waits for committed tab URL before site validation', async () =
     scriptResults: [{ authenticated: true }, [{ title: 'Ready', author: 'eve' }]],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     input: {},
     authMode: 'auto',
   }));
@@ -284,12 +284,12 @@ test('recipe.run waits for committed tab URL before site validation', async () =
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     posts: [{ title: 'Ready', author: 'eve' }],
   });
 });
 
-test('recipe.run returns transient tab_url_not_ready when committed URL never appears', async () => {
+test('command.run returns transient tab_url_not_ready when committed URL never appears', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -301,10 +301,10 @@ test('recipe.run returns transient tab_url_not_ready when committed URL never ap
   });
 
   await assert.rejects(
-    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+    () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      recipe: 'getFeed',
+      command: 'getFeed',
       input: {},
       authMode: 'auto',
     })),
@@ -312,14 +312,14 @@ test('recipe.run returns transient tab_url_not_ready when committed URL never ap
       assert.ok(err instanceof CommandExecutionError);
       const commandErr = err as CommandExecutionError;
       assert.equal(commandErr.code, 'tab_url_not_ready');
-      assert.equal(commandErr.stage, 'recipe.run');
+      assert.equal(commandErr.stage, 'command.run');
       assert.equal(commandErr.retryable, true);
       return true;
     },
   );
 });
 
-test('recipe.run redirects to login when auth check fails in auto mode', async () => {
+test('command.run redirects to login when auth check fails in auto mode', async () => {
   const { chromeApi, tabUrls } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -332,10 +332,10 @@ test('recipe.run redirects to login when auth check fails in auto mode', async (
   });
 
   await assert.rejects(
-    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+    () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      recipe: 'getFeed',
+      command: 'getFeed',
       input: {},
       authMode: 'auto',
     })),
@@ -349,7 +349,7 @@ test('recipe.run redirects to login when auth check fails in auto mode', async (
   );
 });
 
-test('recipe.run executes when authenticated and returns posts', async () => {
+test('command.run executes when authenticated and returns posts', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -361,10 +361,10 @@ test('recipe.run executes when authenticated and returns posts', async () => {
     scriptResults: [{ authenticated: true }, [{ title: 'Hello', author: 'alice' }]],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     input: {},
     authMode: 'auto',
   }));
@@ -372,12 +372,12 @@ test('recipe.run executes when authenticated and returns posts', async () => {
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     posts: [{ title: 'Hello', author: 'alice' }],
   });
 });
 
-test('legacy recipe.reddit_feed action is routed via recipe runtime', async () => {
+test('legacy command.reddit_feed action is routed via command runtime', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -389,19 +389,19 @@ test('legacy recipe.reddit_feed action is routed via recipe runtime', async () =
     scriptResults: [{ authenticated: true }, [{ title: 'Legacy', author: 'bob' }]],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.reddit_feed', {
+  const result = await executeCommand(chromeApi, buildCommand('command.reddit_feed', {
     tabSessionId: 'tab_alpha',
   }));
 
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     posts: [{ title: 'Legacy', author: 'bob' }],
   });
 });
 
-test('recipe.run sendChatMessage returns deterministic payload', async () => {
+test('command.run sendChatMessage returns deterministic payload', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -416,10 +416,10 @@ test('recipe.run sendChatMessage returns deterministic payload', async () => {
     ],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'sendChatMessage',
+    command: 'sendChatMessage',
     input: {
       username: 'alice',
       message: 'hello',
@@ -430,14 +430,14 @@ test('recipe.run sendChatMessage returns deterministic payload', async () => {
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'sendChatMessage',
+    command: 'sendChatMessage',
     sent: true,
     roomId: 'room_1',
     username: 'alice',
   });
 });
 
-test('recipe.run getChatMessages normalizes matrix events', async () => {
+test('command.run getChatMessages normalizes matrix events', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -466,10 +466,10 @@ test('recipe.run getChatMessages normalizes matrix events', async () => {
     ],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     input: {
       roomId: 'room_1',
       limit: 20,
@@ -480,7 +480,7 @@ test('recipe.run getChatMessages normalizes matrix events', async () => {
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     scope: 'room',
     roomId: 'room_1',
     totalCount: 1,
@@ -503,7 +503,7 @@ test('recipe.run getChatMessages normalizes matrix events', async () => {
   });
 });
 
-test('recipe.run getChatMessages fetches across rooms when roomId is omitted', async () => {
+test('command.run getChatMessages fetches across rooms when roomId is omitted', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -538,10 +538,10 @@ test('recipe.run getChatMessages fetches across rooms when roomId is omitted', a
     ],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     input: {
       limit: 20,
     },
@@ -551,7 +551,7 @@ test('recipe.run getChatMessages fetches across rooms when roomId is omitted', a
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     scope: 'all_rooms',
     roomId: undefined,
     totalCount: 2,
@@ -587,7 +587,7 @@ test('recipe.run getChatMessages fetches across rooms when roomId is omitted', a
   });
 });
 
-test('recipe.run getChatMessages falls back to formatted_body when body is missing', async () => {
+test('command.run getChatMessages falls back to formatted_body when body is missing', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -619,10 +619,10 @@ test('recipe.run getChatMessages falls back to formatted_body when body is missi
     ],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     input: {
       roomId: 'room_1',
       limit: 20,
@@ -633,7 +633,7 @@ test('recipe.run getChatMessages falls back to formatted_body when body is missi
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     scope: 'room',
     roomId: 'room_1',
     totalCount: 1,
@@ -656,7 +656,7 @@ test('recipe.run getChatMessages falls back to formatted_body when body is missi
   });
 });
 
-test('recipe.test getChatMessages returns stream listener metadata', async () => {
+test('command.test getChatMessages returns stream listener metadata', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -671,10 +671,10 @@ test('recipe.test getChatMessages returns stream listener metadata', async () =>
     ],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     input: {
       roomId: 'room_1',
       limit: 20,
@@ -685,7 +685,7 @@ test('recipe.test getChatMessages returns stream listener metadata', async () =>
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     ready: true,
     roomId: 'room_1',
     stream: {
@@ -703,7 +703,7 @@ test('recipe.test getChatMessages returns stream listener metadata', async () =>
   });
 });
 
-test('recipe.run rejects unexpected input fields before execute', async () => {
+test('command.run rejects unexpected input fields before execute', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -715,23 +715,23 @@ test('recipe.run rejects unexpected input fields before execute', async () => {
   });
 
   await assert.rejects(
-    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+    () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      recipe: 'getFeed',
+      command: 'getFeed',
       input: { unexpected: true },
       authMode: 'auto',
     })),
     (err: unknown) => {
       assert.ok(err instanceof CommandExecutionError);
       const commandErr = err as CommandExecutionError;
-      assert.equal(commandErr.code, 'unexpected_recipe_input');
+      assert.equal(commandErr.code, 'unexpected_command_input');
       return true;
     },
   );
 });
 
-test('recipe.run rejects missing required input fields before execute', async () => {
+test('command.run rejects missing required input fields before execute', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -743,23 +743,23 @@ test('recipe.run rejects missing required input fields before execute', async ()
   });
 
   await assert.rejects(
-    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+    () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      recipe: 'sendChatMessage',
+      command: 'sendChatMessage',
       input: { username: 'alice' },
       authMode: 'auto',
     })),
     (err: unknown) => {
       assert.ok(err instanceof CommandExecutionError);
       const commandErr = err as CommandExecutionError;
-      assert.equal(commandErr.code, 'missing_recipe_input');
+      assert.equal(commandErr.code, 'missing_command_input');
       return true;
     },
   );
 });
 
-test('recipe.run rejects invalid input field types before execute', async () => {
+test('command.run rejects invalid input field types before execute', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -771,23 +771,23 @@ test('recipe.run rejects invalid input field types before execute', async () => 
   });
 
   await assert.rejects(
-    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+    () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      recipe: 'sendChatMessage',
+      command: 'sendChatMessage',
       input: { username: 'alice', message: 1 },
       authMode: 'auto',
     })),
     (err: unknown) => {
       assert.ok(err instanceof CommandExecutionError);
       const commandErr = err as CommandExecutionError;
-      assert.equal(commandErr.code, 'invalid_recipe_input_type');
+      assert.equal(commandErr.code, 'invalid_command_input_type');
       return true;
     },
   );
 });
 
-test('recipe.run enforces inputAtLeastOneOf metadata before execute', async () => {
+test('command.run enforces inputAtLeastOneOf metadata before execute', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -799,23 +799,23 @@ test('recipe.run enforces inputAtLeastOneOf metadata before execute', async () =
   });
 
   await assert.rejects(
-    () => executeCommand(chromeApi, buildCommand('recipe.run', {
+    () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      recipe: 'getUserInfo',
+      command: 'getUserInfo',
       input: {},
       authMode: 'strict_fail',
     })),
     (err: unknown) => {
       assert.ok(err instanceof CommandExecutionError);
       const commandErr = err as CommandExecutionError;
-      assert.equal(commandErr.code, 'missing_recipe_input_one_of');
+      assert.equal(commandErr.code, 'missing_command_input_one_of');
       return true;
     },
   );
 });
 
-test('recipe.run auto-navigates to preloadHost before execute', async () => {
+test('command.run auto-navigates to preloadHost before execute', async () => {
   const { chromeApi, tabUrls } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -827,10 +827,10 @@ test('recipe.run auto-navigates to preloadHost before execute', async () => {
     scriptResults: [{ authenticated: true }, { chunk: [] }],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     input: { roomId: 'room_1' },
     authMode: 'strict_fail',
   }));
@@ -839,7 +839,7 @@ test('recipe.run auto-navigates to preloadHost before execute', async () => {
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getChatMessages',
+    command: 'getChatMessages',
     scope: 'room',
     roomId: 'room_1',
     totalCount: 0,
@@ -848,7 +848,7 @@ test('recipe.run auto-navigates to preloadHost before execute', async () => {
   });
 });
 
-test('recipe.test falls back to execute when recipe test hook is absent', async () => {
+test('command.test falls back to execute when command test hook is absent', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -860,10 +860,10 @@ test('recipe.test falls back to execute when recipe test hook is absent', async 
     scriptResults: [{ authenticated: true }, [{ title: 'Fallback', author: 'zoe' }]],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     input: {},
     authMode: 'auto',
   }));
@@ -871,12 +871,12 @@ test('recipe.test falls back to execute when recipe test hook is absent', async 
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     posts: [{ title: 'Fallback', author: 'zoe' }],
   });
 });
 
-test('recipe.test falls back to execute and honors preloadHost compatibility', async () => {
+test('command.test falls back to execute and honors preloadHost compatibility', async () => {
   const { chromeApi, tabUrls } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -891,10 +891,10 @@ test('recipe.test falls back to execute and honors preloadHost compatibility', a
     ],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     input: {},
     authMode: 'strict_fail',
   }));
@@ -903,12 +903,12 @@ test('recipe.test falls back to execute and honors preloadHost compatibility', a
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getFeed',
+    command: 'getFeed',
     posts: [{ title: 'from fallback execute', author: 'otto' }],
   });
 });
 
-test('recipe.test uses sendChatMessage test hook for non-side-effect readiness checks', async () => {
+test('command.test uses sendChatMessage test hook for non-side-effect readiness checks', async () => {
   const { chromeApi, tabUrls } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -923,10 +923,10 @@ test('recipe.test uses sendChatMessage test hook for non-side-effect readiness c
     ],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.test', {
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'sendChatMessage',
+    command: 'sendChatMessage',
     input: {
       username: 'alice',
       message: 'hello',
@@ -938,7 +938,7 @@ test('recipe.test uses sendChatMessage test hook for non-side-effect readiness c
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'sendChatMessage',
+    command: 'sendChatMessage',
     ready: true,
     mode: 'create-room',
     username: 'alice',
@@ -1296,7 +1296,7 @@ test('listener.subscribe rejects network interception invalid includeBody type',
   );
 });
 
-test('recipe.run getUserInfo maps reddit profile payload', async () => {
+test('command.run getUserInfo maps reddit profile payload', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -1317,10 +1317,10 @@ test('recipe.run getUserInfo maps reddit profile payload', async () => {
     }],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('recipe.run', {
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getUserInfo',
+    command: 'getUserInfo',
     input: { username: 'alice' },
     authMode: 'strict_fail',
   }));
@@ -1328,7 +1328,7 @@ test('recipe.run getUserInfo maps reddit profile payload', async () => {
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    recipe: 'getUserInfo',
+    command: 'getUserInfo',
     username: 'alice',
     id: 't2_abc123',
     avatar: 'https://example.com/avatar.png',

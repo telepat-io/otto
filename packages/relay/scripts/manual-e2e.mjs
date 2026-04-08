@@ -8,9 +8,9 @@ const nodeId = process.env.OTTO_NODE_ID ?? 'node_manual_e2e';
 const openUrl = process.env.OTTO_E2E_OPEN_URL ?? 'https://www.reddit.com/';
 const extractSelector = process.env.OTTO_E2E_EXTRACT_SELECTOR ?? 'title';
 const commandTimeoutMs = Number(process.env.OTTO_E2E_COMMAND_TIMEOUT_MS ?? '10000');
-const runRecipe = process.env.OTTO_E2E_RUN_RECIPE === '1';
-const recipeSite = process.env.OTTO_E2E_RECIPE_SITE ?? 'reddit.com';
-const recipeId = process.env.OTTO_E2E_RECIPE_ID ?? 'getFeed';
+const runCommand = process.env.OTTO_E2E_RUN_COMMAND === '1';
+const commandSite = process.env.OTTO_E2E_COMMAND_SITE ?? 'reddit.com';
+const commandId = process.env.OTTO_E2E_COMMAND_ID ?? 'getFeed';
 
 function logStep(message) {
   console.log(`\n[manual-e2e] ${message}`);
@@ -216,18 +216,18 @@ async function run() {
     );
     console.log('[manual-e2e] extract result preview:', extract.payload?.data?.text ?? null);
 
-    if (runRecipe) {
-      logStep(`running recipe.run (${recipeSite}/${recipeId})`);
-      const recipe = await sendCommand(ws, 'recipe.run', {
+    if (runCommand) {
+      logStep(`running command.run (${commandSite}/${commandId})`);
+      const commandResult = await sendCommand(ws, 'command.run', {
         tabSessionId,
-        site: recipeSite,
-        recipe: recipeId,
+        site: commandSite,
+        command: commandId,
         input: {},
         authMode: 'auto',
       }, tabSessionId);
-      assertOkTerminal(recipe, 'recipe.run');
-      const posts = recipe.payload?.data?.posts;
-      console.log('[manual-e2e] recipe post count:', Array.isArray(posts) ? posts.length : 0);
+      assertOkTerminal(commandResult, 'command.run');
+      const posts = commandResult.payload?.data?.posts;
+      console.log('[manual-e2e] command post count:', Array.isArray(posts) ? posts.length : 0);
     }
 
     logStep('running primitive.tab.close');
