@@ -18,6 +18,9 @@
       "matchCommandLine": true
     },
     "npm run --workspace extension": true,
-    "npm --workspace extension": true
+    "npm --workspace extension": true,
+    "npm run -w @telepat/otto-extension": true,
+    "npm run -w @telepat/otto-relay": true,
+    "npm run -w @telepat/otto": true
   }
 }

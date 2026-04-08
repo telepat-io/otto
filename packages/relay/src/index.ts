@@ -2402,17 +2402,12 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        const streamSessionRequestId = listenerToRecipeStreamSession.get(msg.requestId);
-        if (streamSessionRequestId) {
-          send(owner.ws, buildEnvelope('event', 'relay', streamSessionRequestId, {
-            type: 'listener_update',
-            data: parsed.data.data,
-            updateType: parsed.data.updateType,
-            emittedAt: parsed.data.emittedAt,
-          }));
-        } else {
-          send(owner.ws, msg);
-        }
+        send(owner.ws, buildEnvelope('event', 'relay', msg.requestId, {
+          type: 'listener_update',
+          data: parsed.data.data,
+          updateType: parsed.data.updateType,
+          emittedAt: parsed.data.emittedAt,
+        }));
         emitLog({
           level: 'info',
           source: 'node',

@@ -7,7 +7,6 @@ type GetChatMessagesInput = {
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
-const REDDIT_MATRIX_V3_PATTERN = 'https://matrix.redditspace.com/_matrix/client/v3/*';
 
 function clampLimit(input: number | undefined): number {
   if (!input || Number.isNaN(input)) {
@@ -288,17 +287,11 @@ export const getChatMessagesRecipe: SiteRecipe = {
       stream: {
         listeners: [
           {
-            listener: 'network.http_intercept',
+            listener: 'reddit.new_chat_messages',
             options: {
               tabSessionId: ctx.tabSessionId,
-              site: 'reddit.com',
-              mode: 'hybrid',
-              includeBody: true,
-              includeHeaders: false,
-              urlPatterns: [REDDIT_MATRIX_V3_PATTERN],
-              requestHostAllowlist: ['matrix.redditspace.com'],
-              mimeTypes: ['application/json', 'text/plain'],
-              maxBodyBytes: 1_000_000,
+              mode: 'intercept',
+              pollIntervalMs: 7_000,
             },
           },
         ],

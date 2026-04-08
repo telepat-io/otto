@@ -322,7 +322,8 @@ test('recipe-local interception can receive callback updates without relay emiss
 
   await flushMicrotasks();
 
-  assert.equal(mock.runtimeMessages.length, 0);
+  const relayUpdates = mock.runtimeMessages.filter((entry) => entry.type === 'otto.listenerUpdate');
+  assert.equal(relayUpdates.length, 0);
   assert.equal(callbackUpdates.length, 1);
   assert.equal(callbackUpdates[0]?.updateType, 'network.response');
 });
@@ -410,4 +411,55 @@ test('network interception manager emits detached and clears subscription on tab
 
   const unsubscribed = await manager.unsubscribe('sub_removed');
   assert.equal(unsubscribed, false);
+});
+
+test('network interception manager emits websocket frame updates', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_ws', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+    urlPatterns: ['wss://ws.reddit.com/*'],
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketCreated',
+    {
+      requestId: 'ws_req_1',
+      url: 'wss://ws.reddit.com/realtime',
+    },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketFrameReceived',
+    {
+      requestId: 'ws_req_1',
+      response: {
+        opcode: 1,
+        payloadData: '{"type":"message"}',
+      },
+    },
+  );
+
+  await flushMicrotasks();
+
+  const updateMessage = mock.runtimeMessages.find(
+    (entry) => entry.type === 'otto.listenerUpdate'
+      && ((entry.payload as { requestId?: string; updateType?: string }).requestId === 'sub_ws')
+      && ((entry.payload as { requestId?: string; updateType?: string }).updateType === 'network.websocket_frame'),
+  );
+  assert.ok(updateMessage);
+  const payload = (updateMessage?.payload ?? {}) as {
+    data?: { url?: string; body?: string; captureSource?: string };
+  };
+  assert.equal(payload.data?.url, 'wss://ws.reddit.com/realtime');
+  assert.equal(payload.data?.body, '{"type":"message"}');
+  assert.equal(payload.data?.captureSource, 'network');
+
+  await manager.unsubscribe('sub_ws');
 });

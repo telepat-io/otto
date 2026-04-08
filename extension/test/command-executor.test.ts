@@ -691,17 +691,11 @@ test('recipe.test getChatMessages returns stream listener metadata', async () =>
     stream: {
       listeners: [
         {
-          listener: 'network.http_intercept',
+          listener: 'reddit.new_chat_messages',
           options: {
             tabSessionId: 'tab_alpha',
-            site: 'reddit.com',
-            mode: 'hybrid',
-            includeBody: true,
-            includeHeaders: false,
-            urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/*'],
-            requestHostAllowlist: ['matrix.redditspace.com'],
-            mimeTypes: ['application/json', 'text/plain'],
-            maxBodyBytes: 1_000_000,
+            mode: 'intercept',
+            pollIntervalMs: 7_000,
           },
         },
       ],
@@ -1052,6 +1046,20 @@ test('primitive.tab.open recovers when tab group update throws nested lastError 
   assert.equal(typeof sessionStore.automationGroupId, 'number');
   assert.notEqual(sessionStore.automationGroupId, staleGroupId);
   assert.equal(getGroupCreateCount(), 1);
+});
+
+test('primitive.tab.open succeeds when tab grouping is unavailable in non-normal windows', async () => {
+  const { chromeApi } = createChromeMock({
+    tabIds: [11],
+    invalidGroupIds: [700],
+    invalidGroupErrorValue: 'Tabs can only be moved to and from normal windows.',
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.open', { url: 'https://www.reddit.com/' }));
+  const data = result.data as { tabId?: number; tabSessionId?: string };
+
+  assert.equal(typeof data.tabId, 'number');
+  assert.ok(data.tabSessionId);
 });
 
 test('listener.subscribe returns deterministic subscribed payload', async () => {

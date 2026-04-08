@@ -76,6 +76,29 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - For long-running controller stream sessions (for example `otto test` streaming recipes), keep websocket heartbeat `ping`/`pong` active; stale controllers should be treated as disconnected and cleaned up by relay.
 - Correlate failures by `requestId` first, then narrow by source (`all` -> `node` or `relay`) to isolate root cause.
 
+## Debugging Tools That Worked Best
+- `otto listener subscribe-network`
+	- Use case: prove raw network capture before debugging recipe stream plumbing.
+	- Example: `otto listener subscribe-network --tab-session <id> --site reddit.com --request-host matrix.redditspace.com --pattern 'https://matrix.redditspace.com/_matrix/client/v3/*' --mode network --max-body-bytes 200000`
+- `otto test <site> <recipe> --json`
+	- Use case: validate recipe-level stream manifests and controller-visible frames.
+	- Example: `otto test reddit.com getChatMessages --stream-follow-ms 45000 --json`
+- `otto test ... --stream-probe`
+	- Use case: force immediate traffic after subscribe to validate listener wiring.
+	- Example: `otto test reddit.com getChatMessages --stream-probe --stream-follow-ms 45000 --json`
+- `otto logs list --source node --latest <n>`
+	- Use case: inspect extension-side runtime events during stream failures.
+	- Example: `otto logs list --source node --latest 300`
+- `otto logs follow --source all`
+	- Use case: correlate relay/controller/node events live by `requestId`.
+	- Example: `otto logs follow --source all`
+- `otto cmd --action primitive.tab.open`
+	- Use case: mint a fresh managed `tabSessionId` after reloads and avoid stale-session false negatives.
+	- Example: `otto cmd --action primitive.tab.open --payload '{"url":"https://chat.reddit.com"}'`
+- `otto recipes list`
+	- Use case: quick health check for auth, routing, and node reachability before deeper debugging.
+	- Example: `otto recipes list`
+
 ## CLI TUI Guidance
 - For any CLI TUI updates, prefer `@inkjs/ui` components and patterns over bespoke terminal rendering.
 - Keep non-interactive output deterministic and machine-readable; TUI polish must not change JSON contracts.

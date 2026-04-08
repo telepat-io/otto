@@ -14,6 +14,7 @@ import { executeCommand } from '../src/runtime/command-executor.js';
 import { CommandExecutionError } from '../src/runtime/execution-error.js';
 import {
   getNetworkInterceptListenerManager,
+  getRedditChatListenerManager,
 } from '../src/runtime/listener-managers.js';
 import { deriveOnboardingState, type RelayConnectionStatus } from '../src/runtime/onboarding-state.js';
 
@@ -81,6 +82,7 @@ export default defineBackground(() => {
   const activeListenerRequestIds = new Set<string>();
   const listenerNameByRequestId = new Map<string, string>();
   const networkInterceptListenerManager = getNetworkInterceptListenerManager(chrome);
+  const redditChatListenerManager = getRedditChatListenerManager(chrome);
 
   const runMaintenance = (mode: 'bootstrap' | 'keepwarm') => {
     if (maintenanceInFlight) {
@@ -272,14 +274,40 @@ export default defineBackground(() => {
           };
           const requestId = typeof payload.requestId === 'string' ? payload.requestId.trim() : '';
           if (!requestId) {
+            await forwardExtensionLog(chrome, {
+              level: 'warn',
+              type: 'listener.update_dropped',
+              data: {
+                reason: 'missing_request_id',
+              },
+            });
             sendResponse({ ok: false, error: 'missing_request_id' });
             return;
           }
 
           if (!activeListenerRequestIds.has(requestId)) {
+            await forwardExtensionLog(chrome, {
+              level: 'warn',
+              type: 'listener.update_dropped',
+              requestId,
+              data: {
+                reason: 'listener_not_active',
+                updateType: payload.updateType,
+                activeListenerCount: activeListenerRequestIds.size,
+              },
+            });
             sendResponse({ ok: false, error: 'listener_not_active' });
             return;
           }
+
+          await forwardExtensionLog(chrome, {
+            level: 'debug',
+            type: 'listener.update_forwarded',
+            requestId,
+            data: {
+              updateType: payload.updateType,
+            },
+          });
 
           await chrome.runtime.sendMessage({
             type: 'otto.offscreen.emitListenerUpdate',
@@ -359,6 +387,13 @@ export default defineBackground(() => {
                   maxBodyBytes?: number;
                   mimeTypes?: string[];
                 });
+              } else if (listener === 'reddit.new_chat_messages') {
+                await redditChatListenerManager.subscribe(cmd.requestId, normalizedOptions as {
+                  tabSessionId?: string;
+                  tabId?: number;
+                  pollIntervalMs?: number;
+                  mode?: 'intercept' | 'poll';
+                });
               } else {
                 throw new CommandExecutionError(
                   `Unsupported listener: ${listener}`,
@@ -369,6 +404,17 @@ export default defineBackground(() => {
               }
               activeListenerRequestIds.add(cmd.requestId);
               listenerNameByRequestId.set(cmd.requestId, listener);
+              await chrome.runtime.sendMessage({
+                type: 'otto.offscreen.emitListenerUpdate',
+                payload: {
+                  requestId: cmd.requestId,
+                  updateType: 'debug.subscribe_ack',
+                  emittedAt: new Date().toISOString(),
+                  data: {
+                    listener,
+                  },
+                },
+              });
             }
             if (cmd.payload.action === 'listener.unsubscribe') {
               const targetRequestId = String(cmd.payload.payload.targetRequestId ?? '').trim();
@@ -376,6 +422,8 @@ export default defineBackground(() => {
                 const listenerName = listenerNameByRequestId.get(targetRequestId);
                 if (listenerName === 'network.http_intercept') {
                   await networkInterceptListenerManager.unsubscribe(targetRequestId);
+                } else if (listenerName === 'reddit.new_chat_messages') {
+                  await redditChatListenerManager.unsubscribe(targetRequestId);
                 } else if (listenerName) {
                   throw new CommandExecutionError(
                     `Unsupported listener for unsubscribe: ${listenerName}`,

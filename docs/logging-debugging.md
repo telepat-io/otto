@@ -163,16 +163,25 @@ Relevant environment variables:
 
 8. Use `requestId` from command output to filter relay logs for that execution.
 
+Unattended capture example (auto-stops listener follow after 45s):
+
+`otto test reddit.com getChatMessages --stream-follow-ms 45000`
+
+Force a deterministic probe request after listener subscribe (helpful when passive chat traffic is quiet):
+
+`otto test reddit.com getChatMessages --stream-probe --stream-follow-ms 45000`
+
 ## Network Interception Debugging Playbook
 
 1. Confirm subscription result first.
 2. Keep the `listener.subscribe` `requestId`; it is the correlation key for all `listener_update` events.
-3. If no body is present in `network` mode, verify that request reached `Network.loadingFinished` and response is not redirect/cache-evicted.
-4. If reliability is required for narrow patterns, use `--mode hybrid` or `--mode fetch`.
-5. If traffic appears stalled in fetch/hybrid mode, verify the node is healthy and that update stream still advances (runtime always continues paused requests in `finally`).
-6. If attach fails, inspect error for debugger conflicts (for example DevTools already attached to target tab).
-7. For `otto test reddit.com getChatMessages`, expected stream scope is Reddit Matrix v3 (`https://matrix.redditspace.com/_matrix/client/v3/*`) in `hybrid` mode so both `Network` and `Fetch` domain paths can surface updates.
-8. Use node logs for isolation:
+3. In `otto test ...` stream sessions, expect listener updates to be keyed by the subscribe `requestId` (not the `recipe.test` command `requestId`).
+4. If no body is present in `network` mode, verify that request reached `Network.loadingFinished` and response is not redirect/cache-evicted.
+5. If reliability is required for narrow patterns, use `--mode hybrid` or `--mode fetch`.
+6. If traffic appears stalled in fetch/hybrid mode, verify the node is healthy and that update stream still advances (runtime always continues paused requests in `finally`).
+7. If attach fails, inspect error for debugger conflicts (for example DevTools already attached to target tab).
+8. For `otto test reddit.com getChatMessages`, expected stream scope is Reddit Matrix v3 (`https://matrix.redditspace.com/_matrix/client/v3/*`).
+9. Use node logs for isolation:
 
 `otto logs list --request-id <subscribeRequestId> --source node --latest 200`
 

@@ -33,6 +33,7 @@ import {
 import { createRecipeTestStreamRenderer } from './test-stream-format.js';
 import { resolveRecipeAutoOpenUrl } from './recipe-open-url.js';
 import { shouldAttemptAccessTokenRefreshOnAuthError } from './auth-retry.js';
+import { isListenerUpdateForSubscription } from './stream-correlation.js';
 import {
   CLIENT_SECRET_ENV_VAR,
   deleteClientSecret,
@@ -678,11 +679,12 @@ async function subscribeListenerAndFollow(
   targetNodeId: string,
   site: string,
   recipe: string,
-  recipeTestRequestId: string,
   listener: string,
   options: Record<string, unknown>,
   timeoutMs: number,
   jsonOutput: boolean,
+  followDurationMs?: number,
+  onSubscribed?: () => Promise<void>,
 ): Promise<void> {
   const renderer = createRecipeTestStreamRenderer({
     site,
@@ -693,7 +695,6 @@ async function subscribeListenerAndFollow(
 
   const subscribeRequestId = nanoid();
   let cleanedUp = false;
-  let cancellationRequested = false;
 
   const unsubscribeFallback = async (): Promise<void> => {
     if (cleanedUp) {
@@ -794,55 +795,71 @@ async function subscribeListenerAndFollow(
   });
 
   console.error(`[otto] following ${listener} updates, press Ctrl+C to stop`);
+  if (typeof followDurationMs === 'number' && followDurationMs > 0) {
+    console.error(`[otto] auto-stopping listener follow after ${followDurationMs}ms`);
+  }
 
-  await new Promise<void>((resolve, reject) => {
-    const handleSigint = () => {
-      if (cancellationRequested) {
+  if (onSubscribed) {
+    try {
+      await onSubscribed();
+    } catch (error) {
+      console.error(`[otto] stream probe failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  await new Promise<void>((resolve) => {
+    let done = false;
+    let autoStopTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = () => {
+      if (done) {
         return;
       }
-      cancellationRequested = true;
+      done = true;
+      if (autoStopTimer) {
+        clearTimeout(autoStopTimer);
+      }
+      process.removeListener('SIGINT', handleSigint);
+      ws.off('close', handleClose);
+      ws.off('message', handleMessage);
+      resolve();
+    };
 
-      ws.send(JSON.stringify(createEnvelope('command_cancel', 'controller', nanoid(), {
-        targetRequestId: recipeTestRequestId,
-      })));
+    const handleSigint = () => {
+      void unsubscribeFallback().finally(() => {
+        finish();
+      });
     };
 
     const handleClose = () => {
-      process.removeListener('SIGINT', handleSigint);
-      reject(new Error('stream connection closed before terminal outcome'));
+      console.error('[otto] stream connection closed; ending listener follow');
+      finish();
     };
 
     const handleMessage = (data: WebSocket.RawData) => {
       const msg = JSON.parse(String(data)) as Envelope;
 
-      if (msg.messageType === 'event') {
-        const payload = (msg.payload ?? {}) as { type?: string };
-        if (msg.requestId === recipeTestRequestId && payload.type === 'listener_update') {
-          for (const line of renderer.renderListenerUpdate(msg)) {
-            console.log(line);
-          }
-          return;
+      if (isListenerUpdateForSubscription(msg, subscribeRequestId)) {
+        for (const line of renderer.renderListenerUpdate(msg)) {
+          console.log(line);
         }
         return;
       }
-
-      if ((msg.messageType === 'result' || msg.messageType === 'error') && msg.requestId === recipeTestRequestId) {
-        for (const line of renderer.renderTerminalResponse(msg)) {
-          console.log(line);
-        }
-        process.removeListener('SIGINT', handleSigint);
-        ws.off('message', handleMessage);
-        ws.off('close', handleClose);
-        void unsubscribeFallback().finally(() => {
-          resolve();
-        });
-      }
     };
+
+    if (typeof followDurationMs === 'number' && followDurationMs > 0) {
+      autoStopTimer = setTimeout(() => {
+        console.error(`[otto] listener follow window elapsed (${followDurationMs}ms)`);
+        finish();
+      }, followDurationMs);
+    }
 
     process.once('SIGINT', handleSigint);
     ws.on('close', handleClose);
     ws.on('message', handleMessage);
   });
+
+  await unsubscribeFallback();
 }
 
 async function subscribeNetworkListenerAndFollow(
@@ -1640,6 +1657,10 @@ program
   .option('--no-cleanup-test-controller', 'Keep auto-registered test controller after command completion')
   .option('--keep-tab-open', 'Keep auto-opened tab instead of closing it after test', false)
   .option('--json', 'Output full JSON envelopes for command and stream frames', false)
+  .option('--stream-follow-ms <ms>', 'Auto-stop listener stream follow after N milliseconds (for unattended debugging)')
+  .option('--stream-probe', 'After listener subscribe, run recipe.run once to force network traffic for stream diagnostics', false)
+  .option('--stream-listener-mode <mode>', 'Override stream listener mode when supported (for example intercept|poll)')
+  .option('--stream-poll-interval-ms <ms>', 'Override stream listener poll interval in milliseconds when supported')
   .action(async (site: string, recipe: string, opts) => {
     const registration = await maybeSelfRegisterControllerForTest(loadConfig(), opts);
     const config = registration.config;
@@ -1650,6 +1671,12 @@ program
     }
 
     const timeoutMs = Number(opts.timeout);
+    const streamFollowMs = opts.streamFollowMs !== undefined
+      ? parsePositiveNumberOption(opts.streamFollowMs, '--stream-follow-ms')
+      : undefined;
+    const streamPollIntervalMs = opts.streamPollIntervalMs !== undefined
+      ? parsePositiveNumberOption(opts.streamPollIntervalMs, '--stream-poll-interval-ms')
+      : undefined;
     const jsonOutput = Boolean(opts.json) || isJsonOutput(config);
     const recipeInput = parseJsonObject(opts.payload, '--payload');
     const ws = await openControllerSocket(config);
@@ -1777,16 +1804,52 @@ program
           ? streamListener.options
           : {};
 
+        const streamOptions = {
+          ...options,
+          ...(typeof opts.streamListenerMode === 'string' && opts.streamListenerMode.trim().length > 0
+            ? { mode: opts.streamListenerMode.trim() }
+            : {}),
+          ...(streamPollIntervalMs !== undefined
+            ? { pollIntervalMs: streamPollIntervalMs }
+            : {}),
+        };
+
+        const probe = opts.streamProbe === true
+          ? async () => {
+            if (!tabSessionId) {
+              return;
+            }
+
+            const probeResponse = await runCommandWithSocket(ws, targetNodeId, {
+              action: 'recipe.run',
+              tabSession: tabSessionId,
+              payload: {
+                tabSessionId,
+                site,
+                recipe,
+                input: recipeInput,
+                authMode: opts.authMode,
+              },
+              timeoutMs,
+            });
+
+            for (const line of renderer.renderCommandResponse(probeResponse, 'recipe.run')) {
+              console.log(line);
+            }
+          }
+          : undefined;
+
         await subscribeListenerAndFollow(
           ws,
           targetNodeId,
           site,
           recipe,
-          testResponse.requestId,
           streamListener.listener,
-          options,
+          streamOptions,
           timeoutMs,
           jsonOutput,
+          streamFollowMs,
+          probe,
         );
       }
     } catch (error) {
@@ -1944,6 +2007,7 @@ listener
   .requiredOption('--tab-session <id>', 'Target managed tab session id')
   .requiredOption('--site <site>', 'Site scope (for example reddit.com)')
   .option('--pattern <glob>', 'URL pattern to capture (repeat for multiple)', collectString, [])
+  .option('--request-host <host>', 'Allow capture for request host (repeat for multiple)', collectString, [])
   .option('--mode <mode>', 'network|fetch|hybrid', 'network')
   .option('--include-headers', 'Include redacted request/response headers in updates', false)
   .option('--no-include-body', 'Do not include response body in updates')
@@ -1969,6 +2033,10 @@ listener
 
     if (Array.isArray(opts.pattern) && opts.pattern.length > 0) {
       options.urlPatterns = opts.pattern;
+    }
+
+    if (Array.isArray(opts.requestHost) && opts.requestHost.length > 0) {
+      options.requestHostAllowlist = opts.requestHost;
     }
 
     if (Array.isArray(opts.mime) && opts.mime.length > 0) {

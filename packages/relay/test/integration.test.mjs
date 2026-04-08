@@ -939,6 +939,12 @@ test('recipe.test streams stay active past timeout window and cancel unsubscribe
 
   await waitController('listener.subscribe result delivered to controller', (msg) => msg.messageType === 'result' && msg.requestId === 'recipe_stream_sub_1');
 
+  const proxiedUpdatePromise = waitController(
+    'listener_update proxied to listener.subscribe request',
+    (msg) => msg.messageType === 'event' && msg.requestId === 'recipe_stream_sub_1' && msg.payload?.type === 'listener_update',
+    5000,
+  );
+
   nodeWs.send(JSON.stringify({
     protocolVersion: '1.0.0',
     messageType: 'event',
@@ -954,14 +960,19 @@ test('recipe.test streams stay active past timeout window and cancel unsubscribe
     },
   }));
 
-  const proxiedUpdate = await waitController(
-    'listener_update proxied to recipe.test request',
-    (msg) => msg.messageType === 'event' && msg.requestId === 'recipe_test_stream_1' && msg.payload?.type === 'listener_update',
-    5000,
-  );
+  const proxiedUpdate = await proxiedUpdatePromise;
   assert.equal(proxiedUpdate.payload?.updateType, 'network_event');
 
   await wait(1300);
+
+  const proxiedUpdateAfterWindowPromise = waitController(
+    'listener_update still proxied after timeout window elapsed',
+    (msg) => msg.messageType === 'event'
+      && msg.requestId === 'recipe_stream_sub_1'
+      && msg.payload?.type === 'listener_update'
+      && msg.payload?.updateType === 'network_event_after_timeout_window',
+    5000,
+  );
 
   nodeWs.send(JSON.stringify({
     protocolVersion: '1.0.0',
@@ -978,14 +989,7 @@ test('recipe.test streams stay active past timeout window and cancel unsubscribe
     },
   }));
 
-  const proxiedUpdateAfterWindow = await waitController(
-    'listener_update still proxied after timeout window elapsed',
-    (msg) => msg.messageType === 'event'
-      && msg.requestId === 'recipe_test_stream_1'
-      && msg.payload?.type === 'listener_update'
-      && msg.payload?.updateType === 'network_event_after_timeout_window',
-    5000,
-  );
+  const proxiedUpdateAfterWindow = await proxiedUpdateAfterWindowPromise;
   assert.equal(proxiedUpdateAfterWindow.payload?.data?.eventId, 'evt_2');
 
   const nodeUnsubscribePromise = waitNode(

@@ -44,6 +44,25 @@ type ResponseMetadata = {
   requestHeaders?: Record<string, string>;
 };
 
+type WebSocketMetadata = {
+  url: string;
+};
+
+async function emitDebugLog(chromeApi: ChromeLike, type: string, data: Record<string, unknown>): Promise<void> {
+  try {
+    await chromeApi.runtime.sendMessage({
+      type: 'otto.extensionLog',
+      payload: {
+        level: 'debug',
+        type,
+        data,
+      },
+    });
+  } catch {
+    // Debug logging is best-effort only.
+  }
+}
+
 type FetchPausedEvent = {
   requestId: string;
   request?: {
@@ -267,15 +286,32 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
   const subscriptions = new Map<string, SubscriptionState>();
   const tabStates = new Map<number, TabState>();
   const responseMetaByTab = new Map<number, Map<string, ResponseMetadata>>();
+  const webSocketMetaByTab = new Map<number, Map<string, WebSocketMetadata>>();
 
   const emitUpdate = async (requestId: string, updateType: string, data: unknown): Promise<void> => {
+    const emittedAt = new Date().toISOString();
+
+    try {
+      await chromeApi.runtime.sendMessage({
+        type: 'otto.offscreen.emitListenerUpdate',
+        payload: {
+          requestId,
+          updateType,
+          emittedAt,
+          data,
+        },
+      });
+    } catch {
+      // Ignore transient offscreen routing failures.
+    }
+
     try {
       await chromeApi.runtime.sendMessage({
         type: 'otto.listenerUpdate',
         payload: {
           requestId,
           updateType,
-          emittedAt: new Date().toISOString(),
+          emittedAt,
           data,
         },
       });
@@ -448,6 +484,34 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
     return matches;
   };
 
+  const matchingSubscriptionsForUrl = (tabId: number, url: string): SubscriptionState[] => {
+    const tabState = tabStates.get(tabId);
+    if (!tabState) {
+      return [];
+    }
+
+    const matches: SubscriptionState[] = [];
+    for (const requestId of tabState.subscriptions) {
+      const sub = subscriptions.get(requestId);
+      if (!sub) {
+        continue;
+      }
+
+      if (!matchesAnyPattern(url, sub.urlPatterns)) {
+        continue;
+      }
+      const siteMatched = isSiteMatch(url, sub.site);
+      const hostAllowed = matchesRequestHostAllowlist(url, sub.requestHostAllowlist);
+      if (!siteMatched && !hostAllowed) {
+        continue;
+      }
+
+      matches.push(sub);
+    }
+
+    return matches;
+  };
+
   const emitNetworkUpdate = async (
     sub: SubscriptionState,
     metadata: ResponseMetadata,
@@ -537,6 +601,16 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
         responseHeaders,
         requestHeaders,
       });
+
+      if (tabStates.get(tabId)?.subscriptions.size) {
+        await emitDebugLog(chromeApi, 'network_listener.response_received', {
+          tabId,
+          requestId,
+          url,
+          mimeType,
+          status,
+        });
+      }
       return;
     }
 
@@ -554,6 +628,16 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       byRequest?.delete(requestId);
 
       const matches = matchingSubscriptions(tabId, metadata);
+      if (tabStates.get(tabId)?.subscriptions.size) {
+        await emitDebugLog(chromeApi, 'network_listener.loading_finished', {
+          tabId,
+          requestId,
+          url: metadata.url,
+          mimeType: metadata.mimeType,
+          status: metadata.status,
+          matchCount: matches.length,
+        });
+      }
       if (matches.length === 0) {
         return;
       }
@@ -605,6 +689,16 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       };
 
       const matches = matchingSubscriptions(tabId, metadata).filter((sub) => sub.mode === 'fetch' || sub.mode === 'hybrid');
+      if (tabStates.get(tabId)?.subscriptions.size) {
+        await emitDebugLog(chromeApi, 'network_listener.fetch_paused', {
+          tabId,
+          requestId,
+          url,
+          mimeType: metadata.mimeType,
+          status: metadata.status,
+          matchCount: matches.length,
+        });
+      }
       if (matches.length === 0) {
         try {
           await chromeApi.debugger.sendCommand({ tabId }, 'Fetch.continueRequest', { requestId });
@@ -642,6 +736,84 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       for (const sub of matches) {
         await emitNetworkUpdate(sub, metadata, requestId, 'fetch', bodyData, bodyError);
       }
+      return;
+    }
+
+    if (method === 'Network.webSocketCreated') {
+      const requestId = typeof params?.requestId === 'string' ? params.requestId : '';
+      const url = typeof params?.url === 'string' ? params.url : '';
+      if (!requestId || !url) {
+        return;
+      }
+
+      if (!webSocketMetaByTab.has(tabId)) {
+        webSocketMetaByTab.set(tabId, new Map<string, WebSocketMetadata>());
+      }
+      webSocketMetaByTab.get(tabId)?.set(requestId, { url });
+      return;
+    }
+
+    if (method === 'Network.webSocketClosed') {
+      const requestId = typeof params?.requestId === 'string' ? params.requestId : '';
+      if (!requestId) {
+        return;
+      }
+      webSocketMetaByTab.get(tabId)?.delete(requestId);
+      return;
+    }
+
+    if (method === 'Network.webSocketFrameReceived') {
+      const requestId = typeof params?.requestId === 'string' ? params.requestId : '';
+      if (!requestId) {
+        return;
+      }
+
+      const wsMeta = webSocketMetaByTab.get(tabId)?.get(requestId);
+      const url = wsMeta?.url;
+      if (!url) {
+        return;
+      }
+
+      const frame = (params?.response ?? {}) as Record<string, unknown>;
+      const payloadData = typeof frame.payloadData === 'string' ? frame.payloadData : '';
+      const opcode = typeof frame.opcode === 'number' ? frame.opcode : undefined;
+
+      const matches = matchingSubscriptionsForUrl(tabId, url);
+      if (matches.length === 0) {
+        return;
+      }
+
+      for (const sub of matches) {
+        const update: NetworkInterceptListenerUpdate = {
+          eventId: `net_${nanoid(10)}`,
+          tabSessionId: sub.tabSessionId,
+          tabId: sub.tabId,
+          site: sub.site,
+          url,
+          method: 'WEBSOCKET',
+          status: 101,
+          mimeType: 'application/websocket',
+          requestId,
+          captureSource: 'network',
+          emittedAt: new Date().toISOString(),
+        };
+
+        if (typeof opcode === 'number') {
+          update.responseHeaders = {
+            'x-websocket-opcode': String(opcode),
+          };
+        }
+
+        if (sub.includeBody && payloadData) {
+          const clamped = clampBody(payloadData, false, sub.maxBodyBytes);
+          update.body = clamped.body;
+          update.base64Encoded = false;
+          update.truncated = clamped.truncated;
+          update.bodyBytes = clamped.bodyBytes;
+        }
+
+        await emitSubscriptionUpdate(sub, 'network.websocket_frame', update);
+      }
     }
   };
 
@@ -678,6 +850,7 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
 
     tabStates.delete(tabId);
     responseMetaByTab.delete(tabId);
+    webSocketMetaByTab.delete(tabId);
   };
 
   const onTabRemoved = async (tabId: number): Promise<void> => {
@@ -710,6 +883,7 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
 
     tabStates.delete(tabId);
     responseMetaByTab.delete(tabId);
+    webSocketMetaByTab.delete(tabId);
   };
 
   chromeApi.debugger.onEvent.addListener((source, method, params) => {
@@ -798,6 +972,15 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
 
     try {
       await ensureAttached(resolved.tabId);
+      await emitDebugLog(chromeApi, 'network_listener.subscribed', {
+        requestId,
+        tabId: resolved.tabId,
+        tabSessionId,
+        site,
+        mode,
+        urlPatternCount: urlPatterns.length,
+        requestHostCount: requestHostAllowlist.length,
+      });
     } catch (error) {
       tabState.subscriptions.delete(requestId);
       if (tabState.subscriptions.size === 0) {

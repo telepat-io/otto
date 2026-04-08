@@ -58,6 +58,50 @@ function isMissingTabGroupError(error: unknown): boolean {
   return candidates.some((candidate) => /no group with id/i.test(candidate));
 }
 
+function isNonNormalWindowTabGroupingError(error: unknown): boolean {
+  const candidates: string[] = [];
+
+  if (typeof error === 'string') {
+    candidates.push(error);
+  }
+
+  if (error && typeof error === 'object') {
+    const asRecord = error as Record<string, unknown>;
+    const directMessage = asRecord.message;
+    if (typeof directMessage === 'string') {
+      candidates.push(directMessage);
+    }
+
+    const nestedLastError = asRecord.lastError;
+    if (nestedLastError && typeof nestedLastError === 'object') {
+      const nestedMessage = (nestedLastError as Record<string, unknown>).message;
+      if (typeof nestedMessage === 'string') {
+        candidates.push(nestedMessage);
+      }
+    }
+
+    const nestedCause = asRecord.cause;
+    if (nestedCause && typeof nestedCause === 'object') {
+      const nestedMessage = (nestedCause as Record<string, unknown>).message;
+      if (typeof nestedMessage === 'string') {
+        candidates.push(nestedMessage);
+      }
+    }
+
+    try {
+      candidates.push(JSON.stringify(error));
+    } catch {
+      // Ignore circular or non-serializable objects.
+    }
+  }
+
+  if (candidates.length === 0) {
+    candidates.push(String(error ?? ''));
+  }
+
+  return candidates.some((candidate) => /tabs can only be moved to and from normal windows/i.test(candidate));
+}
+
 async function clearAutomationGroupId(chromeApi: ChromeLike): Promise<void> {
   await chromeApi.storage.session.set({ automationGroupId: null });
 }
@@ -108,11 +152,24 @@ async function attachTabToAutomationGroup(chromeApi: ChromeLike, tabId: number):
   const maxAttempts = 3;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const groupId = await ensureAutomationGroup(chromeApi, tabId);
+    let groupId: number;
+    try {
+      groupId = await ensureAutomationGroup(chromeApi, tabId);
+    } catch (error) {
+      if (isNonNormalWindowTabGroupingError(error)) {
+        return -1;
+      }
+      throw error;
+    }
+
     try {
       await chromeApi.tabs.group({ groupId, tabIds: [tabId] as [number] });
       return groupId;
     } catch (error) {
+      if (isNonNormalWindowTabGroupingError(error)) {
+        return -1;
+      }
+
       if (!isMissingTabGroupError(error)) {
         throw error;
       }
@@ -121,10 +178,17 @@ async function attachTabToAutomationGroup(chromeApi: ChromeLike, tabId: number):
     }
   }
 
-  const freshGroupId = await chromeApi.tabs.group({ tabIds: [tabId] as [number] });
-  await applyAutomationGroupPresentation(chromeApi, freshGroupId as number);
-  await chromeApi.storage.session.set({ automationGroupId: freshGroupId });
-  return freshGroupId as number;
+  try {
+    const freshGroupId = await chromeApi.tabs.group({ tabIds: [tabId] as [number] });
+    await applyAutomationGroupPresentation(chromeApi, freshGroupId as number);
+    await chromeApi.storage.session.set({ automationGroupId: freshGroupId });
+    return freshGroupId as number;
+  } catch (error) {
+    if (isNonNormalWindowTabGroupingError(error)) {
+      return -1;
+    }
+    throw error;
+  }
 }
 
 async function getTabSessions(chromeApi: ChromeLike): Promise<Record<string, number>> {
