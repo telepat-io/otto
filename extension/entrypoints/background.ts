@@ -495,6 +495,7 @@ export default defineBackground(() => {
     withRuntimeErrorLogging(
       Promise.all([
         networkInterceptListenerManager.unsubscribeAll(),
+        redditChatListenerManager.unsubscribeAll(),
       ]).then(() => {
         activeListenerRequestIds.clear();
         listenerNameByRequestId.clear();

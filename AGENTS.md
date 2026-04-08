@@ -16,6 +16,8 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Never automate user credential submission; use explicit manual login handoff (`manual_login_required`).
 - Keep listener lifecycle deterministic: `listener.subscribe` and `listener.unsubscribe` are terminal commands, while async `listener_update` events are correlated by the original subscribe `requestId`.
 - Keep controller-to-node authorization node-owned: registered controller clients require explicit per-node ACL grants from the authenticated node before command routing.
+- Keep `otto test` teardown signal-safe: Ctrl+C/SIGTERM should trigger `command_cancel` for active stream tests and attempt auto-opened `primitive.tab.close` before exit.
+- Keep orphan cleanup owner-scoped: when controller sessions disconnect/time out, close only tabs owned by that controller identity.
 
 ## Canonical Commands
 - Install deps: `npm install`

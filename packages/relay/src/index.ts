@@ -67,7 +67,7 @@ const CONTROLLER_CLIENTS_FILE = join(LOG_DIR, 'controller-clients.jsonl');
 const CONTROLLER_ACL_FILE = join(LOG_DIR, 'controller-acl.jsonl');
 const ALLOW_REMOTE_CONTROLLER_REGISTRATION = process.env.OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION === '1';
 const CONTROLLER_REGISTRATION_SECRET = process.env.OTTO_CONTROLLER_REGISTRATION_SECRET;
-const CONTROLLER_HEARTBEAT_INTERVAL_MS = parseEnvInt('OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS', 15_000, 1_000, 120_000);
+const CONTROLLER_HEARTBEAT_INTERVAL_MS = parseEnvInt('OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS', 8_000, 1_000, 120_000);
 const CONTROLLER_HEARTBEAT_MISS_LIMIT = parseEnvInt('OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT', 3, 1, 20);
 
 type Client = {
@@ -984,6 +984,97 @@ function queuedDepthForController(controllerId: string): number {
     }
   }
   return total;
+}
+
+function removeQueuedCommandsForController(controllerId: string): void {
+  for (const [tabKey, queue] of queuedByTab.entries()) {
+    const kept: QueuedCommand[] = [];
+    for (const queued of queue) {
+      if (queued.controllerId !== controllerId) {
+        kept.push(queued);
+        continue;
+      }
+
+      clearTimeout(queued.timeoutHandle);
+      emitLog({
+        level: 'info',
+        source: 'relay',
+        type: 'queued_command_dropped',
+        requestId: queued.message.requestId,
+        status: 'controller_disconnected',
+        data: {
+          controllerId,
+          tabKey,
+        },
+      });
+    }
+
+    if (kept.length === 0) {
+      queuedByTab.delete(tabKey);
+      continue;
+    }
+
+    queuedByTab.set(tabKey, kept);
+  }
+}
+
+function withControllerOwnershipMetadata(msg: Envelope, controllerClientId?: string): Envelope {
+  const payload = asRecord(msg.payload);
+  const action = typeof payload?.action === 'string' ? payload.action : undefined;
+  if (action !== 'primitive.tab.open' || !controllerClientId) {
+    return msg;
+  }
+
+  const nested = asRecord(payload?.payload) ?? {};
+  const mergedPayload = {
+    ...nested,
+    __controllerClientId: controllerClientId,
+  };
+
+  return {
+    ...msg,
+    payload: {
+      ...payload,
+      payload: mergedPayload,
+    },
+  };
+}
+
+function requestOwnedTabCleanupForController(client: Client): void {
+  if (client.role !== 'controller' || !client.clientId) {
+    return;
+  }
+
+  for (const nodeClient of nodeClients.values()) {
+    if (!nodeClient.authenticated || !nodeClient.nodeId) {
+      continue;
+    }
+
+    const cleanupRequestId = nanoid();
+    send(nodeClient.ws, buildEnvelope('command', 'relay', cleanupRequestId, {
+      targetNodeId: nodeClient.nodeId,
+      action: 'primitive.tab.close_owned',
+      payload: {
+        controllerClientId: client.clientId,
+      },
+      timeoutMs: 10_000,
+      waitPolicy: 'fail_fast',
+    }));
+
+    emitLog({
+      level: 'info',
+      source: 'relay',
+      type: 'orphan_tab_cleanup_dispatched',
+      requestId: cleanupRequestId,
+      nodeId: nodeClient.nodeId,
+      action: 'primitive.tab.close_owned',
+      status: 'dispatched',
+      data: {
+        controllerId: client.controllerId,
+        clientId: client.clientId,
+      },
+    });
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -2650,6 +2741,8 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      const messageForNode = withControllerOwnershipMetadata(msg, client.clientId);
+
       const tabSessionId = (msg.payload as { tabSessionId?: string }).tabSessionId;
       const queueKey = tabSessionId ? tabQueueKey(payload.targetNodeId, tabSessionId) : undefined;
       if (queueKey && inflightByTab.has(queueKey)) {
@@ -2720,7 +2813,7 @@ wss.on('connection', (ws) => {
           }
         }, waitTimeoutMs);
 
-        queue.push({ message: msg, controllerId: client.id, timeoutHandle });
+        queue.push({ message: messageForNode, controllerId: client.id, timeoutHandle });
         queuedByTab.set(queueKey, queue);
         send(ws, buildEnvelope('event', 'relay', msg.requestId, {
           type: 'queued',
@@ -2808,7 +2901,7 @@ wss.on('connection', (ws) => {
         timeoutHandle,
       });
 
-      send(targetNode.ws, msg);
+      send(targetNode.ws, messageForNode);
       send(ws, buildEnvelope('event', 'relay', msg.requestId, {
         type: 'routed',
         targetNodeId: payload.targetNodeId,
@@ -3128,6 +3221,8 @@ wss.on('connection', (ws) => {
     if (client.role === 'controller') {
       removeListenerSubscriptionsForController(client.id);
       clearRecipeTestStreamSessionsForController(client.id);
+      removeQueuedCommandsForController(client.id);
+      requestOwnedTabCleanupForController(client);
     }
 
     for (const [key, lock] of locks.entries()) {

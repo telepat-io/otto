@@ -516,6 +516,201 @@ test('controller heartbeat timeout disconnects stale controller sessions', async
   await waitForWsClose(controllerWs, 4000);
 });
 
+test('heartbeat timeout dispatches owner-scoped tab cleanup for stale controller only', async (t) => {
+  const port = 8865;
+  const base = `http://127.0.0.1:${port}`;
+  const nodeId = 'node_owner_cleanup_suite';
+  const proc = startRelay(port, {
+    OTTO_DEFAULT_CONTROLLER_SCOPES: 'primitive.tab.open',
+    OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS: '1000',
+    OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT: '1',
+  });
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+
+  const registerController = async (suffix) => {
+    const registerResp = await fetch(`${base}/api/controller/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: `Owner Cleanup ${suffix} ${Date.now()}`,
+        description: `Owner cleanup controller ${suffix}`,
+      }),
+    });
+    assert.equal(registerResp.status, 200);
+    const registered = await registerResp.json();
+
+    const tokenResp = await fetch(`${base}/api/controller/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        clientId: registered.clientId,
+        clientSecret: registered.clientSecret,
+      }),
+    });
+    assert.equal(tokenResp.status, 200);
+    const tokenBody = await tokenResp.json();
+
+    const nodeToken = await issueNodeAccessToken(nodeId);
+    const grantResp = await fetch(`${base}/api/controller/access`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${nodeToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        clientId: registered.clientId,
+        grant: true,
+      }),
+    });
+    assert.equal(grantResp.status, 200);
+
+    return {
+      clientId: registered.clientId,
+      accessToken: tokenBody.accessToken,
+    };
+  };
+
+  const controllerClientA = await registerController('A');
+  const controllerClientB = await registerController('B');
+
+  const nodeWs = await connectAuthedNodeWs(port, nodeId, 'owner_cleanup_node');
+  const controllerA = await connectAuthedControllerWs(port, controllerClientA.accessToken, 'owner_cleanup_controller_a');
+  const controllerB = await connectAuthedControllerWs(port, controllerClientB.accessToken, 'owner_cleanup_controller_b');
+
+  t.after(() => {
+    nodeWs.close();
+    controllerA.close();
+    controllerB.close();
+  });
+
+  const waitNode = (label, predicate, timeoutMs = 3000) => nextWsEnvelope(nodeWs, predicate, timeoutMs).catch((error) => {
+    throw new Error(`${label}: ${error.message}`);
+  });
+
+  controllerA.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'owner_cleanup_open_a',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: nodeId,
+      action: 'primitive.tab.open',
+      replayNonce: 'owner_cleanup_nonce_a',
+      timeoutMs: 1500,
+      payload: {
+        url: 'https://chat.reddit.com',
+      },
+    },
+  }));
+
+  const routedOpenA = await waitNode(
+    'owner A primitive.tab.open routed to node',
+    (msg) => msg.messageType === 'command' && msg.requestId === 'owner_cleanup_open_a',
+  );
+  const ownerClientIdA = routedOpenA.payload?.payload?.__controllerClientId;
+  assert.equal(ownerClientIdA, controllerClientA.clientId);
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'owner_cleanup_open_a',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 5,
+      action: 'primitive.tab.open',
+      data: { tabSessionId: 'owner_cleanup_tab_a' },
+    },
+  }));
+
+  await nextWsEnvelope(
+    controllerA,
+    (msg) => msg.messageType === 'result' && msg.requestId === 'owner_cleanup_open_a',
+    3000,
+  );
+
+  controllerB.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'command',
+    requestId: 'owner_cleanup_open_b',
+    timestamp: new Date().toISOString(),
+    senderRole: 'controller',
+    payload: {
+      targetNodeId: nodeId,
+      action: 'primitive.tab.open',
+      replayNonce: 'owner_cleanup_nonce_b',
+      timeoutMs: 1500,
+      payload: {
+        url: 'https://www.reddit.com',
+      },
+    },
+  }));
+
+  const routedOpenB = await waitNode(
+    'owner B primitive.tab.open routed to node',
+    (msg) => msg.messageType === 'command' && msg.requestId === 'owner_cleanup_open_b',
+  );
+  const ownerClientIdB = routedOpenB.payload?.payload?.__controllerClientId;
+  assert.equal(ownerClientIdB, controllerClientB.clientId);
+  assert.notEqual(ownerClientIdA, ownerClientIdB);
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'result',
+    requestId: 'owner_cleanup_open_b',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      ok: true,
+      durationMs: 5,
+      action: 'primitive.tab.open',
+      data: { tabSessionId: 'owner_cleanup_tab_b' },
+    },
+  }));
+
+  await nextWsEnvelope(
+    controllerB,
+    (msg) => msg.messageType === 'result' && msg.requestId === 'owner_cleanup_open_b',
+    3000,
+  );
+
+  const keepAlive = setInterval(() => {
+    controllerB.send(JSON.stringify({
+      protocolVersion: '1.0.0',
+      messageType: 'ping',
+      requestId: `owner_cleanup_keepalive_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      senderRole: 'controller',
+      payload: { ok: true },
+    }));
+  }, 250);
+
+  t.after(() => {
+    clearInterval(keepAlive);
+  });
+
+  await waitForWsClose(controllerA, 5000);
+
+  const cleanupCommand = await waitNode(
+    'owner cleanup command dispatched after controller A timeout',
+    (msg) => msg.messageType === 'command' && msg.payload?.action === 'primitive.tab.close_owned',
+    3000,
+  );
+
+  assert.equal(cleanupCommand.payload?.payload?.controllerClientId, ownerClientIdA);
+  assert.notEqual(cleanupCommand.payload?.payload?.controllerClientId, ownerClientIdB);
+
+  await wait(1200);
+  assert.equal(controllerB.readyState, WebSocket.OPEN);
+});
+
 test('logs list and export support source and latest filters', async (t) => {
   const port = 8840;
   const base = `http://127.0.0.1:${port}`;

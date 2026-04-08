@@ -1062,6 +1062,55 @@ test('primitive.tab.open succeeds when tab grouping is unavailable in non-normal
   assert.ok(data.tabSessionId);
 });
 
+test('primitive.tab.open stores owner metadata from relay-injected controller client id', async () => {
+  const { chromeApi, sessionStore } = createChromeMock({
+    tabIds: [11],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.open', {
+    url: 'https://www.reddit.com/',
+    __controllerClientId: 'cli_123',
+  }));
+  const data = result.data as { tabSessionId?: string };
+  assert.ok(data.tabSessionId);
+  assert.equal(sessionStore.tabSessionOwners[data.tabSessionId!], 'cli_123');
+});
+
+test('primitive.tab.close_owned closes only tabs owned by target controller', async () => {
+  const { chromeApi, sessionStore } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_a: 11,
+        tab_b: 12,
+        tab_c: 13,
+      },
+      tabSessionOwners: {
+        tab_a: 'cli_a',
+        tab_b: 'cli_b',
+        tab_c: 'cli_a',
+      },
+    },
+    tabIds: [11, 12, 13],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.close_owned', {
+    controllerClientId: 'cli_a',
+  }));
+
+  assert.deepEqual(result.data, {
+    controllerClientId: 'cli_a',
+    closedCount: 2,
+    missingCount: 0,
+    totalOwnedSessions: 2,
+  });
+  assert.deepEqual(sessionStore.tabSessions, {
+    tab_b: 12,
+  });
+  assert.deepEqual(sessionStore.tabSessionOwners, {
+    tab_b: 'cli_b',
+  });
+});
+
 test('listener.subscribe returns deterministic subscribed payload', async () => {
   const { chromeApi } = createChromeMock();
 

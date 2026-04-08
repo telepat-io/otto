@@ -1,6 +1,6 @@
 # Relay Operations
 
-Last Updated: 2026-04-05
+Last Updated: 2026-04-08
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -45,6 +45,8 @@ Environment overrides:
 - `OTTO_DEFAULT_CONTROLLER_SCOPES`
 - `OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION`
 - `OTTO_CONTROLLER_REGISTRATION_SECRET`
+- `OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS` (default `8000`)
+- `OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT` (default `3`)
 
 ## Endpoints
 
@@ -103,6 +105,7 @@ WebSocket:
 - Emit synthetic node disconnect failures for in-flight requests
 - Manage tab lock leases and conflicts
 - Persist and stream structured logs
+- Disconnect stale controllers by heartbeat policy and trigger owner-scoped orphan tab cleanup.
 
 Log storage model:
 
@@ -147,6 +150,14 @@ Listener operations:
 - `listener.unsubscribe` validates `payload.targetRequestId`, ownership, and node match before routing.
 - Successful unsubscribe result removes listener state; future updates on that subscribe `requestId` are rejected with `listener_not_found`.
 - Listener state is cleaned up on controller disconnect and node disconnect.
+
+Controller disconnect behavior:
+
+- Relay marks a controller stale when no authenticated frames are received for `OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS * OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT`.
+- On disconnect/timeout, relay removes that controller's listener and recipe stream state.
+- Relay drops queued commands owned by the disconnected controller immediately (without waiting for queue timeout).
+- Relay dispatches internal `primitive.tab.close_owned` commands to connected nodes with the disconnected controller `clientId`.
+- Node runtime closes only tabs owned by that controller identity.
 
 ## Operational Notes
 

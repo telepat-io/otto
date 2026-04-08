@@ -104,7 +104,7 @@ type ControllerRegistrationMetadata = {
   avatarSeed?: string;
 };
 
-const DEFAULT_CONTROLLER_HEARTBEAT_INTERVAL_MS = 15_000;
+const DEFAULT_CONTROLLER_HEARTBEAT_INTERVAL_MS = 8_000;
 const controllerHeartbeatIntervalBySocket = new WeakMap<WebSocket, number>();
 
 class RelayAuthError extends Error {
@@ -551,11 +551,16 @@ async function runCommandOnce(
   }
 }
 
-async function runCommandWithSocket(
+type SentCommand = {
+  requestId: string;
+  response: Promise<Envelope>;
+};
+
+function sendCommandWithSocket(
   ws: WebSocket,
   targetNodeId: string,
-  opts: { action: string; tabSession?: string; payload: Record<string, unknown>; timeoutMs?: number },
-): Promise<Envelope> {
+  opts: { action: string; tabSession?: string; payload: Record<string, unknown>; timeoutMs?: number; signal?: AbortSignal },
+): SentCommand {
   const requestId = nanoid();
   const timeoutMs = Math.max(1000, Number(opts.timeoutMs ?? 30_000));
 
@@ -570,9 +575,29 @@ async function runCommandWithSocket(
     waitPolicy: 'fail_fast',
   };
 
-  return new Promise<Envelope>((resolve, reject) => {
+  const response = new Promise<Envelope>((resolve, reject) => {
+    if (opts.signal?.aborted) {
+      reject(new Error(`Aborted waiting for ${opts.action} response`));
+      return;
+    }
+
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      ws.off('message', onMessage);
+      ws.off('close', onClose);
+      if (opts.signal) {
+        opts.signal.removeEventListener('abort', onAbort);
+      }
+      fn();
+    };
+
     const timeout = setTimeout(() => {
-      reject(new Error(`Timed out waiting for terminal response (${timeoutMs + 5000}ms)`));
+      settle(() => reject(new Error(`Timed out waiting for terminal response (${timeoutMs + 5000}ms)`)));
     }, timeoutMs + 5000);
 
     const onMessage = (data: WebSocket.RawData) => {
@@ -585,13 +610,75 @@ async function runCommandWithSocket(
         return;
       }
 
-      clearTimeout(timeout);
-      ws.off('message', onMessage);
-      resolve(msg);
+      settle(() => resolve(msg));
+    };
+
+    const onClose = () => {
+      settle(() => reject(new Error(`Socket closed while waiting for ${opts.action} response`)));
+    };
+
+    const onAbort = () => {
+      settle(() => reject(new Error(`Aborted waiting for ${opts.action} response`)));
     };
 
     ws.on('message', onMessage);
+    ws.once('close', onClose);
+    if (opts.signal) {
+      opts.signal.addEventListener('abort', onAbort, { once: true });
+    }
     ws.send(JSON.stringify(createEnvelope('command', 'controller', requestId, commandPayload)));
+  });
+
+  return {
+    requestId,
+    response,
+  };
+}
+
+async function runCommandWithSocket(
+  ws: WebSocket,
+  targetNodeId: string,
+  opts: { action: string; tabSession?: string; payload: Record<string, unknown>; timeoutMs?: number; signal?: AbortSignal },
+): Promise<Envelope> {
+  return sendCommandWithSocket(ws, targetNodeId, opts).response;
+}
+
+async function sendCommandCancelWithSocket(ws: WebSocket, targetRequestId: string, timeoutMs = 1500): Promise<void> {
+  if (ws.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  const cancelRequestId = nanoid();
+  ws.send(
+    JSON.stringify(
+      createEnvelope('command_cancel', 'controller', cancelRequestId, {
+        targetRequestId,
+      }),
+    ),
+  );
+
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      ws.off('message', onMessage);
+      resolve();
+    }, timeoutMs);
+
+    const onMessage = (data: WebSocket.RawData) => {
+      const msg = JSON.parse(String(data)) as Envelope;
+      if (msg.requestId !== cancelRequestId) {
+        return;
+      }
+
+      if (msg.messageType !== 'event' && msg.messageType !== 'result' && msg.messageType !== 'error') {
+        return;
+      }
+
+      clearTimeout(timer);
+      ws.off('message', onMessage);
+      resolve();
+    };
+
+    ws.on('message', onMessage);
   });
 }
 
@@ -685,6 +772,8 @@ async function subscribeListenerAndFollow(
   jsonOutput: boolean,
   followDurationMs?: number,
   onSubscribed?: () => Promise<void>,
+  onInterrupt?: () => Promise<void>,
+  handleSignals = true,
 ): Promise<void> {
   const renderer = createRecipeTestStreamRenderer({
     site,
@@ -819,14 +908,21 @@ async function subscribeListenerAndFollow(
       if (autoStopTimer) {
         clearTimeout(autoStopTimer);
       }
-      process.removeListener('SIGINT', handleSigint);
+      if (handleSignals) {
+        process.removeListener('SIGINT', handleSigint);
+      }
       ws.off('close', handleClose);
       ws.off('message', handleMessage);
       resolve();
     };
 
     const handleSigint = () => {
-      void unsubscribeFallback().finally(() => {
+      void (async () => {
+        if (onInterrupt) {
+          await onInterrupt();
+        }
+        await unsubscribeFallback();
+      })().finally(() => {
         finish();
       });
     };
@@ -854,7 +950,9 @@ async function subscribeListenerAndFollow(
       }, followDurationMs);
     }
 
-    process.once('SIGINT', handleSigint);
+    if (handleSignals) {
+      process.once('SIGINT', handleSigint);
+    }
     ws.on('close', handleClose);
     ws.on('message', handleMessage);
   });
@@ -1692,6 +1790,114 @@ program
     let openedTabSessionId: string | undefined;
 
     let testExecutionError: unknown;
+    let activeRecipeTestRequestId: string | undefined;
+    let tabCloseAttempted = false;
+    let teardownPromise: Promise<void> | undefined;
+    let receivedSignal: 'SIGINT' | 'SIGTERM' | undefined;
+    const commandAbortController = new AbortController();
+
+    const closeOpenedTabIfNeeded = async (hasOriginalError: boolean): Promise<void> => {
+      if (tabCloseAttempted || !openedTabSessionId || opts.keepTabOpen) {
+        return;
+      }
+      tabCloseAttempted = true;
+
+      const cleanupStrategy = resolveCleanupSocketStrategy({
+        socketReadyState: ws.readyState,
+        socketOpenState: WebSocket.OPEN,
+        hasOriginalError,
+      });
+
+      const closeResponse = cleanupStrategy === 'reuse'
+        ? await runCommandWithSocket(ws, targetNodeId, {
+          action: 'primitive.tab.close',
+          tabSession: openedTabSessionId,
+          payload: { tabSessionId: openedTabSessionId },
+          timeoutMs,
+        })
+        : await runCommandOnce(config, targetNodeId, {
+          action: 'primitive.tab.close',
+          tabSession: openedTabSessionId,
+          payload: { tabSessionId: openedTabSessionId },
+          timeoutMs,
+        });
+
+      for (const line of renderer.renderCommandResponse(closeResponse, 'primitive.tab.close')) {
+        console.log(line);
+      }
+      if (closeResponse.messageType === 'error') {
+        const errorPayload = (closeResponse.payload && typeof closeResponse.payload === 'object')
+          ? closeResponse.payload as {
+            code?: string;
+            action?: string;
+            message?: string;
+            nodeId?: string;
+            clientId?: string;
+            actionableHint?: string;
+          }
+          : undefined;
+        if (errorPayload) {
+          showAclMissingGrantHint(errorPayload);
+        }
+        await showTestFailureFooterAlert(errorPayload, 'otto test cleanup failed during primitive.tab.close');
+        process.exitCode = process.exitCode ?? 1;
+      }
+    };
+
+    const performTeardown = async (reason: string, hasOriginalError: boolean): Promise<void> => {
+      if (teardownPromise) {
+        return teardownPromise;
+      }
+
+      teardownPromise = (async () => {
+        if (activeRecipeTestRequestId) {
+          try {
+            await sendCommandCancelWithSocket(ws, activeRecipeTestRequestId);
+          } catch (cancelError) {
+            console.error(
+              `[otto] failed to cancel in-flight recipe.test during ${reason}: ${cancelError instanceof Error ? cancelError.message : String(cancelError)}`,
+            );
+          }
+        }
+
+        try {
+          await closeOpenedTabIfNeeded(hasOriginalError);
+        } catch (cleanupError) {
+          if (testExecutionError !== undefined) {
+            console.error(
+              `[otto] cleanup after failed stream session also failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+            );
+            return;
+          }
+
+          console.error(
+            `[otto] cleanup failed during primitive.tab.close: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+          );
+          process.exitCode = process.exitCode ?? 1;
+        }
+      })();
+
+      return teardownPromise;
+    };
+
+    const handleTermination = (signal: 'SIGINT' | 'SIGTERM') => {
+      if (receivedSignal) {
+        return;
+      }
+      receivedSignal = signal;
+      commandAbortController.abort();
+      process.exitCode = signal === 'SIGTERM' ? 143 : 130;
+
+      void performTeardown(`signal ${signal}`, true).finally(() => {
+        ws.close();
+        stopHeartbeat();
+      });
+    };
+
+    const onSigint = () => handleTermination('SIGINT');
+    const onSigterm = () => handleTermination('SIGTERM');
+    process.once('SIGINT', onSigint);
+    process.once('SIGTERM', onSigterm);
 
     try {
       const testInfo = await resolveTestInfo(config, targetNodeId, site, recipe, timeoutMs, ws);
@@ -1701,6 +1907,7 @@ program
           action: 'primitive.tab.open',
           payload: { url: testInfo.openUrl },
           timeoutMs,
+          signal: commandAbortController.signal,
         });
 
         for (const line of renderer.renderCommandResponse(openResponse, 'primitive.tab.open')) {
@@ -1733,7 +1940,7 @@ program
         }
       }
 
-      const testResponse = await runCommandWithSocket(ws, targetNodeId, {
+      const testCommand = sendCommandWithSocket(ws, targetNodeId, {
         action: 'recipe.test',
         tabSession: tabSessionId,
         payload: {
@@ -1744,7 +1951,11 @@ program
           authMode: opts.authMode,
         },
         timeoutMs,
+        signal: commandAbortController.signal,
       });
+      activeRecipeTestRequestId = testCommand.requestId;
+
+      const testResponse = await testCommand.response;
 
       for (const line of renderer.renderCommandResponse(testResponse, 'recipe.test')) {
         console.log(line);
@@ -1831,6 +2042,7 @@ program
                 authMode: opts.authMode,
               },
               timeoutMs,
+              signal: commandAbortController.signal,
             });
 
             for (const line of renderer.renderCommandResponse(probeResponse, 'recipe.run')) {
@@ -1850,71 +2062,30 @@ program
           jsonOutput,
           streamFollowMs,
           probe,
+          async () => {
+            if (!activeRecipeTestRequestId) {
+              return;
+            }
+            await sendCommandCancelWithSocket(ws, activeRecipeTestRequestId);
+          },
+          false,
         );
+
+        activeRecipeTestRequestId = undefined;
+      } else {
+        activeRecipeTestRequestId = undefined;
       }
     } catch (error) {
       testExecutionError = error;
+      if (receivedSignal) {
+        return;
+      }
       throw error;
     } finally {
-      if (openedTabSessionId && !opts.keepTabOpen) {
-        const cleanupStrategy = resolveCleanupSocketStrategy({
-          socketReadyState: ws.readyState,
-          socketOpenState: WebSocket.OPEN,
-          hasOriginalError: testExecutionError !== undefined,
-        });
+      process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
 
-        try {
-          if (cleanupStrategy === 'skip') {
-            console.error('[otto] skipped primitive.tab.close cleanup because stream session already failed and websocket is closed');
-          } else {
-            const closeResponse = cleanupStrategy === 'reuse'
-              ? await runCommandWithSocket(ws, targetNodeId, {
-                action: 'primitive.tab.close',
-                tabSession: openedTabSessionId,
-                payload: { tabSessionId: openedTabSessionId },
-                timeoutMs,
-              })
-              : await runCommandOnce(config, targetNodeId, {
-                action: 'primitive.tab.close',
-                tabSession: openedTabSessionId,
-                payload: { tabSessionId: openedTabSessionId },
-                timeoutMs,
-              });
-
-            for (const line of renderer.renderCommandResponse(closeResponse, 'primitive.tab.close')) {
-              console.log(line);
-            }
-            if (closeResponse.messageType === 'error') {
-              const errorPayload = (closeResponse.payload && typeof closeResponse.payload === 'object')
-                ? closeResponse.payload as {
-                  code?: string;
-                  action?: string;
-                  message?: string;
-                  nodeId?: string;
-                  clientId?: string;
-                  actionableHint?: string;
-                }
-                : undefined;
-              if (errorPayload) {
-                showAclMissingGrantHint(errorPayload);
-              }
-              await showTestFailureFooterAlert(errorPayload, 'otto test cleanup failed during primitive.tab.close');
-              process.exitCode = 1;
-            }
-          }
-        } catch (cleanupError) {
-          if (testExecutionError !== undefined) {
-            console.error(
-              `[otto] cleanup after failed stream session also failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-            );
-          } else {
-            console.error(
-              `[otto] cleanup failed during primitive.tab.close: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-            );
-            process.exitCode = 1;
-          }
-        }
-      }
+      await performTeardown('normal completion', testExecutionError !== undefined);
 
       ws.close();
       stopHeartbeat();

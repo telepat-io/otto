@@ -88,6 +88,14 @@ Network interception behavior notes:
 - Runtime validates the tab URL against `site` before attaching debugger session state.
 - `network` mode retrieves bodies only after `Network.loadingFinished` to reduce empty-body failures.
 - `fetch` and `hybrid` modes use `Fetch.requestPaused` at response stage; paused requests are always continued by runtime.
+
+## Tab Ownership and Orphan Cleanup
+
+- Relay injects internal ownership metadata for controller-created tabs by setting `payload.__controllerClientId` on forwarded `primitive.tab.open` command payloads.
+- This ownership metadata is relay-owned and must not be trusted when supplied directly by controller clients.
+- Node runtime persists ownership by `tabSessionId` to support deterministic orphan cleanup.
+- Relay may dispatch internal `primitive.tab.close_owned` commands to node runtimes when a controller disconnects or times out on heartbeat.
+- `primitive.tab.close_owned` payload includes `controllerClientId` and closes only tabs owned by that controller identity.
 - Body capture is best-effort and may emit `payload.data.error=response_body_unavailable` for redirects, cache hits, and evicted buffers.
 
 Listener update event shape:
@@ -188,6 +196,7 @@ Queueing rules:
 - Relay rejects stale/future command timestamps outside replay skew window.
 - Commands queued with `wait_with_timeout` receive terminal `queue_wait_timed_out` when they exceed queue wait budget.
 - Relay enforces per-tab and per-controller queued-command depth limits and rejects excess queue attempts deterministically.
+- On controller disconnect or heartbeat timeout, relay purges queued commands owned by that controller and triggers owner-scoped tab cleanup on connected nodes.
 
 ## Locking
 

@@ -22,12 +22,12 @@ test('resolveCleanupSocketStrategy reconnects when socket is closed without prio
   assert.equal(strategy, 'reconnect');
 });
 
-test('resolveCleanupSocketStrategy skips cleanup when socket is closed and there is an original error', () => {
+test('resolveCleanupSocketStrategy reconnects when socket is closed and there is an original error', () => {
   const strategy = resolveCleanupSocketStrategy({
     socketReadyState: 3,
     socketOpenState: 1,
     hasOriginalError: true,
   });
 
-  assert.equal(strategy, 'skip');
+  assert.equal(strategy, 'reconnect');
 });

@@ -179,6 +179,7 @@ Reconnect diagnostics:
 
 - New tab operations mint `tabSessionId`.
 - Mapping is stored in `chrome.storage.session`.
+- Controller ownership metadata is stored in `chrome.storage.session.tabSessionOwners` (keyed by `tabSessionId`) when relay injects owner identity on `primitive.tab.open`.
 - Tab group state is tracked with `automationGroupId`.
 - Automation group initialization is single-flight guarded to avoid duplicate group creation under concurrent `primitive.tab.open` calls.
 
@@ -186,8 +187,9 @@ Compatibility behavior:
 
 - Runtime accepts `tabSessionId` from command top-level field or payload field.
 - Stale mappings are pruned when tab lookup fails.
+- Internal `primitive.tab.close_owned` closes only sessions whose owner matches provided `controllerClientId`; stale session ownership entries are pruned during close/lookup cleanup.
 
 Persistence notes:
 
 - `chrome.storage.local` holds durable node state across browser restarts (`nodeId`, relay URL, node tokens, pairing metadata).
-- `chrome.storage.session` holds reconstructable runtime state (`tabSessions`, automation group id, replay ledger) and is reconciled during bootstrap.
+- `chrome.storage.session` holds reconstructable runtime state (`tabSessions`, `tabSessionOwners`, automation group id, replay ledger) and is reconciled during bootstrap.

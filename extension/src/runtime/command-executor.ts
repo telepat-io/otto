@@ -200,6 +200,15 @@ async function saveTabSessions(chromeApi: ChromeLike, tabSessions: Record<string
   await chromeApi.storage.session.set({ tabSessions });
 }
 
+async function getTabSessionOwners(chromeApi: ChromeLike): Promise<Record<string, string>> {
+  const map = await chromeApi.storage.session.get(['tabSessionOwners']);
+  return (map.tabSessionOwners as Record<string, string> | undefined) ?? {};
+}
+
+async function saveTabSessionOwners(chromeApi: ChromeLike, tabSessionOwners: Record<string, string>): Promise<void> {
+  await chromeApi.storage.session.set({ tabSessionOwners });
+}
+
 export async function resolveTabId(chromeApi: ChromeLike, tabSessionId: string | undefined): Promise<number> {
   if (!tabSessionId) {
     throw new CommandExecutionError('tabSessionId is required for this action', 'missing_tab_session', 'validation', false);
@@ -215,7 +224,12 @@ export async function resolveTabId(chromeApi: ChromeLike, tabSessionId: string |
     await chromeApi.tabs.get(tabId);
   } catch {
     delete sessions[tabSessionId];
-    await saveTabSessions(chromeApi, sessions);
+    const tabSessionOwners = await getTabSessionOwners(chromeApi);
+    delete tabSessionOwners[tabSessionId];
+    await Promise.all([
+      saveTabSessions(chromeApi, sessions),
+      saveTabSessionOwners(chromeApi, tabSessionOwners),
+    ]);
     throw new CommandExecutionError(`Tab for tabSessionId is no longer available: ${tabSessionId}`, 'tab_session_closed', 'resolve_tab', true);
   }
 
@@ -228,6 +242,9 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
   switch (command.action) {
     case 'primitive.tab.open': {
       const url = String(command.payload.url ?? 'about:blank');
+      const controllerClientId = typeof command.payload.__controllerClientId === 'string'
+        ? command.payload.__controllerClientId
+        : undefined;
       const tab = await chromeApi.tabs.create({ url, active: false });
       if (!tab.id || tab.windowId === undefined) {
         throw new CommandExecutionError('Failed to create tab', 'tab_create_failed', 'primitive.tab.open', true);
@@ -238,7 +255,14 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
       const tabSessionId = `tab_${nanoid(10)}`;
       const tabSessions = await getTabSessions(chromeApi);
       tabSessions[tabSessionId] = tab.id;
-      await saveTabSessions(chromeApi, tabSessions);
+      const tabSessionOwners = await getTabSessionOwners(chromeApi);
+      if (controllerClientId) {
+        tabSessionOwners[tabSessionId] = controllerClientId;
+      }
+      await Promise.all([
+        saveTabSessions(chromeApi, tabSessions),
+        saveTabSessionOwners(chromeApi, tabSessionOwners),
+      ]);
 
       return {
         durationMs: Date.now() - start,
@@ -248,13 +272,58 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
     case 'primitive.tab.close': {
       const tabSessionId = String(command.payload.tabSessionId ?? command.tabSessionId ?? '');
       const tabSessions = await getTabSessions(chromeApi);
+      const tabSessionOwners = await getTabSessionOwners(chromeApi);
       const tabId = await resolveTabId(chromeApi, tabSessionId);
       await chromeApi.tabs.remove(tabId);
       delete tabSessions[tabSessionId];
-      await saveTabSessions(chromeApi, tabSessions);
+      delete tabSessionOwners[tabSessionId];
+      await Promise.all([
+        saveTabSessions(chromeApi, tabSessions),
+        saveTabSessionOwners(chromeApi, tabSessionOwners),
+      ]);
       return {
         durationMs: Date.now() - start,
         data: { closed: true, tabSessionId },
+      };
+    }
+    case 'primitive.tab.close_owned': {
+      const controllerClientId = String(command.payload.controllerClientId ?? '').trim();
+      if (!controllerClientId) {
+        throw new CommandExecutionError('controllerClientId is required', 'missing_controller_client_id', 'validation', false);
+      }
+
+      const tabSessions = await getTabSessions(chromeApi);
+      const tabSessionOwners = await getTabSessionOwners(chromeApi);
+      const tabSessionIds = Object.keys(tabSessions).filter((tabSessionId) => tabSessionOwners[tabSessionId] === controllerClientId);
+
+      let closedCount = 0;
+      let missingCount = 0;
+
+      for (const tabSessionId of tabSessionIds) {
+        const tabId = tabSessions[tabSessionId];
+        try {
+          await chromeApi.tabs.remove(tabId);
+          closedCount += 1;
+        } catch {
+          missingCount += 1;
+        }
+        delete tabSessions[tabSessionId];
+        delete tabSessionOwners[tabSessionId];
+      }
+
+      await Promise.all([
+        saveTabSessions(chromeApi, tabSessions),
+        saveTabSessionOwners(chromeApi, tabSessionOwners),
+      ]);
+
+      return {
+        durationMs: Date.now() - start,
+        data: {
+          controllerClientId,
+          closedCount,
+          missingCount,
+          totalOwnedSessions: tabSessionIds.length,
+        },
       };
     }
     case 'primitive.tab.navigate': {
