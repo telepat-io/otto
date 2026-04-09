@@ -13,6 +13,8 @@ Owner: Platform
 
 Relay starts on port `8787` by default.
 
+Global `@telepat/otto` installs include relay runtime dependencies, so daemon lifecycle commands do not require separate `@telepat/otto-relay` installation.
+
 Daemon lifecycle commands:
 
 - `otto start`

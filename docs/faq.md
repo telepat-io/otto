@@ -71,6 +71,9 @@ Bulk remove now purges controller client records after revocation. Once all clie
 ## Does `otto setup` start relay daemon automatically?
 Yes. Setup now ensures relay daemon readiness for the selected setup relay URL port. If no daemon is running, setup starts one. If matching daemon is already running, setup reuses it.
 
+## Do I need to install `@telepat/otto-relay` separately when I install `@telepat/otto`?
+No. Global `@telepat/otto` installation already includes relay runtime dependencies needed for `otto start`, `otto stop`, `otto status`, and setup daemon readiness.
+
 ## Why does `otto setup` fail with download or checksum errors?
 `otto setup` retrieves extension artifacts from release assets and verifies SHA-256 checksums. Failures usually mean missing/misnamed release files, network issues, or a mismatched checksum file.
 

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { CONFIG_DIR } from './config.js';
 
@@ -12,6 +13,72 @@ export type RelayDaemonState = {
 
 const RUNTIME_DIR = join(CONFIG_DIR, 'runtime');
 const RELAY_STATE_PATH = join(RUNTIME_DIR, 'relay-daemon.json');
+const RELAY_ENTRYPOINT_OVERRIDE_ENV = 'OTTO_RELAY_ENTRYPOINT';
+
+type ResolveModulePath = (specifier: string) => string;
+
+const require = createRequire(import.meta.url);
+
+function defaultResolveModulePath(specifier: string): string {
+  return require.resolve(specifier);
+}
+
+function normalizeRelayEntrypoint(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+export function resolveRelayEntrypoint(options: {
+  env?: NodeJS.ProcessEnv;
+  resolveModulePath?: ResolveModulePath;
+} = {}): string {
+  const env = options.env ?? process.env;
+  const resolveModulePath = options.resolveModulePath ?? defaultResolveModulePath;
+
+  const override = normalizeRelayEntrypoint(env[RELAY_ENTRYPOINT_OVERRIDE_ENV]);
+  if (override) {
+    return override;
+  }
+
+  const candidates = [
+    '@telepat/otto-relay/dist/index.js',
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      return resolveModulePath(candidate);
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(
+    'Unable to resolve relay runtime entrypoint. Reinstall @telepat/otto or set OTTO_RELAY_ENTRYPOINT to a valid relay dist/index.js path.',
+  );
+}
+
+export function createRelayLaunchSpec(port: number, options: {
+  env?: NodeJS.ProcessEnv;
+  resolveModulePath?: ResolveModulePath;
+} = {}): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
+  const env = options.env ?? process.env;
+  const relayEntrypoint = resolveRelayEntrypoint({
+    env,
+    resolveModulePath: options.resolveModulePath,
+  });
+
+  return {
+    command: process.execPath,
+    args: [relayEntrypoint],
+    env: {
+      ...env,
+      OTTO_RELAY_PORT: String(port),
+    },
+  };
+}
 
 function ensureRuntimeDir(): void {
   if (!existsSync(RUNTIME_DIR)) {
@@ -130,9 +197,10 @@ export function readRelayDaemonState(): RelayDaemonState | null {
 }
 
 export function startRelayAttached(port: number): ChildProcess {
-  return spawn('npm', ['--workspace', '@telepat/otto-relay', 'run', 'dev'], {
+  const launch = createRelayLaunchSpec(port);
+  return spawn(launch.command, launch.args, {
     stdio: 'inherit',
-    env: { ...process.env, OTTO_RELAY_PORT: String(port) },
+    env: launch.env,
   });
 }
 
@@ -146,10 +214,11 @@ export function startRelayDaemon(port: number): RelayDaemonState {
   const logPath = relayLogPath(port);
   const logFd = openSync(logPath, 'a');
   try {
-    const child = spawn('npm', ['--workspace', '@telepat/otto-relay', 'run', 'dev'], {
+    const launch = createRelayLaunchSpec(port);
+    const child = spawn(launch.command, launch.args, {
       detached: true,
       stdio: ['ignore', logFd, logFd],
-      env: { ...process.env, OTTO_RELAY_PORT: String(port) },
+      env: launch.env,
     });
     child.unref();
 

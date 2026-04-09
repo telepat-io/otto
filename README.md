@@ -30,6 +30,8 @@ Execution guarantees:
 npm install -g @telepat/otto
 ```
 
+The CLI package includes relay runtime dependencies, so daemon commands (`otto start`, `otto stop`, `otto status`) do not require a separate relay install.
+
 2. Run guided setup:
 
 ```bash
