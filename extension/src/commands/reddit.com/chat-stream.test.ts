@@ -15,7 +15,7 @@ test('reddit chat stream returns generic network listener options', () => {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     streamAdapter: 'reddit.chat.v1',
-    mode: 'hybrid',
+    mode: 'fetch',
     includeBody: true,
     includeHeaders: false,
     urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/sync*'],

@@ -93,7 +93,7 @@ Reddit command notes:
 - `checkLogin` now uses Reddit API session probe (`/api/me.json`) with selector fallback to reduce false `manual_login_required` outcomes when the user is already authenticated.
 - `sendChatMessage` supports either existing `roomId` or room creation via `username`, then sends text through Reddit chat composer.
 - `getChatMessages` supports two modes: with `roomId`, it loads room-scoped history from Matrix `/rooms/{roomId}/messages`; without `roomId`, it loads a bounded recent multi-room snapshot from Matrix `/sync` timeline events. Output is grouped by room (`rooms[]`) with per-room message lists and counts.
-- `getChatMessages` command test streaming subscribes with `listener=network.http_intercept` in `hybrid` mode for Reddit Matrix v3 sync traffic (`https://matrix.redditspace.com/_matrix/client/v3/sync*`) and declares command-owned adapter metadata (`options.streamAdapter=reddit.chat.v1`).
+- `getChatMessages` command test streaming subscribes with `listener=network.http_intercept` in `fetch` mode for Reddit Matrix v3 sync traffic (`https://matrix.redditspace.com/_matrix/client/v3/sync*`) and declares command-owned adapter metadata (`options.streamAdapter=reddit.chat.v1`).
 - Adapter mapping converts raw Matrix sync payloads into shared domain chat objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) before controller-visible stream forwarding.
 - Root cause of prior duplicate stream lines was dual transport visibility in hybrid mode (`Network` + `Fetch`) plus replayed Matrix sync payload semantics.
 - Duplicate suppression now runs in two layers:

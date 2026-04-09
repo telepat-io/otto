@@ -45,8 +45,8 @@ The command declares `preloadHost`, runtime attempted to navigate there before e
 ## Why did chat stream lines appear duplicated in `otto test reddit.com getChatMessages`?
 Two sources were involved:
 
-1. Hybrid interception can observe the same response through both CDP `Network` and `Fetch` paths.
-2. Matrix sync payloads can replay prior events across subsequent responses.
+1. Matrix sync payloads can replay prior events across subsequent responses.
+2. In earlier versions, hybrid interception could also observe the same response through both CDP `Network` and `Fetch` paths.
 
 Current behavior now suppresses duplicates in two layers:
 

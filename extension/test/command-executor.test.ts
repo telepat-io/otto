@@ -744,7 +744,7 @@ test('command.test getChatMessages returns stream listener metadata', async () =
             tabSessionId: 'tab_alpha',
             site: 'reddit.com',
             streamAdapter: 'reddit.chat.v1',
-            mode: 'hybrid',
+            mode: 'fetch',
             includeBody: true,
             includeHeaders: false,
             urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/sync*'],
