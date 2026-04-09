@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createNetworkInterceptListenerManager } from '../src/runtime/network-intercept-listener.js';
+import { createNetworkInterceptListenerManager } from '../src/runtime/network-intercept/listener.js';
 
 type Listener<TArgs extends unknown[]> = (...args: TArgs) => void;
 

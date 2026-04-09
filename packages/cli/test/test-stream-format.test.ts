@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createEnvelope, type Envelope } from '@telepat/otto-protocol';
-import { createCommandTestStreamRenderer } from '../src/test-stream-format.js';
+import { createCommandTestStreamRenderer } from '../src/test-stream/format.js';
 
 function envelope(messageType: Envelope['messageType'], payload: unknown, requestId = 'req-1'): Envelope {
   return createEnvelope(messageType, 'controller', requestId, payload);

@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import type { Command } from 'commander';
-import type { OttoConfig } from './config.js';
-import type { RelayDaemonState } from './relay-daemon.js';
-import type { RelayStatusReport } from './daemon-status.js';
+import type { OttoConfig } from '../config.js';
+import type { RelayDaemonState } from '../relay-daemon.js';
+import type { RelayStatusReport } from '../daemon-status.js';
 
 export type RegisterCoreCommandsDeps = {
   loadConfig: () => OttoConfig;

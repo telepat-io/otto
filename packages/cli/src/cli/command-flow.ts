@@ -1,8 +1,8 @@
 import { nanoid } from 'nanoid';
 import WebSocket from 'ws';
 import { createEnvelope, type Envelope } from '@telepat/otto-protocol';
-import type { OttoConfig } from './config.js';
-import type { LogEntry, LogSource } from './logs-options.js';
+import type { OttoConfig } from '../config.js';
+import type { LogEntry, LogSource } from '../logs-options.js';
 
 type CommandDescriptorLike = {
   site?: string;

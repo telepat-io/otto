@@ -4,7 +4,7 @@ import type { ExtensionLogEntry, ExtensionLogEventPayload } from '@telepat/otto-
 import type { ListenerUpdateEventPayload } from '@telepat/otto-protocol';
 import { computeReconnectDelayMs, enqueueOutbound } from './offscreen-transport.js';
 import { createExtensionLogQueue } from './extension-log-queue.js';
-import type { RelayConnectionStatus } from './onboarding-state.js';
+import type { RelayConnectionStatus } from './onboarding/state.js';
 
 let ws: WebSocket | null = null;
 let heartbeatTimer: number | undefined;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { shouldAttemptAccessTokenRefreshOnAuthError } from '../src/auth-retry.js';
+import { shouldAttemptAccessTokenRefreshOnAuthError } from '../src/auth/retry.js';
 
 test('refresh retry is enabled for invalid_access_token auth payload', () => {
   assert.equal(

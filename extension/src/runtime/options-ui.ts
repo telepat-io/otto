@@ -1,3 +1,3 @@
-import { mountOnboardingUi } from './onboarding-ui.js';
+import { mountOnboardingUi } from './onboarding/ui.js';
 
 mountOnboardingUi('options');

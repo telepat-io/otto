@@ -3,7 +3,7 @@ import WebSocket from 'ws';
 import { createEnvelope, type CommandPayload, type Envelope } from '@telepat/otto-protocol';
 import type { NetworkInterceptListenerOptions } from '@telepat/otto-protocol';
 import type { OttoConfig } from './config.js';
-import { createCommandTestStreamRenderer } from './test-stream-format.js';
+import { createCommandTestStreamRenderer } from './test-stream/format.js';
 import { isListenerUpdateForSubscription } from './stream-correlation.js';
 
 export async function subscribeListenerAndFollow(

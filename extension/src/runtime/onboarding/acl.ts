@@ -1,4 +1,4 @@
-import type { OnboardingStorageSnapshot } from './onboarding-state.js';
+import type { OnboardingStorageSnapshot } from './state.js';
 
 export type ControllerAclClientRow = {
   clientId: string;

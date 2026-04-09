@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveOnboardingState } from '../src/runtime/onboarding-state.js';
+import { deriveOnboardingState } from '../src/runtime/onboarding/state.js';
 
 test('deriveOnboardingState returns needs_relay_url when relay URL is missing', () => {
   const view = deriveOnboardingState({

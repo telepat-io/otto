@@ -1,8 +1,8 @@
 import WebSocket from 'ws';
 import type { CommandTestStream, Envelope } from '@telepat/otto-protocol';
-import { createCommandTestStreamRenderer } from './test-stream-format.js';
-import { resolveCleanupSocketStrategy } from './test-cleanup.js';
-import type { OttoConfig } from './config.js';
+import { createCommandTestStreamRenderer } from '../test-stream/format.js';
+import { resolveCleanupSocketStrategy } from '../test-cleanup.js';
+import type { OttoConfig } from '../config.js';
 
 export async function runCmdCommand(
   opts: { action: string; tabSession?: string; nodeId?: string; payload: string; timeout: string },

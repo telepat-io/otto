@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs';
 import type { WebSocket } from 'ws';
 import type { Envelope, MessageType, OttoRole } from '@telepat/otto-protocol';
 import type { LogEvent } from './relay-models-schemas.js';
-import type { Client, LockState } from './relay-runtime-types.js';
+import type { Client, LockState } from './runtime/types.js';
 
 type LogStorageLike = {
   parseTimestampMs: (timestamp: string) => number | null;

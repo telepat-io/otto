@@ -14,7 +14,7 @@ import {
   saveConfig,
   type OttoConfig,
 } from './config.js';
-import { refreshControllerAccessToken } from './auth-refresh.js';
+import { refreshControllerAccessToken } from './auth/refresh.js';
 import { buildRelayStatusReport, renderRelayStatusPretty } from './daemon-status.js';
 import { installExtensionArtifact } from './extension-manager.js';
 import { resolveTargetNodeId } from './node-resolution.js';
@@ -30,9 +30,9 @@ import {
   type LogEntry,
   type LogSource,
 } from './logs-options.js';
-import { createCommandTestStreamRenderer } from './test-stream-format.js';
+import { createCommandTestStreamRenderer } from './test-stream/format.js';
 import { resolveCommandAutoOpenUrl } from './command-open-url.js';
-import { shouldAttemptAccessTokenRefreshOnAuthError } from './auth-retry.js';
+import { shouldAttemptAccessTokenRefreshOnAuthError } from './auth/retry.js';
 import { isListenerUpdateForSubscription } from './stream-correlation.js';
 import {
   CLIENT_SECRET_ENV_VAR,

@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { WebSocketServer } from 'ws';
-import { handleRelayWsClose, handleRelayWsPreCommandMessage } from './relay-ws-routes-lifecycle.js';
-import { handleRelayWsNonCommandFrames } from './relay-ws-routes-non-command.js';
+import { handleRelayWsClose, handleRelayWsPreCommandMessage } from './lifecycle.js';
+import { handleRelayWsNonCommandFrames } from './non-command.js';
 
 type RelayWsHandlersContext = Record<string, unknown>;
 

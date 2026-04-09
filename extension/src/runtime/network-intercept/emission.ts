@@ -4,11 +4,11 @@ import type {
   ChromeLike,
   ResponseMetadata,
   SubscriptionState,
-} from './network-intercept-types.js';
+} from './types.js';
 import {
   clampBody,
   redactHeaders,
-} from './network-intercept-utils.js';
+} from './utils.js';
 
 export function createEmitUpdate(chromeApi: ChromeLike) {
   return async (requestId: string, updateType: string, data: unknown): Promise<void> => {

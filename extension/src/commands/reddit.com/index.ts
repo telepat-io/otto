@@ -1,10 +1,10 @@
 import type { SiteCommandBundle } from '../types.js';
-import { checkLoginCommand } from './checkLogin.js';
-import { getChatMessagesCommand } from './getChatMessages.js';
-import { getFeedCommand } from './getFeed.js';
-import { getUserInfoCommand } from './getUserInfo.js';
-import { gotoLoginCommand } from './gotoLogin.js';
-import { sendChatMessageCommand } from './sendChatMessage.js';
+import { checkLoginCommand } from './check-login.js';
+import { getChatMessagesCommand } from './get-chat-messages.js';
+import { getFeedCommand } from './get-feed.js';
+import { getUserInfoCommand } from './get-user-info.js';
+import { gotoLoginCommand } from './goto-login.js';
+import { sendChatMessageCommand } from './send-chat-message.js';
 
 export const redditCommands: SiteCommandBundle = {
   site: 'reddit.com',

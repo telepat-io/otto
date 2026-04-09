@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import type { OttoConfig } from './config.js';
-import { showTerminalErrorAlert } from './tui.js';
+import type { OttoConfig } from '../config.js';
+import { showTerminalErrorAlert } from '../tui.js';
 
 export type ControllerRegistrationMetadata = {
   name: string;

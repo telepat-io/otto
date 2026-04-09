@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import type { OttoConfig } from './config.js';
+import type { OttoConfig } from '../config.js';
 
 type ControllerRegisterResponse = {
   clientId: string;

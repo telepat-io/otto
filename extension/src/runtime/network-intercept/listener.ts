@@ -4,7 +4,7 @@ import type {
   NetworkInterceptListenerUpdate,
   NetworkInterceptMode,
 } from '@telepat/otto-protocol';
-import { isSiteMatch } from '../commands/index.js';
+import { isSiteMatch } from '../../commands/index.js';
 
 type ChromeLike = typeof chrome;
 

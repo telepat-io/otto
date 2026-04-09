@@ -50,8 +50,8 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Relay routing and locks: `packages/relay/src/index.ts`
 - CLI UX and command entrypoint: `packages/cli/src/index.ts`
 - Extension SW/offscreen runtime: `extension/entrypoints/background.ts`, `extension/src/runtime/offscreen-client.ts`
-- Extension network interception listeners: `extension/src/runtime/network-intercept-listener.ts`, `extension/src/runtime/listener-managers.ts`
-- Extension popup onboarding UI: `extension/entrypoints/popup.html`, `extension/src/runtime/popup-ui.ts`, `extension/src/runtime/onboarding-ui.ts`
+- Extension network interception listeners: `extension/src/runtime/network-intercept/listener.ts`, `extension/src/runtime/listener-managers.ts`
+- Extension popup onboarding UI: `extension/entrypoints/popup.html`, `extension/src/runtime/popup-ui.ts`, `extension/src/runtime/onboarding/ui.ts`
 - Extension command runtime orchestration: `extension/src/runtime/command-runtime.ts`
 - Extension command bundles and registry: `extension/src/commands/**`
 - Extension settings UI: `extension/entrypoints/options.html`, `extension/src/runtime/options-ui.ts`
@@ -62,6 +62,11 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Enforce auth and role checks before routing commands.
 - Keep command input handling bounded and deterministic; avoid unbounded page scraping loops.
 - Preserve legacy command compatibility aliases only when explicitly documented and tested.
+
+## File Naming Convention
+- Use kebab-case for all source and test filenames.
+- Prefer directory namespacing over prefix namespacing for feature families (for example `onboarding/ui.ts` over `onboarding-ui.ts`).
+- Keep NodeNext ESM import specifiers explicit and aligned with moved paths (for example `./feature/file.js`).
 
 ## Local Dev Log Streaming (Extension -> Relay)
 - In local development flows, extension runtime can stream structured extension logs to relay when `localDevLogStreamingEnabled` is set in extension storage.

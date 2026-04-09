@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { Server } from 'node:http';
-import { handleRelayHttpControllerAndLogRoutes } from './relay-http-routes-controller-logs.js';
+import { handleRelayHttpControllerAndLogRoutes } from './controller-logs.js';
 
 type RelayHttpRoutesContext = Record<string, unknown>;
 

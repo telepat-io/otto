@@ -1,5 +1,5 @@
 import type { OttoRole } from '@telepat/otto-protocol';
-import type { PairingChallenge, RateLimitState, ReplayState } from './relay-models-schemas.js';
+import type { PairingChallenge, RateLimitState, ReplayState } from '../relay-models-schemas.js';
 import {
   checkRateLimit as checkRateLimitUtil,
   deriveStatus as deriveStatusUtil,
@@ -8,7 +8,7 @@ import {
   randomCode as randomCodeUtil,
   validateReplayWindow as validateReplayWindowUtil,
   verifyAccessToken as verifyAccessTokenUtil,
-} from './relay-auth-helpers.js';
+} from './helpers.js';
 
 export function createRelayAuthBindings(params: {
   tokenSecret: string;

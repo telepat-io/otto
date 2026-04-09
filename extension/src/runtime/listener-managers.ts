@@ -1,4 +1,4 @@
-import { createNetworkInterceptListenerManager } from './network-intercept-listener.js';
+import { createNetworkInterceptListenerManager } from './network-intercept/listener.js';
 
 type ChromeLike = typeof chrome;
 

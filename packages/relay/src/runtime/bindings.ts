@@ -1,8 +1,8 @@
 import type { WebSocket } from 'ws';
 import type { Envelope, ErrorPayload, MessageType, OttoRole } from '@telepat/otto-protocol';
-import { disconnectControllerSessionsByClientId, removeControllerClientById } from './controller-client-removal-utils.js';
-import { revokeControllerAclByClientId, type ControllerAclGrant } from './controller-acl-utils.js';
-import { revokeRefreshSessionsByClientId, type RefreshSession } from './refresh-session-utils.js';
+import { disconnectControllerSessionsByClientId, removeControllerClientById } from '../controller-client-removal-utils.js';
+import { revokeControllerAclByClientId, type ControllerAclGrant } from '../controller-acl-utils.js';
+import { revokeRefreshSessionsByClientId, type RefreshSession } from '../refresh-session-utils.js';
 import {
   clearCommandTestStreamSession as clearCommandTestStreamSessionUtil,
   clearCommandTestStreamSessionsForController as clearCommandTestStreamSessionsForControllerUtil,
@@ -15,14 +15,14 @@ import {
   removeQueuedCommandsForController as removeQueuedCommandsForControllerUtil,
   requestOwnedTabCleanupForController as requestOwnedTabCleanupForControllerUtil,
   withControllerOwnershipMetadata as withControllerOwnershipMetadataUtil,
-} from './relay-runtime-helpers.js';
-import type { ControllerClientRecord, LogEvent } from './relay-models-schemas.js';
+} from './helpers.js';
+import type { ControllerClientRecord, LogEvent } from '../relay-models-schemas.js';
 import type {
   Client,
   CommandTestStreamSession,
   ListenerSubscription,
   QueuedCommand,
-} from './relay-runtime-types.js';
+} from './types.js';
 
 export function createRelayRuntimeBindings(params: {
   clients: Map<string, Client>;

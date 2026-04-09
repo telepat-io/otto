@@ -1,6 +1,6 @@
 import type { WebSocket } from 'ws';
 import type { Envelope, OttoRole } from '@telepat/otto-protocol';
-import type { CommandStreamListenerBinding } from './command-stream-utils.js';
+import type { CommandStreamListenerBinding } from '../command-stream-utils.js';
 
 export type Client = {
   id: string;

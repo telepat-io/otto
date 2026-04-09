@@ -1,6 +1,6 @@
 import { jwtVerify, SignJWT } from 'jose';
 import type { OttoRole } from '@telepat/otto-protocol';
-import type { PairingChallenge, ReplayState } from './relay-models-schemas.js';
+import type { PairingChallenge, ReplayState } from '../relay-models-schemas.js';
 
 export function randomCode(): string {
   const a = Math.floor(100 + Math.random() * 900);

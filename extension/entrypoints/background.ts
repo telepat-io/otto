@@ -15,7 +15,7 @@ import { CommandExecutionError } from '../src/runtime/execution-error.js';
 import {
   getNetworkInterceptListenerManager,
 } from '../src/runtime/listener-managers.js';
-import { deriveOnboardingState, type RelayConnectionStatus } from '../src/runtime/onboarding-state.js';
+import { deriveOnboardingState, type RelayConnectionStatus } from '../src/runtime/onboarding/state.js';
 import { createRedditStreamDomainMapper } from '../src/commands/reddit.com/chat-stream.js';
 
 function withRuntimeErrorLogging<T>(promise: Promise<T>): void {

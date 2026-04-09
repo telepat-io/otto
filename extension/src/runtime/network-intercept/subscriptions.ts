@@ -1,14 +1,14 @@
-import { isSiteMatch } from '../commands/index.js';
+import { isSiteMatch } from '../../commands/index.js';
 import {
   matchesAnyPattern,
   matchesRequestHostAllowlist,
   shouldCaptureMimeType,
-} from './network-intercept-utils.js';
+} from './utils.js';
 import type {
   ResponseMetadata,
   SubscriptionState,
   TabState,
-} from './network-intercept-types.js';
+} from './types.js';
 
 export function tabRequiresFetch(
   tabStates: Map<number, TabState>,

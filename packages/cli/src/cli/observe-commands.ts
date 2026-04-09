@@ -1,8 +1,8 @@
 import { type Command } from 'commander';
 import type { Envelope, NetworkInterceptListenerOptions } from '@telepat/otto-protocol';
 import type WebSocket from 'ws';
-import type { OttoConfig } from './config.js';
-import type { LogSource } from './logs-options.js';
+import type { OttoConfig } from '../config.js';
+import type { LogSource } from '../logs-options.js';
 
 export function registerObserveCommands(params: {
   program: Command;

@@ -1,4 +1,4 @@
-import { deriveHttpUrl, type OttoConfig } from './config.js';
+import { deriveHttpUrl, type OttoConfig } from '../config.js';
 
 type RefreshResponse = {
   accessToken?: unknown;

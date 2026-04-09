@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { type OttoConfig } from '../src/config.js';
-import { refreshControllerAccessToken } from '../src/auth-refresh.js';
+import { refreshControllerAccessToken } from '../src/auth/refresh.js';
 
 const baseConfig: OttoConfig = {
   relayUrl: 'ws://127.0.0.1:8787/?role=controller',

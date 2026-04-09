@@ -3,7 +3,7 @@ import {
   deriveOnboardingState,
   type OnboardingState,
   type OnboardingStorageSnapshot,
-} from './onboarding-state.js';
+} from './state.js';
 
 type Surface = 'popup' | 'options';
 
