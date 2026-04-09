@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSingleFlight } from '../src/runtime/single-flight';
+import { createSingleFlight } from '../src/runtime/single-flight.js';
 
 test('single-flight coalesces concurrent calls for the same key', async () => {
   const singleFlight = createSingleFlight();

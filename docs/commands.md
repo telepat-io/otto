@@ -1,6 +1,6 @@
 # Commands
 
-Last Updated: 2026-04-07
+Last Updated: 2026-04-10
 Owner: Browser Runtime
 
 ## Source-of-Truth Code Paths
@@ -93,10 +93,16 @@ Reddit command notes:
 - `checkLogin` now uses Reddit API session probe (`/api/me.json`) with selector fallback to reduce false `manual_login_required` outcomes when the user is already authenticated.
 - `sendChatMessage` supports either existing `roomId` or room creation via `username`, then sends text through Reddit chat composer.
 - `getChatMessages` supports two modes: with `roomId`, it loads room-scoped history from Matrix `/rooms/{roomId}/messages`; without `roomId`, it loads a bounded recent multi-room snapshot from Matrix `/sync` timeline events. Output is grouped by room (`rooms[]`) with per-room message lists and counts.
-- `getChatMessages` command test streaming now subscribes in `hybrid` mode to Reddit Matrix v3 responses (`https://matrix.redditspace.com/_matrix/client/v3/*`) so CLI streams remain visible whether traffic is surfaced by Chrome Debugger `Network` or `Fetch` domains.
+- `getChatMessages` command test streaming subscribes with `listener=network.http_intercept` in `hybrid` mode for Reddit Matrix v3 sync traffic (`https://matrix.redditspace.com/_matrix/client/v3/sync*`) and declares command-owned adapter metadata (`options.streamAdapter=reddit.chat.v1`).
+- Adapter mapping converts raw Matrix sync payloads into shared domain chat objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) before controller-visible stream forwarding.
+- Root cause of prior duplicate stream lines was dual transport visibility in hybrid mode (`Network` + `Fetch`) plus replayed Matrix sync payload semantics.
+- Duplicate suppression now runs in two layers:
+- interception layer suppresses equivalent hybrid cross-source response updates
+- command adapter layer suppresses repeated semantic chat object emissions
+- Shared domain objects emitted by command adapters should include `originalEntity` when source entities are available (including nested refs like `from`/`to`/`conversation`) so controllers can keep normalized + source-specific context together.
 - `getUserInfo` supports lookup by `username` or account id and returns normalized profile metadata plus enrollment-relevant flags when available.
 - `sendChatMessage` includes a command-level `test` hook used by `otto test` for non-side-effect readiness checks, while `command.run` still performs message delivery.
-- `getChatMessages` `test` returns a command-native stream manifest with listener subscription details so CLI can stream updates until interrupted.
+- `getChatMessages` `test` returns a command-native stream manifest with listener subscription details and includes command-owned poll fallback metadata (`fallback.strategy=command_poll`) for bounded recovery flows.
 
 ## Runtime Execution Lifecycle
 
@@ -193,6 +199,12 @@ Update types emitted by runtime interception manager:
 - `network.error`
 - `network.detached`
 
+Hybrid interception semantics:
+
+- `mode=hybrid` may observe both CDP surfaces for the same response.
+- Runtime suppression emits at most one equivalent response update per subscription in a short bounded window.
+- Command adapters should still defend against replayed source payload semantics with object-level dedupe.
+
 Operational limits and caveats:
 
 - `mode=network` is passive and may miss bodies for redirects/cache/evicted buffers.
@@ -226,6 +238,7 @@ Reddit-specific execution errors (command-level messages/codes):
 3. Prefer stable selectors and null-safe extraction.
 4. Return structured objects with predictable fields.
 5. Use `requiresAuth` only when website session state is truly required.
+6. For shared domain outputs, attach `originalEntity` whenever source payloads are available and safe to expose.
 
 Developer test flow:
 

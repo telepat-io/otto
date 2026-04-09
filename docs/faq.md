@@ -1,6 +1,6 @@
 # FAQ
 
-Last Updated: 2026-04-05
+Last Updated: 2026-04-10
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -41,6 +41,17 @@ The command metadata declares `inputAtLeastOneOf`, which means at least one key 
 
 ## Why does `command.run` return `preload_host_mismatch`?
 The command declares `preloadHost`, runtime attempted to navigate there before execute, and the committed URL host still did not match. This can happen with redirects, blocked navigation, or site-side interstitials.
+
+## Why did chat stream lines appear duplicated in `otto test reddit.com getChatMessages`?
+Two sources were involved:
+
+1. Hybrid interception can observe the same response through both CDP `Network` and `Fetch` paths.
+2. Matrix sync payloads can replay prior events across subsequent responses.
+
+Current behavior now suppresses duplicates in two layers:
+
+1. Runtime interception suppresses equivalent hybrid cross-source response emissions.
+2. Reddit command adapter suppresses repeated semantic chat objects.
 
 ## Why did `otto test` open a different host than `<site>`?
 `otto test` now prefers command `preloadHost` from `command.list` metadata when available so preconditions are satisfied before command execution.

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { executeCommand } from '../src/runtime/command-executor';
-import { CommandExecutionError } from '../src/runtime/execution-error';
+import { executeCommand } from '../src/runtime/command-executor.js';
+import { CommandExecutionError } from '../src/runtime/execution-error.js';
+import { resetListenerManagersForTest } from '../src/runtime/listener-managers.js';
 import type { CommandPayload } from '@telepat/otto-protocol';
 
 type AnyRecord = Record<string, unknown>;
@@ -18,6 +19,8 @@ type MockOptions = {
   invalidGroupErrorValue?: unknown;
   invalidTabGroupUpdateIds?: number[];
   invalidTabGroupUpdateErrorValue?: unknown;
+  debuggerAttachErrorValue?: unknown;
+  disableDebugger?: boolean;
 };
 
 function createChromeMock(options: MockOptions = {}) {
@@ -37,6 +40,7 @@ function createChromeMock(options: MockOptions = {}) {
   const invalidGroupErrorValue = options.invalidGroupErrorValue;
   const invalidTabGroupUpdateIds = new Set<number>(options.invalidTabGroupUpdateIds ?? []);
   const invalidTabGroupUpdateErrorValue = options.invalidTabGroupUpdateErrorValue;
+  const debuggerAttachErrorValue = options.debuggerAttachErrorValue;
 
   if (!existingTabs.has(activeTabId)) {
     existingTabs.add(activeTabId);
@@ -136,7 +140,42 @@ function createChromeMock(options: MockOptions = {}) {
         }
         return { id: tabId, ...changes };
       },
+      onRemoved: {
+        addListener() {
+          return;
+        },
+      },
+      onUpdated: {
+        addListener() {
+          return;
+        },
+      },
     },
+    debugger: options.disableDebugger
+      ? undefined as unknown as typeof chrome.debugger
+      : {
+        async attach() {
+          if (debuggerAttachErrorValue !== undefined) {
+            throw debuggerAttachErrorValue;
+          }
+        },
+        async detach() {
+          return;
+        },
+        async sendCommand() {
+          return {};
+        },
+        onEvent: {
+          addListener() {
+            return;
+          },
+        },
+        onDetach: {
+          addListener() {
+            return;
+          },
+        },
+      },
     tabGroups: {
       async update(groupId: number, _changes: Record<string, unknown>) {
         void _changes;
@@ -657,6 +696,7 @@ test('command.run getChatMessages falls back to formatted_body when body is miss
 });
 
 test('command.test getChatMessages returns stream listener metadata', async () => {
+  resetListenerManagersForTest();
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -688,19 +728,85 @@ test('command.test getChatMessages returns stream listener metadata', async () =
     command: 'getChatMessages',
     ready: true,
     roomId: 'room_1',
+    fallback: {
+      enabled: true,
+      mode: 'poll',
+      strategy: 'command_poll',
+      intervalMs: 7_000,
+      maxPolls: 4,
+      roomId: 'room_1',
+    },
     stream: {
       listeners: [
         {
-          listener: 'reddit.new_chat_messages',
+          listener: 'network.http_intercept',
           options: {
             tabSessionId: 'tab_alpha',
-            mode: 'intercept',
-            pollIntervalMs: 7_000,
+            site: 'reddit.com',
+            streamAdapter: 'reddit.chat.v1',
+            mode: 'hybrid',
+            includeBody: true,
+            includeHeaders: false,
+            urlPatterns: ['https://matrix.redditspace.com/_matrix/client/v3/sync*'],
+            requestHostAllowlist: ['matrix.redditspace.com'],
+            mimeTypes: ['application/json', 'text/plain'],
+            maxBodyBytes: 1_000_000,
           },
         },
       ],
     },
   });
+});
+
+test('command.test getChatMessages returns buffered polling fallback when interception is unavailable', async () => {
+  resetListenerManagersForTest();
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/' },
+      disableDebugger: true,
+    scriptResults: [
+      { authenticated: true },
+      { ready: true },
+      {
+        scope: 'room',
+        chunk: [
+          {
+            type: 'm.room.message',
+            event_id: 'evt_fb_1',
+            roomId: 'room_1',
+            sender: '@t2_peer:reddit.com',
+            origin_server_ts: 1710000000000,
+            content: { body: 'fallback message' },
+          },
+        ],
+      },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getChatMessages',
+    input: {
+      roomId: 'room_1',
+      limit: 20,
+    },
+    authMode: 'strict_fail',
+  }));
+
+  const payload = result.data as Record<string, unknown>;
+  assert.equal(payload.command, 'getChatMessages');
+  assert.equal((payload.fallback as { engaged?: boolean }).engaged, true);
+  assert.equal((payload.fallback as { reason?: string }).reason, 'intercept_probe_unavailable');
+  assert.ok(!('stream' in payload));
+
+  const bufferedResult = payload.bufferedResult as { totalCount?: number };
+  assert.equal(bufferedResult.totalCount, 1);
 });
 
 test('command.run rejects unexpected input fields before execute', async () => {
@@ -1073,7 +1179,8 @@ test('primitive.tab.open stores owner metadata from relay-injected controller cl
   }));
   const data = result.data as { tabSessionId?: string };
   assert.ok(data.tabSessionId);
-  assert.equal(sessionStore.tabSessionOwners[data.tabSessionId!], 'cli_123');
+  const owners = (sessionStore.tabSessionOwners ?? {}) as Record<string, unknown>;
+  assert.equal(owners[data.tabSessionId!], 'cli_123');
 });
 
 test('primitive.tab.close_owned closes only tabs owned by target controller', async () => {
@@ -1256,6 +1363,8 @@ test('listener.subscribe normalizes network interception mode and list options',
       includeBody: true,
       includeHeaders: false,
       maxBodyBytes: '12345',
+      streamAdapter: ' reddit.chat.v1 ',
+      selfUserId: ' self_user ',
     },
   }));
 
@@ -1271,8 +1380,52 @@ test('listener.subscribe normalizes network interception mode and list options',
       includeBody: true,
       includeHeaders: false,
       maxBodyBytes: 12345,
+      streamAdapter: 'reddit.chat.v1',
+      selfUserId: 'self_user',
     },
   });
+});
+
+test('listener.subscribe rejects network interception invalid streamAdapter type', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        streamAdapter: 7,
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_listener_stream_adapter');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe rejects network interception invalid selfUserId type', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        selfUserId: { id: 'self' },
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_listener_self_user_id');
+      return true;
+    },
+  );
 });
 
 test('listener.subscribe rejects network interception invalid includeBody type', async () => {

@@ -5,7 +5,7 @@ import {
   computeReconnectDelayMs,
   enqueueOutbound,
   MAX_OUTBOUND_QUEUE,
-} from '../src/runtime/offscreen-transport';
+} from '../src/runtime/offscreen-transport.js';
 
 test('reconnect backoff increases and is capped', () => {
   const d0 = computeReconnectDelayMs(0, 0);

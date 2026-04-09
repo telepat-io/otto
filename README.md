@@ -258,6 +258,18 @@ Command metadata and validation:
 - Commands can declare `inputAtLeastOneOf` for conditional contracts (for example `username` or `roomId`).
 - Commands can declare `preloadHost`; runtime auto-navigates to that host before `execute` when needed.
 - `otto test` auto-opens `preloadHost` when available from `command.list`, then runs `command.test` (with fallback to `execute` when no test hook exists).
+
+Streaming architecture (current):
+
+- Runtime listener transport remains generic (`network.http_intercept`).
+- Site modules own stream parsing and fallback strategy (for example Reddit Matrix sync parsing in `extension/src/commands/reddit.com/chat-stream.ts`).
+- Command test hooks can return `stream.listeners` with command-owned adapter hints (`options.streamAdapter`, optional `options.selfUserId`).
+- Background runtime applies adapter mapping before relay emission, so controller/CLI receive shared domain objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) instead of raw site-specific payloads.
+
+Duplicate suppression model:
+
+- Transport-level suppression: hybrid interception now suppresses equivalent duplicate response updates observed across both CDP sources (`Network` plus `Fetch`) in a short bounded window.
+- Domain-level suppression: command adapters dedupe repeated semantic events from replayed sync payloads before forwarding mapped objects.
 - `otto test` prints human-readable stream output by default to make command events easier to follow; add `--json` to see full raw envelope objects.
 
 Auth-aware behavior:

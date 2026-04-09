@@ -1,8 +1,12 @@
 import type {
+  ChatMessage,
+  ChatMessageDeletedEvent,
+  ChatParticipantEvent,
+  ChatTypingEvent,
   Envelope,
   ErrorPayload,
-  NetworkInterceptListenerUpdate,
   ResultPayload,
+  StreamDomainObject,
 } from '@telepat/otto-protocol';
 
 type ListenerUpdateEnvelopePayload = {
@@ -19,29 +23,7 @@ type RendererContext = {
   useColor?: boolean;
 };
 
-type MatrixMessage = {
-  eventId?: string;
-  roomId?: string;
-  sender?: string;
-  text: string;
-  createdAt?: string;
-};
-
-type RedditCommandListenerData = {
-  roomId?: unknown;
-  eventId?: unknown;
-  text?: unknown;
-  createdAt?: unknown;
-  sender?: unknown;
-  senderId?: unknown;
-  from?: unknown;
-  peerId?: unknown;
-  peerUsername?: unknown;
-  userIds?: unknown;
-  peerIds?: unknown;
-  stateKey?: unknown;
-  redacts?: unknown;
-};
+type DomainObjectWithKind = StreamDomainObject & { kind: string };
 
 type ColorToken = 'dim' | 'cyan' | 'green' | 'yellow' | 'red' | 'blue';
 
@@ -121,149 +103,6 @@ function extractListenerUpdate(msg: Envelope): {
   };
 }
 
-function decodeBody(body: string, base64Encoded?: boolean): string {
-  if (!base64Encoded) {
-    return body;
-  }
-
-  try {
-    return Buffer.from(body, 'base64').toString('utf8');
-  } catch {
-    return '';
-  }
-}
-
-function parseMatrixMessagesFromBody(bodyText: string): MatrixMessage[] {
-  let parsedBody: unknown;
-  try {
-    parsedBody = JSON.parse(bodyText) as unknown;
-  } catch {
-    return [];
-  }
-
-  if (!parsedBody || typeof parsedBody !== 'object') {
-    return [];
-  }
-
-  const messages: MatrixMessage[] = [];
-  const bodyRecord = parsedBody as Record<string, unknown>;
-
-  const tryPushFromEvent = (event: Record<string, unknown>, fallbackRoomId?: string): void => {
-    if (event.type !== 'm.room.message') {
-      return;
-    }
-
-    const content = event.content && typeof event.content === 'object'
-      ? event.content as Record<string, unknown>
-      : undefined;
-    const rawText = typeof content?.body === 'string' ? content.body : '';
-    const text = oneLine(rawText);
-    if (!text) {
-      return;
-    }
-
-    const originServerTs = typeof event.origin_server_ts === 'number' ? event.origin_server_ts : undefined;
-    const createdAt = originServerTs ? new Date(originServerTs).toISOString() : undefined;
-
-    messages.push({
-      eventId: typeof event.event_id === 'string' ? event.event_id : undefined,
-      roomId: typeof event.room_id === 'string' ? event.room_id : fallbackRoomId,
-      sender: typeof event.sender === 'string' ? event.sender : undefined,
-      text,
-      createdAt,
-    });
-  };
-
-  const rooms = bodyRecord.rooms && typeof bodyRecord.rooms === 'object'
-    ? bodyRecord.rooms as Record<string, unknown>
-    : undefined;
-  const join = rooms?.join && typeof rooms.join === 'object'
-    ? rooms.join as Record<string, unknown>
-    : undefined;
-
-  if (join) {
-    for (const [joinedRoomId, roomValue] of Object.entries(join)) {
-      const room = roomValue && typeof roomValue === 'object'
-        ? roomValue as Record<string, unknown>
-        : {};
-      const timeline = room.timeline && typeof room.timeline === 'object'
-        ? room.timeline as Record<string, unknown>
-        : {};
-      const timelineEvents = Array.isArray(timeline.events) ? timeline.events : [];
-      for (const candidate of timelineEvents) {
-        if (!candidate || typeof candidate !== 'object') {
-          continue;
-        }
-        tryPushFromEvent(candidate as Record<string, unknown>, joinedRoomId);
-      }
-    }
-  }
-
-  if (Array.isArray(bodyRecord.chunk)) {
-    for (const candidate of bodyRecord.chunk) {
-      if (!candidate || typeof candidate !== 'object') {
-        continue;
-      }
-      tryPushFromEvent(candidate as Record<string, unknown>);
-    }
-  }
-
-  return messages;
-}
-
-function normalizeSender(sender?: string): string {
-  if (!sender) {
-    return 'unknown-sender';
-  }
-
-  const trimmed = sender.startsWith('@') ? sender.slice(1) : sender;
-  const [name] = trimmed.split(':');
-  return name || 'unknown-sender';
-}
-
-function inferRecipient(data: RedditCommandListenerData): string {
-  if (data.from === 'peer') {
-    return 'creator';
-  }
-  if (data.from === 'creator') {
-    return 'peer';
-  }
-  if (typeof data.peerId === 'string' && data.peerId.length > 0) {
-    return data.peerId;
-  }
-  return 'unknown-recipient';
-}
-
-function normalizeUserId(userId: string): string {
-  if (!userId) {
-    return 'unknown-sender';
-  }
-
-  const trimmed = userId.startsWith('@') ? userId.slice(1) : userId;
-  const [name] = trimmed.split(':');
-  return name || 'unknown-sender';
-}
-
-function inferActor(data: RedditCommandListenerData): string {
-  if (typeof data.sender === 'string' && data.sender.length > 0) {
-    return normalizeUserId(data.sender);
-  }
-
-  if (typeof data.senderId === 'string' && data.senderId.length > 0) {
-    return data.senderId;
-  }
-
-  if (typeof data.peerId === 'string' && data.peerId.length > 0) {
-    return data.peerId;
-  }
-
-  if (typeof data.stateKey === 'string' && data.stateKey.length > 0) {
-    return normalizeUserId(data.stateKey);
-  }
-
-  return 'unknown-sender';
-}
-
 function summarizeUnknownData(data: unknown): string {
   if (data === undefined) {
     return 'no-data';
@@ -310,16 +149,19 @@ function summarizeUnknownData(data: unknown): string {
   return String(data);
 }
 
+function isStreamDomainObject(data: unknown): data is DomainObjectWithKind {
+  return Boolean(data && typeof data === 'object' && typeof (data as { kind?: unknown }).kind === 'string');
+}
+
 export function createCommandTestStreamRenderer(context: RendererContext): {
   renderCommandResponse: (msg: Envelope, action: string) => string[];
   renderSubscribeResponse: (msg: Envelope, listener: string) => string[];
   renderListenerUpdate: (msg: Envelope) => string[];
   renderTerminalResponse: (msg: Envelope) => string[];
 } {
+  void context.site;
+  void context.command;
   const colorEnabled = supportsColor(context.useColor);
-  const seenMessageIds = new Set<string>();
-  const roomPeerLabels = new Map<string, Map<string, string>>();
-  const roomUserIds = new Map<string, Set<string>>();
 
   const renderResultStatus = (status: string): string => {
     if (status === 'completed') {
@@ -336,59 +178,6 @@ export function createCommandTestStreamRenderer(context: RendererContext): {
       return [];
     }
     return [jsonLine(msg)];
-  };
-
-  const rememberRoomPeer = (roomId: string | undefined, peerId: string | undefined, peerUsername: string | undefined): void => {
-    if (!roomId || !peerId || !peerUsername) {
-      return;
-    }
-
-    const byPeerId = roomPeerLabels.get(roomId) ?? new Map<string, string>();
-    byPeerId.set(peerId, peerUsername);
-    roomPeerLabels.set(roomId, byPeerId);
-  };
-
-  const resolveRoomPeerLabel = (roomId: string | undefined, senderId: string | undefined): string | undefined => {
-    if (!roomId || !senderId) {
-      return undefined;
-    }
-
-    const byPeerId = roomPeerLabels.get(roomId);
-    if (!byPeerId) {
-      return undefined;
-    }
-
-    return byPeerId.get(senderId);
-  };
-
-  const rememberRoomUserId = (roomId: string | undefined, userId: string | undefined): void => {
-    if (!roomId || !userId) {
-      return;
-    }
-
-    const ids = roomUserIds.get(roomId) ?? new Set<string>();
-    ids.add(userId);
-    roomUserIds.set(roomId, ids);
-  };
-
-  const resolveRoomPrimaryPeerLabel = (roomId: string | undefined): string | undefined => {
-    if (!roomId) {
-      return undefined;
-    }
-
-    const byPeerId = roomPeerLabels.get(roomId);
-    if (!byPeerId || byPeerId.size === 0) {
-      return undefined;
-    }
-
-    const userIds = roomUserIds.get(roomId) ?? new Set<string>();
-    for (const [peerId, peerName] of byPeerId.entries()) {
-      if (!userIds.has(peerId)) {
-        return peerName;
-      }
-    }
-
-    return byPeerId.values().next().value as string | undefined;
   };
 
   return {
@@ -459,149 +248,75 @@ export function createCommandTestStreamRenderer(context: RendererContext): {
         : 'listener_update';
 
       const data = extracted.payload.data;
-      const isRedditChatMessages = context.site === 'reddit.com' && context.command === 'getChatMessages';
+      const baseEmittedAt = typeof extracted.payload.emittedAt === 'string' ? extracted.payload.emittedAt : msg.timestamp;
 
-      if (!isRedditChatMessages || !data || typeof data !== 'object') {
-        const emittedAt = typeof extracted.payload.emittedAt === 'string' ? extracted.payload.emittedAt : msg.timestamp;
-        const time = colorize(colorEnabled, 'dim', `[${shortTimestamp(emittedAt)}]`);
-        const summary = summarizeUnknownData(data);
-        return [`${time} [update:${updateType}] ${summary}`];
-      }
+      if (isStreamDomainObject(data)) {
+        const time = colorize(colorEnabled, 'dim', `[${shortTimestamp(baseEmittedAt)}]`);
 
-      const commandData = data as RedditCommandListenerData;
-      const hasCommandNativeShape = [
-        'new_message',
-        'typing',
-        'room_member',
-        'message_deleted',
-      ].includes(updateType);
-      if (hasCommandNativeShape) {
-        const emittedAt = typeof extracted.payload.emittedAt === 'string' ? extracted.payload.emittedAt : msg.timestamp;
-        const time = colorize(colorEnabled, 'dim', `[${shortTimestamp(emittedAt)}]`);
-        const roomId = typeof commandData.roomId === 'string' ? commandData.roomId : undefined;
-        const roomPart = roomId ? ` ${colorize(colorEnabled, 'dim', `(${roomId})`)}` : '';
-
-        if (updateType === 'new_message') {
-          const senderId = typeof commandData.senderId === 'string' ? commandData.senderId : undefined;
-          const fromRole = typeof commandData.from === 'string' ? commandData.from : undefined;
-          const eventTime = typeof commandData.createdAt === 'string' && commandData.createdAt.length > 0
-            ? commandData.createdAt
-            : emittedAt;
-          const messageTime = colorize(colorEnabled, 'dim', `[${shortTimestamp(eventTime)}]`);
-          const senderRaw = typeof commandData.sender === 'string'
-            ? commandData.sender
-            : (senderId ? `@${senderId}:reddit.com` : undefined);
-          const roomPeerLabel = resolveRoomPeerLabel(roomId, senderId);
-          if (fromRole === 'creator') {
-            rememberRoomUserId(roomId, senderId);
-          }
-
-          const senderLabel = fromRole === 'creator'
-            ? 'user'
-            : (roomPeerLabel ?? normalizeSender(senderRaw));
-          const sender = colorize(colorEnabled, 'cyan', senderLabel);
-
-          const inferredRecipient = inferRecipient(commandData);
-          const primaryPeerLabel = resolveRoomPrimaryPeerLabel(roomId);
-          let recipientLabel = inferredRecipient === 'creator' ? 'user' : inferredRecipient;
-          if (fromRole === 'creator') {
-            recipientLabel = primaryPeerLabel ?? (recipientLabel === 'peer' ? 'peer' : recipientLabel);
-          } else if (fromRole === 'peer') {
-            recipientLabel = 'user';
-          }
-          const recipient = colorize(colorEnabled, 'yellow', recipientLabel);
-          const text = typeof commandData.text === 'string' ? oneLine(commandData.text) : '';
-          const message = text || '(empty message)';
+        if (data.kind === 'chat.message') {
+          const message = data as ChatMessage;
+          const fromLabel = message.from.displayName || message.from.username || message.from.id;
+          const toLabel = message.to.displayName || message.to.username || message.to.id;
+          const when = message.datetime || baseEmittedAt;
+          const messageTime = colorize(colorEnabled, 'dim', `[${shortTimestamp(when)}]`);
+          const roomPart = message.conversation?.id
+            ? ` ${colorize(colorEnabled, 'dim', `(${message.conversation.id})`)}`
+            : '';
           return [
-            `${messageTime} ${colorize(colorEnabled, 'blue', '[chat:new_message]')} ${sender} -> ${recipient}: ${shorten(message, 240)}${roomPart}`,
+            `${messageTime} ${colorize(colorEnabled, 'blue', '[chat.message]')} ${colorize(colorEnabled, 'cyan', fromLabel)} -> ${colorize(colorEnabled, 'yellow', toLabel)}: ${shorten(oneLine(message.message), 240)}${roomPart}`,
           ];
         }
 
-        if (updateType === 'typing') {
-          const peerIds = Array.isArray(commandData.peerIds)
-            ? commandData.peerIds.filter((value): value is string => typeof value === 'string')
-            : (Array.isArray(commandData.userIds)
-              ? commandData.userIds.filter((value): value is string => typeof value === 'string')
-              : []);
-          const actorList = peerIds.map((userId) => normalizeUserId(userId));
-          const who = actorList.length > 0 ? actorList.join(', ') : inferActor(commandData);
-          const inferredRecipient = inferRecipient(commandData);
-          const recipient = inferredRecipient === 'unknown-recipient' && actorList.length > 0
-            ? 'user'
-            : (inferredRecipient === 'creator' ? 'user' : inferredRecipient);
+        if (data.kind === 'chat.typing') {
+          const typing = data as ChatTypingEvent;
+          const fromLabel = typing.from.displayName || typing.from.username || typing.from.id;
+          const toLabel = typing.to.displayName || typing.to.username || typing.to.id;
+          const when = typing.datetime || baseEmittedAt;
+          const typingTime = colorize(colorEnabled, 'dim', `[${shortTimestamp(when)}]`);
+          const roomPart = typing.conversation?.id
+            ? ` ${colorize(colorEnabled, 'dim', `(${typing.conversation.id})`)}`
+            : '';
           return [
-            `${time} ${colorize(colorEnabled, 'blue', '[chat:typing]')} ${who} -> ${recipient}${roomPart}`,
+            `${typingTime} ${colorize(colorEnabled, 'blue', '[chat.typing]')} ${fromLabel} -> ${toLabel}${roomPart}`,
           ];
         }
 
-        if (updateType === 'room_member') {
-          const peerId = typeof commandData.peerId === 'string' && commandData.peerId.length > 0
-            ? commandData.peerId
-            : undefined;
-          const peerName = typeof commandData.peerUsername === 'string' && commandData.peerUsername.length > 0
-            ? commandData.peerUsername
-            : inferActor(commandData);
-          rememberRoomPeer(roomId, peerId, typeof commandData.peerUsername === 'string' ? commandData.peerUsername : undefined);
-          const recipient = inferRecipient(commandData);
+        if (data.kind === 'chat.participant') {
+          const participant = data as ChatParticipantEvent;
+          const when = participant.datetime || baseEmittedAt;
+          const participantTime = colorize(colorEnabled, 'dim', `[${shortTimestamp(when)}]`);
+          const participantLabel = participant.participant.displayName
+            || participant.participant.username
+            || participant.participant.id;
+          const roomPart = participant.conversation?.id
+            ? ` ${colorize(colorEnabled, 'dim', `(${participant.conversation.id})`)}`
+            : '';
           return [
-            `${time} ${colorize(colorEnabled, 'blue', '[chat:room_member]')} ${peerName} -> ${recipient === 'creator' || recipient === 'unknown-recipient' ? 'user' : recipient} joined${roomPart}`,
+            `${participantTime} ${colorize(colorEnabled, 'blue', '[chat.participant]')} ${participantLabel} ${participant.event}${roomPart}`,
           ];
         }
 
-        if (updateType === 'message_deleted') {
-          const actor = inferActor(commandData);
-          const recipient = inferRecipient(commandData);
-          const redacts = typeof commandData.redacts === 'string' ? commandData.redacts : 'unknown-event';
+        if (data.kind === 'chat.message_deleted') {
+          const deleted = data as ChatMessageDeletedEvent;
+          const when = deleted.datetime || baseEmittedAt;
+          const deletedTime = colorize(colorEnabled, 'dim', `[${shortTimestamp(when)}]`);
+          const actor = deleted.deletedBy?.displayName || deleted.deletedBy?.username || deleted.deletedBy?.id || 'unknown';
+          const roomPart = deleted.conversation?.id
+            ? ` ${colorize(colorEnabled, 'dim', `(${deleted.conversation.id})`)}`
+            : '';
           return [
-            `${time} ${colorize(colorEnabled, 'blue', '[chat:message_deleted]')} ${actor} -> ${recipient === 'creator' ? 'user' : recipient} deleted ${redacts}${roomPart}`,
+            `${deletedTime} ${colorize(colorEnabled, 'blue', '[chat.message_deleted]')} ${actor} deleted ${deleted.messageId}${roomPart}`,
           ];
         }
+
+        return [
+          `${time} [update:${data.kind}] ${summarizeUnknownData(data)}`,
+        ];
       }
 
-      const net = data as Partial<NetworkInterceptListenerUpdate>;
-      const emittedAt = typeof net.emittedAt === 'string'
-        ? net.emittedAt
-        : (typeof extracted.payload.emittedAt === 'string' ? extracted.payload.emittedAt : msg.timestamp);
-      const method = typeof net.method === 'string' ? net.method : '?';
-      const status = typeof net.status === 'number' ? String(net.status) : '?';
-      const shortUrl = typeof net.url === 'string' ? shorten(net.url, 90) : 'unknown-url';
-      const networkMetaPieces = [`${method}`, status, shortUrl];
-      if (net.truncated) {
-        networkMetaPieces.push('truncated');
-      }
-      if (typeof net.error === 'string' && net.error.length > 0) {
-        networkMetaPieces.push(`error=${net.error}`);
-      }
-
-      const time = colorize(colorEnabled, 'dim', `[${shortTimestamp(emittedAt)}]`);
-      const lines: string[] = [
-        `${time} ${colorize(colorEnabled, 'blue', `[net:${updateType}]`)} ${networkMetaPieces.join(' | ')}`,
-      ];
-
-      if (typeof net.body !== 'string' || net.body.length === 0) {
-        return lines;
-      }
-
-      const decoded = decodeBody(net.body, net.base64Encoded);
-      if (!decoded) {
-        return lines;
-      }
-
-      const messages = parseMatrixMessagesFromBody(decoded);
-      for (const message of messages) {
-        const dedupeId = message.eventId ?? `${message.roomId ?? 'unknown'}|${message.sender ?? 'unknown'}|${message.createdAt ?? ''}|${message.text}`;
-        if (seenMessageIds.has(dedupeId)) {
-          continue;
-        }
-        seenMessageIds.add(dedupeId);
-
-        const sender = colorize(colorEnabled, 'cyan', normalizeSender(message.sender));
-        const messageTime = colorize(colorEnabled, 'dim', `[${shortTimestamp(message.createdAt ?? emittedAt)}]`);
-        const roomPart = message.roomId ? ` ${colorize(colorEnabled, 'dim', `(${message.roomId})`)}` : '';
-        lines.push(`${messageTime} ${sender}: ${shorten(message.text, 240)}${roomPart}`);
-      }
-
-      return lines;
+      const time = colorize(colorEnabled, 'dim', `[${shortTimestamp(baseEmittedAt)}]`);
+      const summary = summarizeUnknownData(data);
+      return [`${time} [update:${updateType}] ${summary}`];
     },
 
     renderTerminalResponse: (msg: Envelope): string[] => {

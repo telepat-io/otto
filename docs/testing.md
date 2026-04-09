@@ -1,6 +1,6 @@
 # Testing
 
-Last Updated: 2026-04-07
+Last Updated: 2026-04-10
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -43,8 +43,10 @@ Owner: Platform
 - Extension command tests for site mismatch, auth preflight redirect, authenticated execution, legacy alias routing, metadata input validation, preload-host checks, and `command.test` fallback/hook execution
 - Extension listener validation tests for `network.http_intercept` option normalization and deterministic validation errors
 - Extension network interception manager tests for `Network.loadingFinished` body capture and `Fetch.continueRequest` safety guarantees
+- Extension network interception manager tests for hybrid cross-source duplicate suppression (`Network`/`Fetch` equivalent response emissions)
 - Extension network interception manager tests for command-local callback buffering without relay emission
 - Extension Reddit command tests for `getUserInfo`, `sendChatMessage`, and `getChatMessages` payload normalization
+- Extension Reddit stream adapter tests for raw-event dedupe and semantic-domain dedupe across replayed sync payloads
 - Extension Reddit auth regression tests for API-backed `checkLogin` behavior
 - Extension Reddit chat listener tests for interception `data:` payload parsing, error-threshold fallback to polling, and interception-unavailable polling fallback
 - CLI setup command checks for release download/extract/checksum verification path
@@ -57,9 +59,10 @@ Owner: Platform
 
 Run in this order after any code change:
 
-1. `npm run lint`
-2. `npm run build`
-3. `npm run -ws --if-present test`
+1. `npm run check`
+2. `npm run lint`
+3. `npm run build`
+4. `npm run -ws --if-present test`
 
 ## Acceptance Gates
 
@@ -101,6 +104,7 @@ Run in this order after any code change:
 - `otto test` prefers a single controller websocket for open/test/subscribe/follow; if that socket closes before cleanup close, CLI reconnects and still attempts `primitive.tab.close` for auto-opened tabs.
 - For streaming commands, `--timeout` applies to initial `command.test` response only; active listener follow remains open until explicit stop.
 - Commands returning `stream.listeners` from `command.test` keep `otto test` active and stream listener updates until `Ctrl+C` on that same controller connection
+- For `reddit.com/getChatMessages`, stream updates should use shared domain `kind` values (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) rather than legacy reddit-specific update names
 - Streaming test mode sends `command_cancel` targeting the original `command.test` request on `Ctrl+C`; relay owns stream teardown and terminal outcome emission
 - `Ctrl+C`/`SIGTERM` during open/test/probe/follow triggers a shared teardown path: cancel active `command.test` stream, unsubscribe listener fallback, then close auto-opened tab (unless `--keep-tab-open`).
 - Long-running `otto test` streams send periodic controller heartbeat pings; custom controllers should do the same.

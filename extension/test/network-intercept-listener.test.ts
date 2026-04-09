@@ -270,6 +270,84 @@ test('fetch mode always continues paused request when body lookup fails', async 
   assert.ok(errorUpdate);
 });
 
+test('hybrid mode suppresses duplicate network response when equivalent fetch response already emitted', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_hybrid', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'hybrid',
+    includeBody: true,
+    urlPatterns: ['https://www.reddit.com/api/*'],
+  });
+
+  mock.setNetworkBody('req_hybrid_1', {
+    body: '{"ok":true}',
+    base64Encoded: false,
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.responseReceived',
+    {
+      requestId: 'req_hybrid_1',
+      request: {
+        method: 'GET',
+      },
+      response: {
+        url: 'https://www.reddit.com/api/v1/me',
+        status: 200,
+        mimeType: 'application/json',
+      },
+    },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Fetch.requestPaused',
+    {
+      requestId: 'fetch_hybrid_1',
+      request: {
+        url: 'https://www.reddit.com/api/v1/me',
+        method: 'GET',
+      },
+      responseStatusCode: 200,
+      responseHeaders: [{ name: 'content-type', value: 'application/json' }],
+    },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.loadingFinished',
+    {
+      requestId: 'req_hybrid_1',
+    },
+  );
+
+  await flushMicrotasks();
+
+  const updates = mock.runtimeMessages.filter((entry) => {
+    if (entry.type !== 'otto.listenerUpdate') {
+      return false;
+    }
+    const payload = (entry.payload ?? {}) as {
+      requestId?: string;
+      updateType?: string;
+      data?: { captureSource?: string };
+    };
+    return payload.requestId === 'sub_hybrid' && payload.updateType === 'network.response';
+  });
+
+  assert.equal(updates.length, 1);
+  const payload = (updates[0]?.payload ?? {}) as {
+    data?: { captureSource?: string };
+  };
+  assert.ok(payload.data?.captureSource === 'fetch' || payload.data?.captureSource === 'network');
+
+  await manager.unsubscribe('sub_hybrid');
+});
+
 test('command-local interception can receive callback updates without relay emission', async () => {
   const mock = createMockChrome();
   const manager = createNetworkInterceptListenerManager(mock.chromeApi);

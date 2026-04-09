@@ -555,6 +555,44 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
           ? rawOptions.includeHeaders
           : undefined;
 
+        let streamAdapter: string | undefined;
+        if (rawOptions.streamAdapter !== undefined) {
+          if (typeof rawOptions.streamAdapter !== 'string') {
+            throw new CommandExecutionError(
+              'network listener streamAdapter must be a string',
+              'invalid_listener_stream_adapter',
+              'validation',
+              false,
+            );
+          }
+          const normalized = rawOptions.streamAdapter.trim();
+          if (normalized.length === 0) {
+            throw new CommandExecutionError(
+              'network listener streamAdapter must not be empty',
+              'invalid_listener_stream_adapter',
+              'validation',
+              false,
+            );
+          }
+          streamAdapter = normalized;
+        }
+
+        let selfUserId: string | undefined;
+        if (rawOptions.selfUserId !== undefined) {
+          if (typeof rawOptions.selfUserId !== 'string') {
+            throw new CommandExecutionError(
+              'network listener selfUserId must be a string',
+              'invalid_listener_self_user_id',
+              'validation',
+              false,
+            );
+          }
+          const normalized = rawOptions.selfUserId.trim();
+          if (normalized.length > 0) {
+            selfUserId = normalized;
+          }
+        }
+
         options = {
           tabSessionId,
           site,
@@ -565,6 +603,8 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
           ...(includeBody !== undefined ? { includeBody } : {}),
           ...(includeHeaders !== undefined ? { includeHeaders } : {}),
           ...(requestHostAllowlist ? { requestHostAllowlist } : {}),
+          ...(streamAdapter !== undefined ? { streamAdapter } : {}),
+          ...(selfUserId !== undefined ? { selfUserId } : {}),
         };
       }
 

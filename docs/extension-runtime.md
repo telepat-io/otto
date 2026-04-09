@@ -1,6 +1,6 @@
 # Extension Runtime
 
-Last Updated: 2026-04-05
+Last Updated: 2026-04-10
 Owner: Browser Runtime
 
 ## Runtime Components
@@ -87,9 +87,12 @@ Listener infrastructure:
 - Background tracks active listener subscribe `requestId` values in-memory.
 - Runtime includes `network.http_intercept` listener source, backed by `chrome.debugger` with CDP `Network` and optional `Fetch` domains.
 - `network.http_intercept` emits update types: `network.response`, `network.error`, and `network.detached`.
+- Site-specific stream parsing and fallback policies are command-owned; runtime listener routing remains generic and listener-name agnostic beyond supported listener contracts.
+- Command-owned stream adapters can be selected via listener options metadata (for example `streamAdapter=reddit.chat.v1`) so background subscription hooks transform raw network updates into shared domain objects before offscreen relay emission.
 - Network listener manager waits for `Network.loadingFinished` before `Network.getResponseBody`, supports optional `Fetch` fallback modes, and always continues paused fetch requests.
+- Hybrid mode includes bounded cross-source duplicate suppression so equivalent response updates seen from both `Network` and `Fetch` paths are emitted once per subscription window.
 - Network listener manager redacts sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`) before emitting updates.
-- Listener manager instances are shared through runtime singleton getters so command-driven listeners and command-driven listeners operate on one coherent per-tab debugger state map.
+- Listener manager instances are shared through runtime singleton getters so background listener routing and command-started interception operate on one coherent per-tab debugger state map.
 
 Command-started interception behavior:
 
@@ -104,6 +107,8 @@ Command-started interception behavior:
 - optional `emittedAt`
 - Background rejects updates for unknown/inactive listener request ids.
 - Accepted updates are forwarded to offscreen via `otto.offscreen.emitListenerUpdate` and emitted to relay as `event` with `payload.type=listener_update`.
+- For adapter-backed listeners, forwarded updates should be shared-domain object frames (`payload.data.kind` set) while preserving original subscribe `requestId` correlation.
+- Command adapters should apply semantic dedupe against replayed source payloads (for example repeated Matrix sync event snapshots) before forwarding mapped objects.
 
 Command commands:
 

@@ -78,6 +78,8 @@ type FetchPausedEvent = {
 
 const DEFAULT_MAX_BODY_BYTES = 256_000;
 const MAX_MAX_BODY_BYTES = 2_000_000;
+const HYBRID_DUPLICATE_SUPPRESSION_WINDOW_MS = 1_200;
+const MAX_SIGNATURES_PER_SUBSCRIPTION = 256;
 const DEFAULT_MIME_TYPES = [
   'application/json',
   'text/plain',
@@ -204,6 +206,18 @@ function approximateBodyBytes(body: string, base64Encoded: boolean): number {
   return new TextEncoder().encode(body).byteLength;
 }
 
+function responseSignature(
+  metadata: ResponseMetadata,
+  _bodyData?: { body: string; base64Encoded: boolean },
+  error?: string,
+): string {
+  return [
+    metadata.url,
+    metadata.status,
+    error ?? '',
+  ].join('|');
+}
+
 function clampBody(body: string, base64Encoded: boolean, maxBodyBytes: number): { body: string; truncated: boolean; bodyBytes: number } {
   const bodyBytes = approximateBodyBytes(body, base64Encoded);
   if (bodyBytes <= maxBodyBytes) {
@@ -287,6 +301,96 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
   const tabStates = new Map<number, TabState>();
   const responseMetaByTab = new Map<number, Map<string, ResponseMetadata>>();
   const webSocketMetaByTab = new Map<number, Map<string, WebSocketMetadata>>();
+  const recentFetchSignaturesBySubscription = new Map<string, Map<string, number>>();
+  const recentEmittedSignaturesBySubscription = new Map<string, Map<string, number>>();
+
+  const rememberFetchSignature = (subscriptionRequestId: string, signature: string): void => {
+    const now = Date.now();
+    const signatures = recentFetchSignaturesBySubscription.get(subscriptionRequestId) ?? new Map<string, number>();
+    signatures.set(signature, now);
+
+    for (const [existingSignature, timestamp] of signatures.entries()) {
+      if (now - timestamp > HYBRID_DUPLICATE_SUPPRESSION_WINDOW_MS) {
+        signatures.delete(existingSignature);
+      }
+    }
+
+    while (signatures.size > MAX_SIGNATURES_PER_SUBSCRIPTION) {
+      const oldest = signatures.keys().next().value;
+      if (!oldest) {
+        break;
+      }
+      signatures.delete(oldest);
+    }
+
+    recentFetchSignaturesBySubscription.set(subscriptionRequestId, signatures);
+  };
+
+  const hasRecentFetchSignature = (subscriptionRequestId: string, signature: string): boolean => {
+    const signatures = recentFetchSignaturesBySubscription.get(subscriptionRequestId);
+    if (!signatures) {
+      return false;
+    }
+
+    const timestamp = signatures.get(signature);
+    if (!timestamp) {
+      return false;
+    }
+
+    if (Date.now() - timestamp > HYBRID_DUPLICATE_SUPPRESSION_WINDOW_MS) {
+      signatures.delete(signature);
+      if (signatures.size === 0) {
+        recentFetchSignaturesBySubscription.delete(subscriptionRequestId);
+      }
+      return false;
+    }
+
+    return true;
+  };
+
+  const rememberEmittedSignature = (subscriptionRequestId: string, signature: string): void => {
+    const now = Date.now();
+    const signatures = recentEmittedSignaturesBySubscription.get(subscriptionRequestId) ?? new Map<string, number>();
+    signatures.set(signature, now);
+
+    for (const [existingSignature, timestamp] of signatures.entries()) {
+      if (now - timestamp > HYBRID_DUPLICATE_SUPPRESSION_WINDOW_MS) {
+        signatures.delete(existingSignature);
+      }
+    }
+
+    while (signatures.size > MAX_SIGNATURES_PER_SUBSCRIPTION) {
+      const oldest = signatures.keys().next().value;
+      if (!oldest) {
+        break;
+      }
+      signatures.delete(oldest);
+    }
+
+    recentEmittedSignaturesBySubscription.set(subscriptionRequestId, signatures);
+  };
+
+  const hasRecentEmittedSignature = (subscriptionRequestId: string, signature: string): boolean => {
+    const signatures = recentEmittedSignaturesBySubscription.get(subscriptionRequestId);
+    if (!signatures) {
+      return false;
+    }
+
+    const timestamp = signatures.get(signature);
+    if (!timestamp) {
+      return false;
+    }
+
+    if (Date.now() - timestamp > HYBRID_DUPLICATE_SUPPRESSION_WINDOW_MS) {
+      signatures.delete(signature);
+      if (signatures.size === 0) {
+        recentEmittedSignaturesBySubscription.delete(subscriptionRequestId);
+      }
+      return false;
+    }
+
+    return true;
+  };
 
   const emitUpdate = async (requestId: string, updateType: string, data: unknown): Promise<void> => {
     const emittedAt = new Date().toISOString();
@@ -665,7 +769,32 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
         if (sub.mode === 'fetch') {
           continue;
         }
+
+        const signature = responseSignature(metadata, bodyData, bodyError);
+        if (sub.mode === 'hybrid' && !bodyError && hasRecentEmittedSignature(sub.requestId, signature)) {
+          continue;
+        }
+
+        if (sub.mode === 'hybrid' && !bodyError) {
+          // Let fetch-path callback settle first when events race.
+          await Promise.resolve();
+          if (hasRecentEmittedSignature(sub.requestId, signature) || hasRecentFetchSignature(sub.requestId, signature)) {
+            continue;
+          }
+        }
+
+        if (
+          sub.mode === 'hybrid'
+          && !bodyError
+          && hasRecentFetchSignature(sub.requestId, signature)
+        ) {
+          continue;
+        }
+
         await emitNetworkUpdate(sub, metadata, requestId, 'network', bodyData, bodyError);
+        if (sub.mode === 'hybrid' && !bodyError) {
+          rememberEmittedSignature(sub.requestId, signature);
+        }
       }
       return;
     }
@@ -734,7 +863,18 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       }
 
       for (const sub of matches) {
+        const signature = responseSignature(metadata, bodyData, bodyError);
+        if (sub.mode === 'hybrid' && !bodyError && hasRecentEmittedSignature(sub.requestId, signature)) {
+          continue;
+        }
+
+        if (!bodyError) {
+          rememberFetchSignature(sub.requestId, signature);
+        }
         await emitNetworkUpdate(sub, metadata, requestId, 'fetch', bodyData, bodyError);
+        if (sub.mode === 'hybrid' && !bodyError) {
+          rememberEmittedSignature(sub.requestId, signature);
+        }
       }
       return;
     }
@@ -846,6 +986,8 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
         reason,
       });
       subscriptions.delete(requestId);
+      recentFetchSignaturesBySubscription.delete(requestId);
+      recentEmittedSignaturesBySubscription.delete(requestId);
     }
 
     tabStates.delete(tabId);
@@ -879,6 +1021,8 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       });
 
       subscriptions.delete(requestId);
+      recentFetchSignaturesBySubscription.delete(requestId);
+      recentEmittedSignaturesBySubscription.delete(requestId);
     }
 
     tabStates.delete(tabId);
@@ -1004,6 +1148,8 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
     }
 
     subscriptions.delete(requestId);
+    recentFetchSignaturesBySubscription.delete(requestId);
+    recentEmittedSignaturesBySubscription.delete(requestId);
 
     const tabState = tabStates.get(sub.tabId);
     if (tabState) {

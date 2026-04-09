@@ -14,9 +14,9 @@ import { executeCommand } from '../src/runtime/command-executor.js';
 import { CommandExecutionError } from '../src/runtime/execution-error.js';
 import {
   getNetworkInterceptListenerManager,
-  getRedditChatListenerManager,
 } from '../src/runtime/listener-managers.js';
 import { deriveOnboardingState, type RelayConnectionStatus } from '../src/runtime/onboarding-state.js';
+import { createRedditStreamDomainMapper } from '../src/commands/reddit.com/chat-stream.js';
 
 function withRuntimeErrorLogging<T>(promise: Promise<T>): void {
   promise.catch((err) => {
@@ -75,6 +75,23 @@ async function syncActionBadge(chromeApi: typeof chrome): Promise<void> {
   await chromeApi.action.setTitle({ title: `Otto Node: ${state.stateLabel}` });
 }
 
+async function emitListenerUpdateToRelay(
+  chromeApi: typeof chrome,
+  requestId: string,
+  updateType: string,
+  data: unknown,
+): Promise<void> {
+  await chromeApi.runtime.sendMessage({
+    type: 'otto.offscreen.emitListenerUpdate',
+    payload: {
+      requestId,
+      updateType,
+      emittedAt: new Date().toISOString(),
+      data,
+    },
+  });
+}
+
 export default defineBackground(() => {
   let maintenanceInFlight: Promise<void> | null = null;
   let rerunRequested = false;
@@ -82,7 +99,6 @@ export default defineBackground(() => {
   const activeListenerRequestIds = new Set<string>();
   const listenerNameByRequestId = new Map<string, string>();
   const networkInterceptListenerManager = getNetworkInterceptListenerManager(chrome);
-  const redditChatListenerManager = getRedditChatListenerManager(chrome);
 
   const runMaintenance = (mode: 'bootstrap' | 'keepwarm') => {
     if (maintenanceInFlight) {
@@ -374,26 +390,56 @@ export default defineBackground(() => {
                   ? resultData.options
                   : {}
               ) as Record<string, unknown>;
+              const streamAdapter = typeof normalizedOptions.streamAdapter === 'string'
+                ? normalizedOptions.streamAdapter
+                : undefined;
 
               if (listener === 'network.http_intercept') {
-                await networkInterceptListenerManager.subscribe(cmd.requestId, normalizedOptions as {
-                  tabSessionId: string;
-                  site: string;
-                  urlPatterns?: string[];
-                  requestHostAllowlist?: string[];
-                  mode?: 'network' | 'fetch' | 'hybrid';
-                  includeBody?: boolean;
-                  includeHeaders?: boolean;
-                  maxBodyBytes?: number;
-                  mimeTypes?: string[];
-                });
-              } else if (listener === 'reddit.new_chat_messages') {
-                await redditChatListenerManager.subscribe(cmd.requestId, normalizedOptions as {
-                  tabSessionId?: string;
-                  tabId?: number;
-                  pollIntervalMs?: number;
-                  mode?: 'intercept' | 'poll';
-                });
+                if (streamAdapter === 'reddit.chat.v1') {
+                  const selfUserId = typeof normalizedOptions.selfUserId === 'string'
+                    ? normalizedOptions.selfUserId
+                    : undefined;
+                  const mapper = createRedditStreamDomainMapper(selfUserId);
+
+                  await networkInterceptListenerManager.subscribe(cmd.requestId, normalizedOptions as {
+                    tabSessionId: string;
+                    site: string;
+                    urlPatterns?: string[];
+                    requestHostAllowlist?: string[];
+                    mode?: 'network' | 'fetch' | 'hybrid';
+                    includeBody?: boolean;
+                    includeHeaders?: boolean;
+                    maxBodyBytes?: number;
+                    mimeTypes?: string[];
+                  }, {
+                    emitToRelay: false,
+                    onUpdate: async (updateType, data) => {
+                      const mappedUpdates = mapper.mapNetworkUpdate(updateType, data);
+                      if (mappedUpdates.length > 0) {
+                        for (const mappedUpdate of mappedUpdates) {
+                          await emitListenerUpdateToRelay(chrome, cmd.requestId, mappedUpdate.updateType, mappedUpdate.data);
+                        }
+                        return;
+                      }
+
+                      if (updateType !== 'network.response') {
+                        await emitListenerUpdateToRelay(chrome, cmd.requestId, updateType, data);
+                      }
+                    },
+                  });
+                } else {
+                  await networkInterceptListenerManager.subscribe(cmd.requestId, normalizedOptions as {
+                    tabSessionId: string;
+                    site: string;
+                    urlPatterns?: string[];
+                    requestHostAllowlist?: string[];
+                    mode?: 'network' | 'fetch' | 'hybrid';
+                    includeBody?: boolean;
+                    includeHeaders?: boolean;
+                    maxBodyBytes?: number;
+                    mimeTypes?: string[];
+                  });
+                }
               } else {
                 throw new CommandExecutionError(
                   `Unsupported listener: ${listener}`,
@@ -412,6 +458,7 @@ export default defineBackground(() => {
                   emittedAt: new Date().toISOString(),
                   data: {
                     listener,
+                    streamAdapter,
                   },
                 },
               });
@@ -422,8 +469,6 @@ export default defineBackground(() => {
                 const listenerName = listenerNameByRequestId.get(targetRequestId);
                 if (listenerName === 'network.http_intercept') {
                   await networkInterceptListenerManager.unsubscribe(targetRequestId);
-                } else if (listenerName === 'reddit.new_chat_messages') {
-                  await redditChatListenerManager.unsubscribe(targetRequestId);
                 } else if (listenerName) {
                   throw new CommandExecutionError(
                     `Unsupported listener for unsubscribe: ${listenerName}`,
@@ -495,7 +540,6 @@ export default defineBackground(() => {
     withRuntimeErrorLogging(
       Promise.all([
         networkInterceptListenerManager.unsubscribeAll(),
-        redditChatListenerManager.unsubscribeAll(),
       ]).then(() => {
         activeListenerRequestIds.clear();
         listenerNameByRequestId.clear();

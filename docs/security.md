@@ -1,6 +1,6 @@
 # Security
 
-Last Updated: 2026-04-05
+Last Updated: 2026-04-10
 Owner: Security
 
 ## Source-of-Truth Code Paths
@@ -57,6 +57,7 @@ Current controls:
 - Command auth flow never automates end-user credential submission; failed login preflight returns `manual_login_required` after optional navigation to site login page.
 - `chrome.debugger` interception remains explicit opt-in via listener subscribe actions and cannot suppress Chrome debugger infobar.
 - Fetch-domain interception always continues paused requests to avoid traffic deadlock if body retrieval fails.
+- Hybrid interception duplicate suppression bounds equivalent cross-source response replay, reducing repeated payload forwarding surfaces.
 
 ## Operational Security Checklist
 

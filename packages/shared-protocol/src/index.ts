@@ -92,6 +92,93 @@ export interface CommandTestStream {
   listeners: CommandTestStreamListener[];
 }
 
+export interface UserRef {
+  id: string;
+  username?: string;
+  displayName?: string;
+  platform?: string;
+  originalEntity?: unknown;
+}
+
+export interface ConversationRef {
+  id: string;
+  platform?: string;
+  title?: string;
+  originalEntity?: unknown;
+}
+
+export interface DomainMeta {
+  site: string;
+  source?: string;
+  rawEventType?: string;
+  trace?: Record<string, unknown>;
+}
+
+export interface ChatMessage {
+  kind: 'chat.message';
+  conversation: ConversationRef;
+  from: UserRef;
+  to: UserRef;
+  message: string;
+  datetime: string;
+  eventId?: string;
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
+export interface ChatTypingEvent {
+  kind: 'chat.typing';
+  conversation: ConversationRef;
+  from: UserRef;
+  to: UserRef;
+  datetime: string;
+  isTyping?: boolean;
+  eventId?: string;
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
+export interface ChatParticipantEvent {
+  kind: 'chat.participant';
+  conversation: ConversationRef;
+  participant: UserRef;
+  event: 'joined' | 'left' | 'updated';
+  datetime: string;
+  eventId?: string;
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
+export interface ChatMessageDeletedEvent {
+  kind: 'chat.message_deleted';
+  conversation: ConversationRef;
+  messageId: string;
+  datetime: string;
+  deletedBy?: UserRef;
+  eventId?: string;
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
+export interface Article {
+  kind: 'content.article';
+  id: string;
+  title: string;
+  url?: string;
+  author?: UserRef;
+  publishedAt?: string;
+  summary?: string;
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
+export type StreamDomainObject =
+  | ChatMessage
+  | ChatTypingEvent
+  | ChatParticipantEvent
+  | ChatMessageDeletedEvent
+  | Article;
+
 export type CommandOutcome = 'completed' | 'failed' | 'timed_out' | 'cancelled';
 
 export interface ResultPayload {

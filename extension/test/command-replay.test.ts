@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   getReplayResponse,
   rememberReplayResponse,
-} from '../src/runtime/command-replay';
+} from '../src/runtime/command-replay.js';
 import { createEnvelope, type CommandPayload, type Envelope } from '@telepat/otto-protocol';
 
 function createSessionStorageMock(initial: Record<string, unknown> = {}) {

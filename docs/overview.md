@@ -1,6 +1,6 @@
 # Otto Overview
 
-Last Updated: 2026-04-04
+Last Updated: 2026-04-10
 Owner: Platform
 
 ## Purpose
@@ -20,6 +20,8 @@ Primary architecture:
 - Legacy command alias support (`command.reddit_feed` -> `reddit.com/getFeed`).
 - Deterministic terminal outcomes and replay-safe command handling.
 - CLI onboarding setup flow (`otto setup`) for relay daemon readiness, extension artifact retrieval, and Chrome import handoff.
+- Command-native stream outputs using shared domain objects from command-owned adapters.
+- Hybrid interception duplicate suppression across `Network`/`Fetch` transport surfaces plus command-level semantic dedupe.
 
 ## Runtime Topology
 
@@ -45,6 +47,15 @@ Otto extension uses MV3 split runtime:
 
 - `background.ts` handles command execution and browser APIs.
 - `offscreen-client.ts` maintains persistent relay WebSocket and heartbeat.
+
+Stream ownership model:
+
+- Runtime transport listeners remain generic and site-agnostic.
+- Site command modules parse raw listener payloads into shared domain objects.
+- Background routes adapter-mapped stream objects to relay under the original subscribe `requestId`.
+- Duplicate suppression is layered:
+- listener transport layer suppresses equivalent hybrid cross-source response duplicates
+- command adapter layer suppresses replayed semantic duplicates from site payloads
 
 This split avoids relying on persistent Service Worker uptime while keeping connectivity stable.
 

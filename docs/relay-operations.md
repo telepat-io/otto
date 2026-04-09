@@ -1,6 +1,6 @@
 # Relay Operations
 
-Last Updated: 2026-04-08
+Last Updated: 2026-04-10
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -150,6 +150,7 @@ Listener operations:
 - `listener.unsubscribe` validates `payload.targetRequestId`, ownership, and node match before routing.
 - Successful unsubscribe result removes listener state; future updates on that subscribe `requestId` are rejected with `listener_not_found`.
 - Listener state is cleaned up on controller disconnect and node disconnect.
+- For hybrid interception listeners, node runtime suppresses equivalent duplicate response emissions before relay forwarding, reducing duplicate listener_update traffic at source.
 
 Controller disconnect behavior:
 

@@ -1,6 +1,6 @@
 # Pairing and Auth
 
-Last Updated: 2026-04-05
+Last Updated: 2026-04-10
 Owner: Security
 
 ## Source-of-Truth Code Paths
@@ -135,6 +135,11 @@ Relay verifies token signature and claims (`iss`, `aud`, role, and optional node
 `auth_ack` includes effective role and scopes for the authenticated session.
 
 Unauthenticated clients cannot send command, lock, or subscription frames.
+
+Command streaming note:
+
+- `command.test` stream sessions remain listener-lifecycle terminal commands (`listener.subscribe`/`listener.unsubscribe`) plus async `listener_update` events.
+- Stream payload shaping is command-owned through adapter hints (for example `streamAdapter`) and does not change relay auth/session ownership semantics.
 
 Scope behavior:
 

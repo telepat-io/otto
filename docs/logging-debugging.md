@@ -1,6 +1,6 @@
 # Logging and Debugging
 
-Last Updated: 2026-04-03
+Last Updated: 2026-04-10
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -103,7 +103,7 @@ Useful event types:
 - `offscreen.connect_attempt`
 - `offscreen.authenticated_connected`
 - `background.refresh_setup_completed`
-- `listener_update` with `updateType=network.response|network.error|network.detached`
+- `listener_update` with transport updates (`network.response|network.error|network.detached`) for raw network listeners, or shared domain kinds (`chat.message|chat.typing|chat.participant|chat.message_deleted`) for command-adapted chat streams
 
 ## Extension Local-Dev Log Streaming
 
@@ -180,10 +180,17 @@ Force a deterministic probe request after listener subscribe (helpful when passi
 5. If reliability is required for narrow patterns, use `--mode hybrid` or `--mode fetch`.
 6. If traffic appears stalled in fetch/hybrid mode, verify the node is healthy and that update stream still advances (runtime always continues paused requests in `finally`).
 7. If attach fails, inspect error for debugger conflicts (for example DevTools already attached to target tab).
-8. For `otto test reddit.com getChatMessages`, expected stream scope is Reddit Matrix v3 (`https://matrix.redditspace.com/_matrix/client/v3/*`).
+8. For `otto test reddit.com getChatMessages`, expected stream scope is Reddit Matrix v3 (`https://matrix.redditspace.com/_matrix/client/v3/*`) and expected controller-visible event kinds are shared chat objects (`chat.message|chat.typing|chat.participant|chat.message_deleted`).
 9. Use node logs for isolation:
 
 `otto logs list --request-id <subscribeRequestId> --source node --latest 200`
+
+Duplicate stream diagnostics:
+
+1. Prior duplicate root cause in chat streaming was hybrid dual-surface visibility plus replayed site payload semantics.
+2. Runtime now suppresses equivalent hybrid cross-source response duplicates in interception layer.
+3. Command adapters still perform object-level dedupe for replayed semantic payloads.
+4. If duplicates are suspected, inspect `payload.data.captureSource` in raw `--json` output and correlate by subscribe `requestId`.
 
 ## Setup Troubleshooting
 

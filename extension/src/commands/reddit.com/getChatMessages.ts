@@ -1,4 +1,6 @@
-import type { SiteCommand } from '../types.js';
+import type { CommandNetworkInterceptionEvent, SiteCommand } from '../types.js';
+import { createPollingFallbackPlan, createRedditNetworkListenerOptions } from './chat-stream.js';
+import { parseSyncPayloadsFromBody } from './chat-stream.js';
 
 type GetChatMessagesInput = {
   roomId?: string;
@@ -7,6 +9,127 @@ type GetChatMessagesInput = {
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
+const INTERCEPT_PROBE_WINDOW_MS = 900;
+const INTERCEPT_PROBE_POLL_MS = 120;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function decodeBase64Utf8(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function hasParseableInterceptPayload(events: CommandNetworkInterceptionEvent[]): boolean {
+  for (const event of events) {
+    if (event.updateType !== 'network.response' || !event.data || typeof event.data !== 'object') {
+      continue;
+    }
+
+    const payload = event.data as { body?: unknown; base64Encoded?: unknown };
+    if (typeof payload.body !== 'string' || payload.body.length === 0) {
+      continue;
+    }
+
+    let body = payload.body;
+    if (payload.base64Encoded === true) {
+      try {
+        body = decodeBase64Utf8(payload.body);
+      } catch {
+        continue;
+      }
+    }
+
+    if (parseSyncPayloadsFromBody(body).length > 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function runInterceptProbe(ctx: Parameters<NonNullable<SiteCommand['test']>>[0]): Promise<boolean> {
+  const options = createRedditNetworkListenerOptions(ctx.tabSessionId);
+  const interception = await ctx.startNetworkInterception({
+    mode: options.mode as 'network' | 'fetch' | 'hybrid',
+    includeBody: options.includeBody as boolean,
+    includeHeaders: options.includeHeaders as boolean,
+    urlPatterns: options.urlPatterns as string[],
+    requestHostAllowlist: options.requestHostAllowlist as string[],
+    mimeTypes: options.mimeTypes as string[],
+    maxBodyBytes: options.maxBodyBytes as number,
+  });
+
+  try {
+    await ctx.executeScript(async () => {
+      const tokenCandidates = ['chat:matrix-access-token', 'chat:access-token'];
+
+      const readToken = (): string => {
+        for (const key of tokenCandidates) {
+          try {
+            const raw = localStorage.getItem(key);
+            if (!raw) {
+              continue;
+            }
+
+            const parsed = JSON.parse(raw) as unknown;
+            if (typeof parsed === 'string' && parsed.length > 0) {
+              return parsed;
+            }
+
+            if (parsed && typeof parsed === 'object') {
+              const token = (parsed as { token?: unknown }).token;
+              if (typeof token === 'string' && token.length > 0) {
+                return token;
+              }
+            }
+          } catch {
+            continue;
+          }
+        }
+
+        return '';
+      };
+
+      const token = readToken();
+      if (!token) {
+        return;
+      }
+
+      try {
+        await fetch('https://matrix.redditspace.com/_matrix/client/v3/sync?timeout=0', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: 'no-store',
+        });
+      } catch {
+        // Probe is best-effort; fallback path handles failures.
+      }
+    }, []);
+
+    const deadline = Date.now() + INTERCEPT_PROBE_WINDOW_MS;
+    let sawUpdates = false;
+    while (Date.now() < deadline) {
+      const updates = interception.takeUpdates();
+      if (updates.length > 0) {
+        sawUpdates = true;
+      }
+      if (hasParseableInterceptPayload(updates)) {
+        return true;
+      }
+      await sleep(INTERCEPT_PROBE_POLL_MS);
+    }
+
+    return !sawUpdates;
+  } finally {
+    await interception.stop();
+  }
+}
 
 function clampLimit(input: number | undefined): number {
   if (!input || Number.isNaN(input)) {
@@ -240,9 +363,10 @@ export const getChatMessagesCommand: SiteCommand = {
       rooms,
     };
   },
-  async test(ctx, input) {
+  async test(ctx, input, helpers) {
     const parsed = (input ?? {}) as Partial<GetChatMessagesInput>;
     const roomId = typeof parsed.roomId === 'string' ? parsed.roomId.trim() : '';
+    const limit = clampLimit(typeof parsed.limit === 'number' ? parsed.limit : undefined);
 
     await ctx.navigateTab('https://chat.reddit.com/threads');
 
@@ -281,18 +405,37 @@ export const getChatMessagesCommand: SiteCommand = {
       };
     }, []);
 
+    const fallbackPlan = createPollingFallbackPlan(roomId || undefined);
+    const interceptHealthy = await runInterceptProbe(ctx).catch(() => false);
+
+    if (!interceptHealthy) {
+      const bufferedResult = await helpers.execute({
+        ...(roomId ? { roomId } : {}),
+        limit,
+      });
+
+      return {
+        ready: Boolean(readiness && typeof readiness === 'object' && (readiness as { ready?: unknown }).ready),
+        roomId: roomId || undefined,
+        fallback: {
+          ...fallbackPlan,
+          engaged: true,
+          reason: 'intercept_probe_unavailable',
+          bufferedAt: new Date().toISOString(),
+        },
+        bufferedResult,
+      };
+    }
+
     return {
       ready: Boolean(readiness && typeof readiness === 'object' && (readiness as { ready?: unknown }).ready),
       roomId: roomId || undefined,
+      fallback: fallbackPlan,
       stream: {
         listeners: [
           {
-            listener: 'reddit.new_chat_messages',
-            options: {
-              tabSessionId: ctx.tabSessionId,
-              mode: 'intercept',
-              pollIntervalMs: 7_000,
-            },
+            listener: 'network.http_intercept',
+            options: createRedditNetworkListenerOptions(ctx.tabSessionId),
           },
         ],
       },

@@ -6,7 +6,7 @@ import {
   ensureOffscreenDocument,
   reconcileAutomationState,
   bootstrap,
-} from '../src/runtime/background-bootstrap';
+} from '../src/runtime/background-bootstrap.js';
 
 type AnyRecord = Record<string, unknown>;
 

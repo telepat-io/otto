@@ -276,7 +276,7 @@ function buildContext(
         tabId,
         func,
         args,
-      ) as Awaited<ReturnType<typeof func>>;
+      );
     },
     async startNetworkInterception(options = {}) {
       const networkInterceptListenerManager = getNetworkInterceptListenerManager(chromeApi);
@@ -377,12 +377,12 @@ function isTransientFrameExecutionError(error: unknown): boolean {
     || message.includes('The tab was closed');
 }
 
-async function executeScriptWithRetry<T>(
+async function executeScriptWithRetry<TArgs extends unknown[], TResult>(
   chromeApi: ChromeLike,
   tabId: number,
-  func: (...args: unknown[]) => T,
-  args: unknown[],
-): Promise<T> {
+  func: (...args: TArgs) => TResult,
+  args: TArgs,
+): Promise<TResult> {
   const maxAttempts = 4;
   const retryDelayMs = 150;
 
@@ -393,7 +393,7 @@ async function executeScriptWithRetry<T>(
         func,
         args,
       });
-      return result[0]?.result as T;
+      return result[0]?.result as TResult;
     } catch (error) {
       if (!isTransientFrameExecutionError(error) || attempt >= maxAttempts) {
         throw error;

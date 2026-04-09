@@ -1,6 +1,6 @@
 # Protocol
 
-Last Updated: 2026-04-07
+Last Updated: 2026-04-10
 Owner: Platform
 
 Current shared protocol types live in `packages/shared-protocol/src/index.ts`.
@@ -73,6 +73,8 @@ Implemented listener source notes:
 - `includeHeaders` (default `false`, sensitive headers are redacted)
 - `maxBodyBytes` (default `256000`)
 - `mimeTypes` (optional MIME prefix allowlist)
+- `streamAdapter` (optional command-owned adapter hint string)
+- `selfUserId` (optional command-owned adapter context string)
 
 Validation and normalization rules for `network.http_intercept` options:
 
@@ -81,6 +83,8 @@ Validation and normalization rules for `network.http_intercept` options:
 - `maxBodyBytes` must be numeric and positive; accepted values are normalized to integer.
 - `includeBody` and `includeHeaders` must be booleans when provided.
 - `urlPatterns`, `mimeTypes`, and `requestHostAllowlist` must be string arrays when provided; entries are trimmed, normalized (lowercased for `mimeTypes`/`requestHostAllowlist`), deduplicated, and empty entries are dropped.
+- `streamAdapter` must be a non-empty string when provided.
+- `selfUserId` must be a string when provided; blank values are omitted from normalized options.
 
 Network interception behavior notes:
 
@@ -88,6 +92,7 @@ Network interception behavior notes:
 - Runtime validates the tab URL against `site` before attaching debugger session state.
 - `network` mode retrieves bodies only after `Network.loadingFinished` to reduce empty-body failures.
 - `fetch` and `hybrid` modes use `Fetch.requestPaused` at response stage; paused requests are always continued by runtime.
+- `hybrid` mode now suppresses equivalent duplicate response emissions observed across `Network` and `Fetch` capture surfaces within a short bounded runtime window.
 
 ## Tab Ownership and Orphan Cleanup
 
@@ -107,6 +112,24 @@ Listener update event shape:
 - `payload.updateType` optional short event name
 - `payload.emittedAt` optional ISO timestamp
 
+Shared domain stream payloads:
+
+- `payload.data` may carry command-owned shared domain objects, not only raw listener transport payloads.
+- Current shared domain object discriminator values include:
+- `chat.message`
+- `chat.typing`
+- `chat.participant`
+- `chat.message_deleted`
+- `content.article`
+- Producers should set `payload.updateType` to the same discriminator value as `payload.data.kind` when emitting shared objects.
+- Shared objects may include `originalEntity` to preserve the site-specific source entity used to produce the normalized object.
+- `originalEntity` is a first-class compatibility field and may be used for product logic, reconciliation, or downstream enrichment (not only debugging).
+- Nested shared references may also include `originalEntity` (for example `from.originalEntity`, `participant.originalEntity`, `conversation.originalEntity`).
+- When source data is available, command adapters should attach `originalEntity`; when unavailable, omit it.
+- Commands must still honor redaction and sensitivity controls; never include raw credentials, tokens, or cookie material in `originalEntity`.
+- Listener envelope and request correlation remain unchanged.
+- Producers should apply bounded duplicate suppression where source transports or payload semantics can replay equivalent events.
+
 Network listener update types:
 
 - `network.response`
@@ -124,6 +147,7 @@ Command test streaming:
 - Controllers should send periodic heartbeat frames (`ping`) during long-lived sessions and handle relay `pong` responses.
 - Relay may proxy `listener_update` events to the original `command.test` `requestId` for active stream sessions.
 - `command_cancel` targeting the original `command.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled`).
+- Listener `options` may include command-owned adapter hints (for example `streamAdapter`) so node runtime can transform raw listener updates into shared domain objects before forwarding.
 
 ## Command Payload
 

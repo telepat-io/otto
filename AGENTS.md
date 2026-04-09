@@ -11,6 +11,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Keep `chrome.debugger` features behind explicit opt-in flags.
 - Keep command execution site-scoped and validate tab URL before running command logic.
 - Keep `command.test` streaming command-native via returned stream listener manifests; avoid site-specific runtime listener managers.
+- Keep runtime listener infrastructure generic (for example `network.http_intercept`) and keep site-specific stream parsing/fallback policy in command modules.
 - Validate declared command input metadata before command execution; command handlers should receive sanitized input.
 - For `otto test`, support optional command-level test hooks with execute fallback for simple commands.
 - Never automate user credential submission; use explicit manual login handoff (`manual_login_required`).
@@ -35,6 +36,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 
 ## Required Validation After Any Update
 - Always run, in order, at the end of any code update:
+- `npm run check`
 - `npm run lint`
 - `npm run build`
 - `npm run -ws --if-present test`
