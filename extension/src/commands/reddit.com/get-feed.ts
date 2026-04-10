@@ -225,7 +225,12 @@ export const getFeedCommand: SiteCommand = {
         };
 
         const collectPostUrls = (limit: number): string[] => {
-          const rows = Array.from(document.querySelectorAll('shreddit-post, [data-testid="post-container"]'));
+          const feedRoot = document.querySelector('#main-content');
+          if (!feedRoot) {
+            return [];
+          }
+
+          const rows = Array.from(feedRoot.querySelectorAll('shreddit-post, [data-testid="post-container"]'));
           const urls = new Set<string>();
 
           const addUrl = (candidateHref: string | null | undefined): void => {
@@ -254,7 +259,7 @@ export const getFeedCommand: SiteCommand = {
           }
 
           if (urls.size < limit) {
-            const allAnchors = Array.from(document.querySelectorAll('a[href*="/comments/"]'));
+            const allAnchors = Array.from(feedRoot.querySelectorAll('a[href*="/comments/"]'));
             for (const anchor of allAnchors) {
               addUrl(anchor.getAttribute('href'));
               if (urls.size >= limit) {
