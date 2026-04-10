@@ -119,6 +119,123 @@ test('shared domain chat.message_deleted renders actor and message id', () => {
   assert.match(lines[0], /Peer User deleted \$evt-3/);
 });
 
+test('command result renders payload post lines in non-json mode', () => {
+  const renderer = createCommandTestStreamRenderer({
+    site: 'reddit.com',
+    command: 'getFeed',
+    jsonOutput: false,
+    useColor: false,
+  });
+
+  const lines = renderer.renderCommandResponse(
+    envelope('result', {
+      ok: true,
+      action: 'command.test',
+      durationMs: 1391,
+      commandOutcome: 'completed',
+      data: {
+        site: 'reddit.com',
+        command: 'getFeed',
+        posts: [
+          {
+            kind: 'content.post',
+            id: 'abc123',
+            title: 'A post title',
+            community: 'r/example',
+            author: { id: 'alice', username: 'alice', displayName: 'Alice' },
+            score: 42,
+            commentCount: 3,
+            content: 'post preview text from reddit',
+          },
+        ],
+      },
+    }, 'command-req-4'),
+    'command.test',
+  );
+
+  assert.equal(lines.length, 7);
+  assert.match(lines[0], /command\.test completed/);
+  assert.equal(lines[1], '[otto:test:data] posts=1');
+  assert.match(lines[2], /^\+/);
+  assert.match(lines[3], /title \/ preview/);
+  assert.equal(lines[3].includes('#'), false);
+  assert.match(lines[4], /^\+/);
+  assert.match(lines[5], /A post title/);
+  assert.match(lines[5], /Alice/);
+  assert.match(lines[5], /r\/example/);
+  assert.match(lines[5], /42/);
+  assert.match(lines[5], /3/);
+  assert.match(lines[5], /post preview text from reddit/);
+  assert.match(lines[6], /^\+/);
+});
+
+test('command result renders generic object summary when posts are absent', () => {
+  const renderer = createCommandTestStreamRenderer({
+    site: 'example.com',
+    command: 'getData',
+    jsonOutput: false,
+    useColor: false,
+  });
+
+  const lines = renderer.renderCommandResponse(
+    envelope('result', {
+      ok: true,
+      action: 'command.test',
+      durationMs: 12,
+      commandOutcome: 'completed',
+      data: {
+        records: 2,
+        status: 'ok',
+      },
+    }, 'command-req-5'),
+    'command.test',
+  );
+
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /command\.test completed/);
+  assert.match(lines[1], /otto:test:data/);
+  assert.match(lines[1], /records=2/);
+});
+
+test('command result colorizes post lines when color output is enabled', () => {
+  const renderer = createCommandTestStreamRenderer({
+    site: 'reddit.com',
+    command: 'getFeed',
+    jsonOutput: false,
+    useColor: true,
+  });
+
+  const lines = renderer.renderCommandResponse(
+    envelope('result', {
+      ok: true,
+      action: 'command.test',
+      durationMs: 120,
+      commandOutcome: 'completed',
+      data: {
+        posts: [
+          {
+            kind: 'content.post',
+            id: 'abc123',
+            title: 'A post title',
+            community: 'r/example',
+            author: { id: 'alice', username: 'alice', displayName: 'Alice' },
+            score: 42,
+            commentCount: 3,
+            content: 'preview line',
+          },
+        ],
+      },
+    }, 'command-req-color-1'),
+    'command.test',
+  );
+
+  assert.equal(lines.length, 7);
+  assert.equal(lines[1].includes('\u001b[34mposts=1\u001b[0m'), true);
+  assert.equal(lines[5].includes('\u001b[32mA post title'), true);
+  assert.equal(lines[5].includes('\u001b[36mAlice'), true);
+  assert.equal(lines[5].includes('\u001b[33mr/example'), true);
+});
+
 test('json output mode preserves full frame object output', () => {
   const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',

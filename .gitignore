@@ -9,3 +9,4 @@ coverage/
 .otto-relay/
 .env
 .DS_Store
+.vscode/

@@ -11,9 +11,9 @@
     "dev": "tsx watch src/index.ts",
     "dev:run": "tsx src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "check": "tsc -p tsconfig.json --noEmit",
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "tsx --test test/**/*.test.ts",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0"
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"test/**/*.ts\" --max-warnings 0"
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",

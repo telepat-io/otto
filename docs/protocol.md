@@ -121,6 +121,8 @@ Shared domain stream payloads:
 - `chat.participant`
 - `chat.message_deleted`
 - `content.article`
+- `content.post`
+- `content.post_comment`
 - Producers should set `payload.updateType` to the same discriminator value as `payload.data.kind` when emitting shared objects.
 - Shared objects may include `originalEntity` to preserve the site-specific source entity used to produce the normalized object.
 - `originalEntity` is a first-class compatibility field and may be used for product logic, reconciliation, or downstream enrichment (not only debugging).
@@ -191,6 +193,7 @@ Command result/error behavior:
 
 - Successful `command.run` returns normalized metadata fields (`site`, `command`) plus command output.
 - Successful `command.test` returns the same result envelope shape as `command.run`.
+- In non-JSON `otto test` mode, CLI may render human-readable summary lines derived from `result.payload.data` while preserving the raw envelope contract on the wire.
 - If tab URL is not yet committed during immediate post-open execution, runtime returns transient execution error (`tab_url_not_ready`, `retryable=true`).
 - Site mismatch after URL commit returns deterministic execution error (`site_mismatch`, `retryable=false`).
 - If a command declares `preloadHost`, runtime auto-navigates to that host before execute and returns `preload_host_mismatch` only when post-navigation host still does not match.

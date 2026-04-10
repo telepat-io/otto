@@ -24,6 +24,29 @@ function createSessionStorageMock(initial: Record<string, unknown> = {}) {
   };
 }
 
+function createQuotaSessionStorageMock(maxBytes: number, initial: Record<string, unknown> = {}) {
+  const state: Record<string, unknown> = { ...initial };
+
+  return {
+    storage: {
+      async get(keys: string[]) {
+        const out: Record<string, unknown> = {};
+        for (const key of keys) out[key] = state[key];
+        return out;
+      },
+      async set(values: Record<string, unknown>) {
+        const next = { ...state, ...values };
+        const serialized = JSON.stringify(next);
+        if (serialized.length > maxBytes) {
+          throw new Error('Session storage quota bytes exceeded. Values were not stored.');
+        }
+        Object.assign(state, values);
+      },
+    },
+    state,
+  };
+}
+
 function buildCommand(requestId: string, idempotencyKey?: string): Envelope<CommandPayload> {
   return createEnvelope('command', 'controller', requestId, {
     targetNodeId: 'node_test',
@@ -80,4 +103,39 @@ test('stale replay entries are pruned by TTL', async () => {
   const miss = await getReplayResponse(storage, buildCommand('req_new', 'idem_old'), 1_000 + 5 * 60 * 1000 + 1);
 
   assert.equal(miss, undefined);
+});
+
+test('rememberReplayResponse compacts oversized responses to avoid quota failures', async () => {
+  const { storage } = createQuotaSessionStorageMock(2_500);
+  const cmd = buildCommand('req_big', 'idem_big');
+  const response = createEnvelope('result', 'node', 'req_big', {
+    ok: true,
+    durationMs: 15,
+    action: 'command.test',
+    data: {
+      site: 'reddit.com',
+      command: 'getFeed',
+      posts: [
+        {
+          kind: 'content.post',
+          id: 'p_1',
+          title: 'large payload post',
+          originalEntity: {
+            veryLargeBlob: 'x'.repeat(20_000),
+          },
+        },
+      ],
+    },
+  });
+
+  await assert.doesNotReject(async () => {
+    await rememberReplayResponse(storage, cmd, response, 9_000);
+  });
+
+  const replayed = await getReplayResponse(storage, buildCommand('req_next', 'idem_big'), 9_001);
+  assert.ok(replayed);
+  const payload = replayed?.payload as { data?: { posts?: Array<Record<string, unknown>> } };
+  const firstPost = payload.data?.posts?.[0];
+  assert.ok(firstPost);
+  assert.equal(Object.prototype.hasOwnProperty.call(firstPost, 'originalEntity'), false);
 });

@@ -153,6 +153,181 @@ function isStreamDomainObject(data: unknown): data is DomainObjectWithKind {
   return Boolean(data && typeof data === 'object' && typeof (data as { kind?: unknown }).kind === 'string');
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function getString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function getNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function resolveAuthorLabel(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return getString(value);
+  }
+
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return getString(value.displayName)
+    || getString(value.username)
+    || getString(value.id);
+}
+
+function renderPostCollection(
+  value: unknown,
+  style: {
+    dim: (text: string) => string;
+    title: (text: string) => string;
+    author: (text: string) => string;
+    community: (text: string) => string;
+    stat: (text: string) => string;
+    preview: (text: string) => string;
+  },
+): string[] {
+  if (!isRecord(value) || !Array.isArray(value.posts)) {
+    return [];
+  }
+
+  const truncate = (input: string, max: number): string => {
+    if (input.length <= max) {
+      return input;
+    }
+    if (max <= 3) {
+      return input.slice(0, max);
+    }
+    return `${input.slice(0, max - 3)}...`;
+  };
+
+  const pad = (input: string, width: number): string => {
+    if (input.length >= width) {
+      return input;
+    }
+    return `${input}${' '.repeat(width - input.length)}`;
+  };
+
+  const widths = {
+    score: 6,
+    comments: 6,
+    community: 18,
+    author: 16,
+    title: 72,
+  };
+
+  const desiredTitleWidth = 72;
+  const minTitleWidth = 18;
+  const tableOverheadWithoutTitle = 16 + widths.score + widths.comments + widths.community + widths.author;
+  const terminalColumns = typeof process.stdout.columns === 'number'
+    ? process.stdout.columns
+    : undefined;
+  const responsiveTitleWidth = terminalColumns === undefined
+    ? desiredTitleWidth
+    : Math.max(minTitleWidth, Math.min(desiredTitleWidth, terminalColumns - tableOverheadWithoutTitle));
+  widths.title = responsiveTitleWidth;
+
+  const separator = [
+    '+',
+    '-'.repeat(widths.score + 2),
+    '+',
+    '-'.repeat(widths.comments + 2),
+    '+',
+    '-'.repeat(widths.community + 2),
+    '+',
+    '-'.repeat(widths.author + 2),
+    '+',
+    '-'.repeat(widths.title + 2),
+    '+',
+  ].join('');
+
+  const posts = value.posts;
+  const lines: string[] = [`[otto:test:data] ${style.stat(`posts=${posts.length}`)}`];
+  if (posts.length === 0) {
+    return lines;
+  }
+
+  lines.push(style.dim(separator));
+  lines.push(style.dim(
+    `| ${pad('score', widths.score)} | ${pad('cmnts', widths.comments)} | ${pad('community', widths.community)} | ${pad('author', widths.author)} | ${pad('title / preview', widths.title)} |`,
+  ));
+  lines.push(style.dim(separator));
+
+  const maxLines = Math.min(posts.length, 20);
+
+  for (let index = 0; index < maxLines; index += 1) {
+    const post = posts[index];
+    if (!isRecord(post)) {
+      lines.push(`[post ${index + 1}] ${summarizeUnknownData(post)}`);
+      continue;
+    }
+
+    const title = getString(post.title) ?? '(untitled)';
+    const author = resolveAuthorLabel(post.author) ?? 'unknown';
+    const community = getString(post.community);
+    const score = getNumber(post.score);
+    const commentCount = getNumber(post.commentCount);
+    const preview = getString(post.content) || getString(post.summary) || getString(post.message);
+    const titleWithPreview = preview
+      ? `${title} | ${preview}`
+      : title;
+
+    const scoreCell = style.stat(pad(score === undefined ? '-' : String(score), widths.score));
+    const commentsCell = style.stat(pad(commentCount === undefined ? '-' : String(commentCount), widths.comments));
+    const communityCell = style.community(pad(truncate(community ?? '-', widths.community), widths.community));
+    const authorCell = style.author(pad(truncate(author, widths.author), widths.author));
+    const titleCell = style.title(pad(truncate(oneLine(titleWithPreview), widths.title), widths.title));
+
+    lines.push(`| ${scoreCell} | ${commentsCell} | ${communityCell} | ${authorCell} | ${titleCell} |`);
+  }
+
+  lines.push(style.dim(separator));
+
+  if (posts.length > maxLines) {
+    lines.push(`[otto:test:data] ${style.dim(`truncated=${posts.length - maxLines}`)}`);
+  }
+
+  return lines;
+}
+
+function renderResultData(
+  value: unknown,
+  style: {
+    dim: (text: string) => string;
+    title: (text: string) => string;
+    author: (text: string) => string;
+    community: (text: string) => string;
+    stat: (text: string) => string;
+    preview: (text: string) => string;
+  },
+): string[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  const postLines = renderPostCollection(value, style);
+  if (postLines.length > 0) {
+    return postLines;
+  }
+
+  if (Array.isArray(value)) {
+    return [`[otto:test:data] array(${value.length})`];
+  }
+
+  if (isRecord(value)) {
+    return [`[otto:test:data] ${summarizeUnknownData(value)}`];
+  }
+
+  return [`[otto:test:data] ${summarizeUnknownData(value)}`];
+}
+
 export function createCommandTestStreamRenderer(context: RendererContext): {
   renderCommandResponse: (msg: Envelope, action: string) => string[];
   renderSubscribeResponse: (msg: Envelope, listener: string) => string[];
@@ -180,6 +355,15 @@ export function createCommandTestStreamRenderer(context: RendererContext): {
     return [jsonLine(msg)];
   };
 
+  const style = {
+    dim: (text: string) => colorize(colorEnabled, 'dim', text),
+    title: (text: string) => colorize(colorEnabled, 'green', text),
+    author: (text: string) => colorize(colorEnabled, 'cyan', text),
+    community: (text: string) => colorize(colorEnabled, 'yellow', text),
+    stat: (text: string) => colorize(colorEnabled, 'blue', text),
+    preview: (text: string) => colorize(colorEnabled, 'dim', text),
+  };
+
   return {
     renderCommandResponse: (msg: Envelope, action: string): string[] => {
       const raw = maybeJson(msg);
@@ -193,7 +377,13 @@ export function createCommandTestStreamRenderer(context: RendererContext): {
         const durationMs = typeof payload.durationMs === 'number' ? payload.durationMs : undefined;
         const statusPart = renderResultStatus(outcome);
         const durationPart = durationMs === undefined ? '' : ` (${durationMs}ms)`;
-        return [`[otto:test] ${action} ${statusPart}${durationPart}`];
+        const dataLines = renderResultData(payload.data, style);
+        const warningLines = Array.isArray(payload.warnings)
+          ? payload.warnings
+            .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+            .map((warning) => `[otto:test:warning] ${shorten(oneLine(warning), 220)}`)
+          : [];
+        return [`[otto:test] ${action} ${statusPart}${durationPart}`, ...dataLines, ...warningLines];
       }
 
       if (msg.messageType === 'error') {

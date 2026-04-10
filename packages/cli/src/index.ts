@@ -1754,7 +1754,7 @@ program
   .option('--controller-description <description>', 'Controller description for auto self-registration when identity is missing')
   .option('--controller-avatar-seed <seed>', 'Optional avatar seed for auto self-registration')
   .option('--cleanup-test-controller', 'Remove auto-registered test controller after command completion', false)
-  .option('--keep-tab-open', 'Keep auto-opened tab instead of closing it after test', false)
+  .option('--wait-for-interrupt', 'Keep terminal attached after command output until Ctrl+C', false)
   .option('--json', 'Output full JSON envelopes for command and stream frames', false)
   .option('--stream-follow-ms <ms>', 'Auto-stop listener stream follow after N milliseconds (for unattended debugging)')
   .option('--stream-probe', 'After listener subscribe, run command.run once to force network traffic for stream diagnostics', false)
@@ -1795,10 +1795,13 @@ program
     let tabCloseAttempted = false;
     let teardownPromise: Promise<void> | undefined;
     let receivedSignal: 'SIGINT' | 'SIGTERM' | undefined;
+    let resolveWaitForInterrupt: (() => void) | undefined;
     const commandAbortController = new AbortController();
 
+    const shouldWaitForInterrupt = opts.waitForInterrupt === true;
+
     const closeOpenedTabIfNeeded = async (hasOriginalError: boolean): Promise<void> => {
-      if (tabCloseAttempted || !openedTabSessionId || opts.keepTabOpen) {
+      if (tabCloseAttempted || !openedTabSessionId) {
         return;
       }
       tabCloseAttempted = true;
@@ -1887,6 +1890,7 @@ program
       }
       receivedSignal = signal;
       commandAbortController.abort();
+      resolveWaitForInterrupt?.();
       process.exitCode = signal === 'SIGTERM' ? 143 : 130;
 
       void performTeardown(`signal ${signal}`, true).finally(() => {
@@ -2075,6 +2079,13 @@ program
         activeCommandTestRequestId = undefined;
       } else {
         activeCommandTestRequestId = undefined;
+
+        if (shouldWaitForInterrupt) {
+          console.log('[otto:test] waiting for interrupt (Ctrl+C)');
+          await new Promise<void>((resolve) => {
+            resolveWaitForInterrupt = resolve;
+          });
+        }
       }
     } catch (error) {
       testExecutionError = error;

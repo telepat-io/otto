@@ -169,10 +169,12 @@ export async function runTestCommand(
   let tabCloseAttempted = false;
   let teardownPromise: Promise<void> | undefined;
   let receivedSignal: 'SIGINT' | 'SIGTERM' | undefined;
+  let resolveWaitForInterrupt: (() => void) | undefined;
   const commandAbortController = new AbortController();
+  const shouldWaitForInterrupt = opts.waitForInterrupt === true;
 
   const closeOpenedTabIfNeeded = async (hasOriginalError: boolean): Promise<void> => {
-    if (tabCloseAttempted || !openedTabSessionId || opts.keepTabOpen) {
+    if (tabCloseAttempted || !openedTabSessionId) {
       return;
     }
     tabCloseAttempted = true;
@@ -261,6 +263,7 @@ export async function runTestCommand(
     }
     receivedSignal = signal;
     commandAbortController.abort();
+    resolveWaitForInterrupt?.();
     process.exitCode = signal === 'SIGTERM' ? 143 : 130;
 
     void performTeardown(`signal ${signal}`, true).finally(() => {
@@ -449,6 +452,13 @@ export async function runTestCommand(
       activeCommandTestRequestId = undefined;
     } else {
       activeCommandTestRequestId = undefined;
+
+      if (shouldWaitForInterrupt) {
+        console.log('[otto:test] waiting for interrupt (Ctrl+C)');
+        await new Promise<void>((resolve) => {
+          resolveWaitForInterrupt = resolve;
+        });
+      }
     }
   } catch (error) {
     testExecutionError = error;

@@ -104,6 +104,8 @@ Reddit command notes:
 - `getUserInfo` supports lookup by `username` or account id and returns normalized profile metadata plus enrollment-relevant flags when available.
 - `sendChatMessage` includes a command-level `test` hook used by `otto test` for non-side-effect readiness checks, while `command.run` still performs message delivery.
 - `getChatMessages` `test` returns a command-native stream manifest with listener subscription details and includes command-owned poll fallback metadata (`fallback.strategy=command_poll`) for bounded recovery flows.
+- `getFeed` now collects homepage post permalinks, hydrates each post via Reddit `.json` endpoints, and returns generic `content.post` objects with recursive `content.post_comment` trees when available.
+- `getFeed` keeps Reddit-specific extraction and JSON mapping logic scoped under `extension/src/commands/reddit.com/`, while output types remain shared and site-agnostic.
 
 ## Runtime Execution Lifecycle
 
@@ -118,6 +120,7 @@ Reddit command notes:
 - `command.test`: call `test` when defined, otherwise fall back to `execute`.
 - For commands returning `stream.listeners` from `test`, CLI subscribes to listener updates and stays active until `Ctrl+C`; cancellation targets the original `command.test` request so relay can deterministically close stream sessions.
 - `otto test` defaults to human-readable stream lines for easier debugging; use `--json` to print full raw envelope objects for every command and stream frame.
+- For non-stream commands that return structured payload data (for example `getFeed` posts), `otto test` now prints compact summary lines in non-JSON mode after command status.
 - For streaming commands, `otto test --timeout` bounds only the initial `command.test` response window; once stream listeners are active, relay does not enforce a stream duration timeout.
 - Long-running controller sessions should send heartbeat `ping` frames and expect relay `pong` responses.
 8. Enforce `metadata.preloadHost` before any call into `execute`.
@@ -247,7 +250,7 @@ Developer test flow:
 - If `targetNodeId` is missing or stale and exactly one node is connected, CLI auto-selects that connected node.
 - If multiple nodes are connected, CLI requires explicit `--node-id`.
 - If `--tab-session` is omitted, CLI auto-opens command `preloadHost` when metadata provides it, otherwise falls back to `https://<site>`.
-- Auto-opened test tabs are closed automatically when the command completes; pass `--keep-tab-open` to keep the tab for manual inspection.
+- Auto-opened test tabs are closed automatically when the command completes; pass `--wait-for-interrupt` to keep the test session attached until `Ctrl+C` so you can inspect the tab before teardown.
 - Non-TTY mode emits JSON and returns non-zero exit code on terminal errors for automation.
 - Use `otto commands list [--site <site>]` to inspect available metadata exposed by the node runtime.
 - `otto test` now sends `command.test` action.

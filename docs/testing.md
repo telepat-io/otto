@@ -98,15 +98,16 @@ Run in this order after any code change:
 - If multiple nodes are connected, pass `--node-id <id>` explicitly.
 - Defaults:
 - Auto-opens command `preloadHost` when available from `command.list` metadata, otherwise falls back to `https://<site>` if `--tab-session` is omitted
-- Auto-opened tabs are closed automatically after command completion (pass `--keep-tab-open` to retain)
+- Auto-opened tabs are closed automatically after command completion (pass `--wait-for-interrupt` to keep the terminal session alive until `Ctrl+C` and inspect before teardown)
 - Uses `command.test` action with `authMode=auto`
 - Automatically falls back to command `execute` when a command does not define a `test` hook
 - `otto test` prefers a single controller websocket for open/test/subscribe/follow; if that socket closes before cleanup close, CLI reconnects and still attempts `primitive.tab.close` for auto-opened tabs.
 - For streaming commands, `--timeout` applies to initial `command.test` response only; active listener follow remains open until explicit stop.
 - Commands returning `stream.listeners` from `command.test` keep `otto test` active and stream listener updates until `Ctrl+C` on that same controller connection
+- Non-stream commands that return rich payloads (for example `reddit.com/getFeed`) should emit human-readable summary lines in non-JSON mode (for example `posts=<n>` and per-post lines) in addition to the terminal command status line.
 - For `reddit.com/getChatMessages`, stream updates should use shared domain `kind` values (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) rather than legacy reddit-specific update names
 - Streaming test mode sends `command_cancel` targeting the original `command.test` request on `Ctrl+C`; relay owns stream teardown and terminal outcome emission
-- `Ctrl+C`/`SIGTERM` during open/test/probe/follow triggers a shared teardown path: cancel active `command.test` stream, unsubscribe listener fallback, then close auto-opened tab (unless `--keep-tab-open`).
+- `Ctrl+C`/`SIGTERM` during open/test/probe/follow triggers a shared teardown path: cancel active `command.test` stream, unsubscribe listener fallback, then close auto-opened tab.
 - Long-running `otto test` streams send periodic controller heartbeat pings; custom controllers should do the same.
 - Non-TTY output is JSON and exits non-zero on terminal command error
 - In TTY mode, `otto test` terminal errors also print a final high-visibility alert footer after the JSON/error hints (including operation errors such as `primitive.tab.open`/`primitive.tab.close`).

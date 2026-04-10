@@ -309,7 +309,7 @@ test('command.run waits for committed tab URL before site validation', async () 
     tabUrlSequenceById: {
       11: [undefined, undefined, 'https://www.reddit.com/'],
     },
-    scriptResults: [{ authenticated: true }, [{ title: 'Ready', author: 'eve' }]],
+    scriptResults: [{ authenticated: true }, { posts: [{ kind: 'content.post', id: 'post-ready', title: 'Ready', author: 'eve' }] }],
   });
 
   const result = await executeCommand(chromeApi, buildCommand('command.run', {
@@ -324,7 +324,7 @@ test('command.run waits for committed tab URL before site validation', async () 
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     command: 'getFeed',
-    posts: [{ title: 'Ready', author: 'eve' }],
+    posts: [{ kind: 'content.post', id: 'post-ready', title: 'Ready', author: 'eve' }],
   });
 });
 
@@ -397,7 +397,7 @@ test('command.run executes when authenticated and returns posts', async () => {
     },
     tabIds: [11],
     tabUrls: { 11: 'https://www.reddit.com/' },
-    scriptResults: [{ authenticated: true }, [{ title: 'Hello', author: 'alice' }]],
+    scriptResults: [{ authenticated: true }, { posts: [{ kind: 'content.post', id: 'post-hello', title: 'Hello', author: 'alice' }] }],
   });
 
   const result = await executeCommand(chromeApi, buildCommand('command.run', {
@@ -412,7 +412,7 @@ test('command.run executes when authenticated and returns posts', async () => {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     command: 'getFeed',
-    posts: [{ title: 'Hello', author: 'alice' }],
+    posts: [{ kind: 'content.post', id: 'post-hello', title: 'Hello', author: 'alice' }],
   });
 });
 
@@ -425,7 +425,7 @@ test('legacy command.reddit_feed action is routed via command runtime', async ()
     },
     tabIds: [11],
     tabUrls: { 11: 'https://www.reddit.com/' },
-    scriptResults: [{ authenticated: true }, [{ title: 'Legacy', author: 'bob' }]],
+    scriptResults: [{ authenticated: true }, { posts: [{ kind: 'content.post', id: 'post-legacy', title: 'Legacy', author: 'bob' }] }],
   });
 
   const result = await executeCommand(chromeApi, buildCommand('command.reddit_feed', {
@@ -436,7 +436,7 @@ test('legacy command.reddit_feed action is routed via command runtime', async ()
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     command: 'getFeed',
-    posts: [{ title: 'Legacy', author: 'bob' }],
+    posts: [{ kind: 'content.post', id: 'post-legacy', title: 'Legacy', author: 'bob' }],
   });
 });
 
@@ -963,7 +963,7 @@ test('command.test falls back to execute when command test hook is absent', asyn
     },
     tabIds: [11],
     tabUrls: { 11: 'https://www.reddit.com/' },
-    scriptResults: [{ authenticated: true }, [{ title: 'Fallback', author: 'zoe' }]],
+    scriptResults: [{ authenticated: true }, { posts: [{ kind: 'content.post', id: 'post-fallback', title: 'Fallback', author: 'zoe' }] }],
   });
 
   const result = await executeCommand(chromeApi, buildCommand('command.test', {
@@ -978,7 +978,7 @@ test('command.test falls back to execute when command test hook is absent', asyn
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     command: 'getFeed',
-    posts: [{ title: 'Fallback', author: 'zoe' }],
+    posts: [{ kind: 'content.post', id: 'post-fallback', title: 'Fallback', author: 'zoe' }],
   });
 });
 
@@ -993,7 +993,7 @@ test('command.test falls back to execute and honors preloadHost compatibility', 
     tabUrls: { 11: 'https://chat.reddit.com/threads' },
     scriptResults: [
       { authenticated: true },
-      [{ title: 'from fallback execute', author: 'otto' }],
+      { posts: [{ kind: 'content.post', id: 'post-fallback-2', title: 'from fallback execute', author: 'otto' }] },
     ],
   });
 
@@ -1010,7 +1010,7 @@ test('command.test falls back to execute and honors preloadHost compatibility', 
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     command: 'getFeed',
-    posts: [{ title: 'from fallback execute', author: 'otto' }],
+    posts: [{ kind: 'content.post', id: 'post-fallback-2', title: 'from fallback execute', author: 'otto' }],
   });
 });
 

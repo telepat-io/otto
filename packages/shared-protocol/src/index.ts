@@ -172,12 +172,47 @@ export interface Article {
   originalEntity?: unknown;
 }
 
+export interface PostComment {
+  kind: 'content.post_comment';
+  id: string;
+  parentPostId?: string;
+  parentCommentId?: string;
+  author?: UserRef;
+  content?: string;
+  publishedAt?: string;
+  editedAt?: string;
+  score?: number;
+  depth?: number;
+  comments?: PostComment[];
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
+export interface Post {
+  kind: 'content.post';
+  id: string;
+  title: string;
+  url?: string;
+  author?: UserRef;
+  publishedAt?: string;
+  editedAt?: string;
+  content?: string;
+  community?: string;
+  score?: number;
+  commentCount?: number;
+  comments?: PostComment[];
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
 export type StreamDomainObject =
   | ChatMessage
   | ChatTypingEvent
   | ChatParticipantEvent
   | ChatMessageDeletedEvent
-  | Article;
+  | Article
+  | Post
+  | PostComment;
 
 export type CommandOutcome = 'completed' | 'failed' | 'timed_out' | 'cancelled';
 
