@@ -41,6 +41,7 @@ import {
   storeClientSecret,
 } from './client-secret-store.js';
 import { resolveCleanupSocketStrategy } from './test-cleanup.js';
+import { createSocketClosedWhileWaitingError, toSocketCloseAlertPayload } from './cli/socket-errors.js';
 
 type CommandDescriptorLike = {
   site?: string;
@@ -614,7 +615,7 @@ function sendCommandWithSocket(
     };
 
     const onClose = () => {
-      settle(() => reject(new Error(`Socket closed while waiting for ${opts.action} response`)));
+      settle(() => reject(createSocketClosedWhileWaitingError(opts.action)));
     };
 
     const onAbort = () => {
@@ -1450,7 +1451,7 @@ client
     const base = getRelayHttpBase(config);
     const clientId = String(opts.clientId ?? config.controllerClientId ?? '').trim();
     if (!clientId) {
-      throw new Error('Missing client id. Pass --client-id or run otto client register first.');
+      throw new Error('Missing client id. Pass --client-id or run otto client register first, then otto client login.');
     }
 
     let clientSecret: string;
@@ -1752,7 +1753,7 @@ program
   .option('--controller-name <name>', 'Controller name for auto self-registration when identity is missing')
   .option('--controller-description <description>', 'Controller description for auto self-registration when identity is missing')
   .option('--controller-avatar-seed <seed>', 'Optional avatar seed for auto self-registration')
-  .option('--no-cleanup-test-controller', 'Keep auto-registered test controller after command completion')
+  .option('--cleanup-test-controller', 'Remove auto-registered test controller after command completion', false)
   .option('--keep-tab-open', 'Keep auto-opened tab instead of closing it after test', false)
   .option('--json', 'Output full JSON envelopes for command and stream frames', false)
   .option('--stream-follow-ms <ms>', 'Auto-stop listener stream follow after N milliseconds (for unattended debugging)')
@@ -1981,9 +1982,9 @@ program
         ) {
           const nodeSuffix = errorPayload.nodeId ? ` for node ${errorPayload.nodeId}` : '';
           console.error(
-            `[otto] controller token is missing command.test scope${nodeSuffix}. Re-pair to issue a token with updated scopes.`,
+            `[otto] controller token is missing command.test scope${nodeSuffix}. Re-auth with controller client credentials to issue a token with updated scopes.`,
           );
-          console.error('[otto] suggested fix: otto revoke && otto authcode && otto pair <code>');
+          console.error('[otto] suggested fix: otto client login (or re-pair if you use pairing auth)');
         }
         await showTestFailureFooterAlert(errorPayload);
         process.exitCode = 1;
@@ -2080,6 +2081,12 @@ program
       if (receivedSignal) {
         return;
       }
+      const socketClosePayload = toSocketCloseAlertPayload(error);
+      if (socketClosePayload) {
+        await showTestFailureFooterAlert(socketClosePayload, 'otto test interrupted before command response');
+        process.exitCode = 1;
+        return;
+      }
       throw error;
     } finally {
       process.removeListener('SIGINT', onSigint);
@@ -2090,7 +2097,7 @@ program
       ws.close();
       stopHeartbeat();
 
-      if (registration.autoRegisteredClientId && opts.cleanupTestController !== false) {
+      if (registration.autoRegisteredClientId && opts.cleanupTestController === true) {
         try {
           await removeControllerClientAtRelay(config, registration.autoRegisteredClientId);
           await deleteClientSecret(config, registration.autoRegisteredClientId);

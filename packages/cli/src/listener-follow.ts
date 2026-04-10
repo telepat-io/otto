@@ -90,7 +90,7 @@ export async function subscribeListenerAndFollow(
         if (errorPayload.code === 'forbidden_action' && errorPayload.action === 'listener.subscribe') {
           reject(
             new Error(
-              `${errorPayload.message ?? 'listener.subscribe forbidden'}; controller token likely lacks listener.subscribe scope. Re-auth controller with \`otto client login\` to mint a token with listener scopes.`,
+              `${errorPayload.message ?? 'listener.subscribe forbidden'}; controller token likely lacks listener.subscribe scope. Re-auth with \`otto client login\` (or re-pair if you use pairing auth) to mint a token with listener scopes.`,
             ),
           );
           return;

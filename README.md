@@ -87,27 +87,28 @@ Setup behavior reference:
 Default extension relay URL is ws://127.0.0.1:8787?role=node
 ```
 
-5. Pair controller and node:
+5. Preferred: register a persistent controller identity (client-secret auth):
+
+```bash
+otto client register --name "my-laptop" --description "Persistent controller for local testing"
+otto client login
+```
+
+Notes:
+
+- `otto client register` returns a one-time client secret and stores it in OS keychain when available.
+- If keychain is unavailable, set `OTTO_CONTROLLER_CLIENT_SECRET` (or pass `--client-secret`) and rerun `otto client login`.
+- Client secret is used for token exchange (`otto client login`); runtime commands use bearer token scopes plus node ACL grants.
+- Newly registered controller clients must be granted node access in extension popup/options under Controller Access.
+
+6. Pair controller and node (secondary onboarding path):
 
 ```bash
 otto authcode
 otto pair <code>
 ```
 
-Alternative controller onboarding (independent client lifecycle):
-
-```bash
-otto client register --label "my-laptop"
-otto client login
-```
-
-Notes:
-
-- `otto client register` stores the client secret in OS keychain when available.
-- If keychain is unavailable, set `OTTO_CONTROLLER_CLIENT_SECRET` and rerun `otto client login`.
-- Newly registered controller clients must be granted node access in extension popup/options under Controller Access.
-
-6. Smoke test:
+7. Smoke test:
 
 ```bash
 otto commands list

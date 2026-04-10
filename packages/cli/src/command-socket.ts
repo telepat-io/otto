@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import WebSocket from 'ws';
 import { createEnvelope, type CommandPayload, type Envelope } from '@telepat/otto-protocol';
+import { createSocketClosedWhileWaitingError } from './cli/socket-errors.js';
 
 export type SentCommand = {
   requestId: string;
@@ -65,7 +66,7 @@ export function sendCommandWithSocket(
     };
 
     const onClose = () => {
-      settle(() => reject(new Error(`Socket closed while waiting for ${opts.action} response`)));
+      settle(() => reject(createSocketClosedWhileWaitingError(opts.action)));
     };
 
     const onAbort = () => {

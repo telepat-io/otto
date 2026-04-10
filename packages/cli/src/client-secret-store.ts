@@ -54,7 +54,7 @@ export async function resolveClientSecret(
   const keytar = await loadKeytar();
   if (!keytar) {
     throw new Error(
-      `Client secret not found in environment and keychain is unavailable. Set ${CLIENT_SECRET_ENV_VAR}.`,
+      `Client secret not found in environment and keychain is unavailable. Set ${CLIENT_SECRET_ENV_VAR} or pass --client-secret to otto client login.`,
     );
   }
 
@@ -62,7 +62,7 @@ export async function resolveClientSecret(
   const secret = await keytar.getPassword(CLIENT_SECRET_SERVICE_NAME, account);
   if (!secret) {
     throw new Error(
-      `No stored secret found for client ${clientId}. Set ${CLIENT_SECRET_ENV_VAR} or register/login again.`,
+      `No stored secret found for client ${clientId}. Set ${CLIENT_SECRET_ENV_VAR} or run otto client login --client-secret <secret>.`,
     );
   }
 

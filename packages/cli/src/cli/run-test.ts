@@ -3,6 +3,7 @@ import type { CommandTestStream, Envelope } from '@telepat/otto-protocol';
 import { createCommandTestStreamRenderer } from '../test-stream/format.js';
 import { resolveCleanupSocketStrategy } from '../test-cleanup.js';
 import type { OttoConfig } from '../config.js';
+import { toSocketCloseAlertPayload } from './socket-errors.js';
 
 export async function runCmdCommand(
   opts: { action: string; tabSession?: string; nodeId?: string; payload: string; timeout: string },
@@ -454,6 +455,12 @@ export async function runTestCommand(
     if (receivedSignal) {
       return;
     }
+    const socketClosePayload = toSocketCloseAlertPayload(error);
+    if (socketClosePayload) {
+      await deps.showTestFailureFooterAlert(socketClosePayload, 'otto test interrupted before command response');
+      process.exitCode = 1;
+      return;
+    }
     throw error;
   } finally {
     process.removeListener('SIGINT', onSigint);
@@ -464,7 +471,7 @@ export async function runTestCommand(
     ws.close();
     stopHeartbeat();
 
-    if (registration.autoRegisteredClientId && opts.cleanupTestController !== false) {
+    if (registration.autoRegisteredClientId && opts.cleanupTestController === true) {
       try {
         await deps.removeControllerClientAtRelay(config, registration.autoRegisteredClientId);
         await deps.deleteClientSecret(config, registration.autoRegisteredClientId);

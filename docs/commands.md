@@ -39,6 +39,7 @@ CLI entrypoints:
 
 - `otto commands list [--site <site>]`
 - `otto test <site> <command> [--payload <json>] [--timeout <ms>] [--auth-mode auto|strict_fail|skip] [--json]`
+- `otto test` retains auto-registered `otto-tester` controller identity by default; pass `--cleanup-test-controller` to remove it after the run.
 
 Site-scoped command model:
 

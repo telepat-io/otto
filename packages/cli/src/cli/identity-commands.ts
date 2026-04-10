@@ -126,7 +126,7 @@ export function registerIdentityCommands(program: Command, deps: RegisterIdentit
       const base = deps.getRelayHttpBase(config);
       const clientId = String(opts.clientId ?? config.controllerClientId ?? '').trim();
       if (!clientId) {
-        throw new Error('Missing client id. Pass --client-id or run otto client register first.');
+        throw new Error('Missing client id. Pass --client-id or run otto client register first, then otto client login.');
       }
 
       let clientSecret: string;

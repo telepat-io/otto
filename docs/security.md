@@ -38,6 +38,7 @@ Baseline controls:
 Threat boundaries:
 
 - Relay auth and scopes protect command ingress.
+- Runtime controller command authorization is bearer-token based (access token scopes + node ACL grants), not client-secret based.
 - Command auth preflight protects website-session prerequisites.
 - Browser credentials remain user-managed and never transmitted through Otto command payloads by design.
 
@@ -51,6 +52,7 @@ Current controls:
 
 - Pairing approval is first-wins; repeat approval attempts return deterministic `pairing_not_pending`.
 - Controller clients registered via `/api/controller/token` are denied node command routing until node-owned ACL grants access (`acl_missing_node_grant`).
+- Controller client secrets are used for `/api/controller/token` credential exchange and are never transmitted in runtime command frames.
 - Malformed or expired access tokens are rejected during WebSocket auth with `invalid_access_token`.
 - Malformed command envelopes (for example missing `targetNodeId`) are rejected before routing.
 - Queue depth and per-session rate limits are enforced to reduce starvation and abuse pressure.

@@ -66,7 +66,7 @@ Controller client registration and ACL:
 
 - `POST /api/controller/register` with `{ name, description, avatarSeed? }`
 - `POST /api/controller/token`
-- `POST /api/controller/remove` with `{ clientId }` (revokes + purges controller client record)
+- `POST /api/controller/remove` with `{ clientId }` (revokes controller client record and tears down ACL/refresh/sessions)
 - `POST /api/controller/remove-all` (revokes + purges all controller client records)
 - `GET /api/controller/access` (node bearer token required)
 - `POST /api/controller/access` (node bearer token required)
@@ -74,6 +74,7 @@ Controller client registration and ACL:
 ACL enforcement note:
 
 - Node-targeted controller commands without an active grant return deterministic error code `acl_missing_node_grant`.
+- Client secret is only used for `/api/controller/token`; runtime command authorization uses access-token scopes and node ACL grants.
 
 Related CLI commands:
 
@@ -86,6 +87,7 @@ Related CLI commands:
 Removal semantics notes:
 
 - Single remove and bulk remove both tear down ACL grants, refresh sessions, and active controller sockets for affected clients.
+- Single remove marks a controller client as revoked; bulk remove additionally purges controller records.
 - Bulk remove is idempotent after purge; subsequent `remove-all` calls return zero removals until new clients are registered.
 
 Logs:

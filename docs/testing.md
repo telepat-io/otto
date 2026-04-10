@@ -110,12 +110,14 @@ Run in this order after any code change:
 - Long-running `otto test` streams send periodic controller heartbeat pings; custom controllers should do the same.
 - Non-TTY output is JSON and exits non-zero on terminal command error
 - In TTY mode, `otto test` terminal errors also print a final high-visibility alert footer after the JSON/error hints (including operation errors such as `primitive.tab.open`/`primitive.tab.close`).
+- If the controller websocket closes before a command response envelope arrives, `otto test` now emits a high-visibility transport interruption footer alert and exits non-zero without throwing a raw stack-style error line.
 
 `otto test` controller identity and cleanup behavior:
 
 - If no local controller identity/token is available, `otto test` performs self-registration automatically.
 - Default self-registration metadata is non-interactive: `name=otto-tester`, `description=Auto-registered controller for otto test flows.`
-- Self-registered test controller is removed by default when test run exits; pass `--no-cleanup-test-controller` to retain it.
+- Self-registered test controller is retained by default when test run exits so it can be approved once and reused.
+- Pass `--cleanup-test-controller` to remove the auto-registered controller at the end of that test run.
 - When retained, node ACL grants still require explicit popup approval before node-targeted actions can route.
 
 TTY failure-surface behavior:

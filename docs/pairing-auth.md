@@ -54,7 +54,7 @@ Setup workflow integration:
 
 ## Independent Controller Client Flow
 
-Controller clients can now register independently of node pairing.
+Controller clients can register independently of node pairing and this is the recommended path for persistent controller identities.
 
 1. Register controller client identity:
 
@@ -68,6 +68,8 @@ Controller clients can now register independently of node pairing.
 - `POST /api/controller/token`
 - Payload: `{ clientId, clientSecret }`
 - Response: `{ accessToken, refreshToken, scopes, controllerId, clientId }`
+- Client secret is only used for this credential exchange and is not sent with runtime command frames.
+- Runtime command authorization uses bearer access tokens, token scopes, and node-owned ACL grants.
 
 CLI onboarding commands for this flow:
 
@@ -79,7 +81,7 @@ CLI onboarding commands for this flow:
 
 Controller removal behavior:
 
-- `POST /api/controller/remove` with `{ clientId }` revokes and purges the controller record from relay controller-client storage.
+- `POST /api/controller/remove` with `{ clientId }` revokes the controller record and immediately removes ACL grants, refresh sessions, and active controller sockets for that client.
 - `POST /api/controller/remove-all` revokes and purges all controller records.
 - Relay immediately removes all ACL grants for that client, revokes its refresh sessions, and disconnects active controller websocket sessions for that client.
 - Bulk removal applies the same ACL/session revocation semantics to every registered controller client.
@@ -90,6 +92,7 @@ Secret handling behavior:
 - CLI stores controller client secrets in OS keychain when available (via cross-platform keytar integration).
 - Environment variable fallback: `OTTO_CONTROLLER_CLIENT_SECRET`.
 - `OTTO_CONTROLLER_CLIENT_SECRET` takes precedence over keychain lookup.
+- Relay stores only salted client-secret hashes at rest (never plaintext secrets).
 
 3. Node-owned ACL grant controls target-node access:
 
@@ -105,8 +108,8 @@ Test-flow cleanup behavior:
 
 - `otto test` auto self-registers a controller only when no local controller identity/tokens are present.
 - Auto-registration now defaults to `name=otto-tester` and description `Auto-registered controller for otto test flows.` and does not prompt interactively when defaults are used.
-- That auto-registered controller is removed automatically at the end of the test run by default.
-- Use `--no-cleanup-test-controller` to keep the auto-registered controller for follow-up debugging.
+- That auto-registered controller is retained automatically at the end of the test run by default.
+- Use `--cleanup-test-controller` to remove the auto-registered controller after the run.
 
 Extension onboarding UI (v1):
 

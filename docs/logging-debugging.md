@@ -161,7 +161,9 @@ Relevant environment variables:
 
 7. If `acl_missing_node_grant`, open extension popup -> Controller Access and grant that controller client for the node before retrying.
 
-8. Use `requestId` from command output to filter relay logs for that execution.
+8. If the CLI reports that the controller connection closed before a command response, treat it as transport interruption first: verify relay is reachable, extension node is connected, then retry. If the controller is newly created for testing, confirm node access grant in extension Controller Access.
+
+9. Use `requestId` from command output to filter relay logs for that execution.
 
 Unattended capture example (auto-stops listener follow after 45s):
 
