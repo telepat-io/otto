@@ -416,6 +416,34 @@ test('command.run executes when authenticated and returns posts', async () => {
   });
 });
 
+test('command.run getFeed accepts optional minReturnedPosts input', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{ authenticated: true }, { posts: [{ kind: 'content.post', id: 'post-min', title: 'Min', author: 'alice' }] }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getFeed',
+    input: { minReturnedPosts: 35 },
+    authMode: 'auto',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getFeed',
+    posts: [{ kind: 'content.post', id: 'post-min', title: 'Min', author: 'alice' }],
+  });
+});
+
 test('legacy command.reddit_feed action is routed via command runtime', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
@@ -882,6 +910,34 @@ test('command.run rejects invalid input field types before execute', async () =>
       site: 'reddit.com',
       command: 'sendChatMessage',
       input: { username: 'alice', message: 1 },
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_command_input_type');
+      return true;
+    },
+  );
+});
+
+test('command.run rejects non-number getFeed minReturnedPosts before execute', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'getFeed',
+      input: { minReturnedPosts: '20' },
       authMode: 'auto',
     })),
     (err: unknown) => {

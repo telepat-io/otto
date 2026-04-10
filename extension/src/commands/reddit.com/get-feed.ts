@@ -1,9 +1,14 @@
 import type { Post } from '@telepat/otto-protocol';
 import type { SiteCommand } from '../types.js';
 
-const MAX_POSTS = 20;
+const DEFAULT_MIN_RETURNED_POSTS = 20;
+const MAX_MIN_RETURNED_POSTS = 200;
+const MAX_POST_URLS_TO_FETCH = 250;
 const MAX_CONCURRENT_FETCHES = 4;
 const FETCH_TIMEOUT_MS = 8_000;
+const MAX_SCROLL_PASSES = 24;
+const SCROLL_WAIT_MS = 650;
+const STAGNANT_SCROLL_PASSES_TO_STOP = 3;
 
 export const getFeedCommand: SiteCommand = {
   metadata: {
@@ -14,13 +19,42 @@ export const getFeedCommand: SiteCommand = {
     tags: ['feed', 'reddit'],
     requiresAuth: true,
     preloadHost: 'reddit.com',
-    inputFields: [],
+    inputFields: [
+      {
+        name: 'minReturnedPosts',
+        type: 'number',
+        description: 'Minimum number of feed posts to attempt to return by scrolling and loading additional pages.',
+        optional: true,
+      },
+    ],
   },
-  async execute(ctx) {
+  async execute(ctx, input) {
+    const minReturnedPostsRaw = input.minReturnedPosts;
+    const minReturnedPosts = typeof minReturnedPostsRaw === 'number' && Number.isFinite(minReturnedPostsRaw)
+      ? minReturnedPostsRaw
+      : DEFAULT_MIN_RETURNED_POSTS;
+    const boundedMinReturnedPosts = Math.max(1, Math.min(MAX_MIN_RETURNED_POSTS, Math.floor(minReturnedPosts)));
+    const targetPostUrlCount = Math.max(
+      boundedMinReturnedPosts,
+      Math.min(MAX_POST_URLS_TO_FETCH, Math.ceil(boundedMinReturnedPosts * 1.5)),
+    );
+
     const result = await ctx.executeScript(
-      async (maxPosts: number, maxConcurrentFetches: number, fetchTimeoutMs: number) => {
+      async (
+        minPostUrlCount: number,
+        maxPostUrlsToFetch: number,
+        maxConcurrentFetches: number,
+        fetchTimeoutMs: number,
+        maxScrollPasses: number,
+        scrollWaitMs: number,
+        stagnantPassesToStop: number,
+      ) => {
         type GenericRecord = Record<string, unknown>;
         type RedditListingNode = { kind?: unknown; data?: GenericRecord };
+
+        const sleep = (delayMs: number): Promise<void> => new Promise((resolve) => {
+          window.setTimeout(resolve, delayMs);
+        });
 
         const toIsoFromSeconds = (value: unknown): string | undefined => {
           if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -224,12 +258,8 @@ export const getFeedCommand: SiteCommand = {
           };
         };
 
-        const collectPostUrls = (limit: number): string[] => {
-          const feedRoot = document.querySelector('#main-content');
-          if (!feedRoot) {
-            return [];
-          }
-
+        const collectPostUrlsWithinFeedRoot = (feedRoot: Element, limit: number): string[] => {
+          const cappedLimit = Math.max(1, limit);
           const rows = Array.from(feedRoot.querySelectorAll('shreddit-post, [data-testid="post-container"]'));
           const urls = new Set<string>();
 
@@ -245,30 +275,87 @@ export const getFeedCommand: SiteCommand = {
           };
 
           for (const row of rows) {
-            if (urls.size >= limit) {
+            if (urls.size >= cappedLimit) {
               break;
             }
 
             const anchors = Array.from(row.querySelectorAll('a[href*="/comments/"]'));
             for (const anchor of anchors) {
               addUrl(anchor.getAttribute('href'));
-              if (urls.size >= limit) {
+              if (urls.size >= cappedLimit) {
                 break;
               }
             }
           }
 
-          if (urls.size < limit) {
+          if (urls.size < cappedLimit) {
             const allAnchors = Array.from(feedRoot.querySelectorAll('a[href*="/comments/"]'));
             for (const anchor of allAnchors) {
               addUrl(anchor.getAttribute('href'));
-              if (urls.size >= limit) {
+              if (urls.size >= cappedLimit) {
                 break;
               }
             }
           }
 
-          return Array.from(urls).slice(0, limit);
+          return Array.from(urls).slice(0, cappedLimit);
+        };
+
+        const collectPostUrlsWithPagination = async (
+          minCount: number,
+          hardCap: number,
+          scrollPassLimit: number,
+          scrollDelayMs: number,
+          maxStagnantPasses: number,
+        ): Promise<string[]> => {
+          const feedRoot = document.querySelector('#main-content');
+          if (!feedRoot) {
+            return [];
+          }
+
+          const cappedTarget = Math.max(1, Math.min(hardCap, minCount));
+          let previousDocumentHeight = document.documentElement.scrollHeight;
+          let previousFeedHeight = feedRoot.scrollHeight;
+          let previousCount = 0;
+          let stagnantPasses = 0;
+
+          for (let pass = 0; pass <= scrollPassLimit; pass += 1) {
+            const currentUrls = collectPostUrlsWithinFeedRoot(feedRoot, hardCap);
+            const currentCount = currentUrls.length;
+            if (currentCount >= cappedTarget) {
+              return currentUrls;
+            }
+
+            const lastItem = feedRoot.lastElementChild;
+            if (lastItem instanceof HTMLElement) {
+              lastItem.scrollIntoView({ block: 'end', inline: 'nearest' });
+            }
+            window.scrollTo({ top: document.documentElement.scrollHeight, left: 0, behavior: 'auto' });
+            await sleep(scrollDelayMs);
+
+            const postWaitUrls = collectPostUrlsWithinFeedRoot(feedRoot, hardCap);
+            const postWaitCount = postWaitUrls.length;
+            if (postWaitCount >= cappedTarget) {
+              return postWaitUrls;
+            }
+
+            const nextDocumentHeight = document.documentElement.scrollHeight;
+            const nextFeedHeight = feedRoot.scrollHeight;
+            const madeProgress = postWaitCount > previousCount
+              || nextDocumentHeight > previousDocumentHeight
+              || nextFeedHeight > previousFeedHeight;
+
+            previousDocumentHeight = nextDocumentHeight;
+            previousFeedHeight = nextFeedHeight;
+            previousCount = postWaitCount;
+
+            stagnantPasses = madeProgress ? 0 : stagnantPasses + 1;
+            if (stagnantPasses >= maxStagnantPasses) {
+              break;
+            }
+          }
+
+          return collectPostUrlsWithinFeedRoot(feedRoot, hardCap);
         };
 
         const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unknown> => {
@@ -300,7 +387,13 @@ export const getFeedCommand: SiteCommand = {
           }
         };
 
-        const postUrls = collectPostUrls(maxPosts);
+        const postUrls = await collectPostUrlsWithPagination(
+          minPostUrlCount,
+          maxPostUrlsToFetch,
+          maxScrollPasses,
+          scrollWaitMs,
+          stagnantPassesToStop,
+        );
         if (postUrls.length === 0) {
           return { posts: [] };
         }
@@ -333,7 +426,15 @@ export const getFeedCommand: SiteCommand = {
 
         return { posts: outputPosts };
       },
-      [MAX_POSTS, MAX_CONCURRENT_FETCHES, FETCH_TIMEOUT_MS],
+      [
+        targetPostUrlCount,
+        MAX_POST_URLS_TO_FETCH,
+        MAX_CONCURRENT_FETCHES,
+        FETCH_TIMEOUT_MS,
+        MAX_SCROLL_PASSES,
+        SCROLL_WAIT_MS,
+        STAGNANT_SCROLL_PASSES_TO_STOP,
+      ],
     );
 
     const rawPosts = result && typeof result === 'object' && Array.isArray((result as { posts?: unknown }).posts)

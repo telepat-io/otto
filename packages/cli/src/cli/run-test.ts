@@ -5,6 +5,24 @@ import { resolveCleanupSocketStrategy } from '../test-cleanup.js';
 import type { OttoConfig } from '../config.js';
 import { toSocketCloseAlertPayload } from './socket-errors.js';
 
+function applyTestInputDefaults(site: string, command: string, input: Record<string, unknown>): Record<string, unknown> {
+  const normalizedSite = site.trim().toLowerCase();
+  const normalizedCommand = command.trim();
+
+  if (
+    normalizedSite === 'reddit.com'
+    && normalizedCommand === 'getFeed'
+    && !Object.prototype.hasOwnProperty.call(input, 'minReturnedPosts')
+  ) {
+    return {
+      ...input,
+      minReturnedPosts: 20,
+    };
+  }
+
+  return input;
+}
+
 export async function runCmdCommand(
   opts: { action: string; tabSession?: string; nodeId?: string; payload: string; timeout: string },
   deps: {
@@ -151,7 +169,11 @@ export async function runTestCommand(
     ? deps.parsePositiveNumberOption(opts.streamPollIntervalMs, '--stream-poll-interval-ms')
     : undefined;
   const jsonOutput = Boolean(opts.json) || deps.isJsonOutput(config);
-  const commandInput = deps.parseJsonObject(String(opts.payload ?? '{}'), '--payload');
+  const commandInput = applyTestInputDefaults(
+    site,
+    command,
+    deps.parseJsonObject(String(opts.payload ?? '{}'), '--payload'),
+  );
   const ws = await deps.openControllerSocket(config);
   const stopHeartbeat = deps.startControllerHeartbeat(ws);
   const renderer = createCommandTestStreamRenderer({
@@ -172,6 +194,13 @@ export async function runTestCommand(
   let resolveWaitForInterrupt: (() => void) | undefined;
   const commandAbortController = new AbortController();
   const shouldWaitForInterrupt = opts.waitForInterrupt === true;
+
+  const waitForInterrupt = async (): Promise<void> => {
+    console.log('[otto:test] waiting for interrupt (Ctrl+C)');
+    await new Promise<void>((resolve) => {
+      resolveWaitForInterrupt = resolve;
+    });
+  };
 
   const closeOpenedTabIfNeeded = async (hasOriginalError: boolean): Promise<void> => {
     if (tabCloseAttempted || !openedTabSessionId) {
@@ -365,6 +394,11 @@ export async function runTestCommand(
       }
       await deps.showTestFailureFooterAlert(errorPayload);
       process.exitCode = 1;
+
+      if (shouldWaitForInterrupt) {
+        await waitForInterrupt();
+      }
+
       return;
     }
 
@@ -454,10 +488,7 @@ export async function runTestCommand(
       activeCommandTestRequestId = undefined;
 
       if (shouldWaitForInterrupt) {
-        console.log('[otto:test] waiting for interrupt (Ctrl+C)');
-        await new Promise<void>((resolve) => {
-          resolveWaitForInterrupt = resolve;
-        });
+        await waitForInterrupt();
       }
     }
   } catch (error) {

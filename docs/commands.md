@@ -104,7 +104,8 @@ Reddit command notes:
 - `getUserInfo` supports lookup by `username` or account id and returns normalized profile metadata plus enrollment-relevant flags when available.
 - `sendChatMessage` includes a command-level `test` hook used by `otto test` for non-side-effect readiness checks, while `command.run` still performs message delivery.
 - `getChatMessages` `test` returns a command-native stream manifest with listener subscription details and includes command-owned poll fallback metadata (`fallback.strategy=command_poll`) for bounded recovery flows.
-- `getFeed` now collects homepage post permalinks, hydrates each post via Reddit `.json` endpoints, and returns generic `content.post` objects with recursive `content.post_comment` trees when available.
+- `getFeed` now collects feed post permalinks from `#main-content`, hydrates each post via Reddit `.json` endpoints, and returns generic `content.post` objects with recursive `content.post_comment` trees when available.
+- `getFeed` supports optional input `minReturnedPosts` (number). Runtime scrolls page-by-page (`scroll -> wait -> collect`) until at least that many post URLs are discovered or a bounded pagination limit is reached. Returning more than requested is allowed.
 - `getFeed` keeps Reddit-specific extraction and JSON mapping logic scoped under `extension/src/commands/reddit.com/`, while output types remain shared and site-agnostic.
 
 ## Runtime Execution Lifecycle
@@ -247,6 +248,7 @@ Reddit-specific execution errors (command-level messages/codes):
 Developer test flow:
 
 - Use `otto test <site> <command>` for local execution.
+- `otto test reddit.com getFeed` defaults `input.minReturnedPosts=20` when `--payload` does not provide it.
 - If `targetNodeId` is missing or stale and exactly one node is connected, CLI auto-selects that connected node.
 - If multiple nodes are connected, CLI requires explicit `--node-id`.
 - If `--tab-session` is omitted, CLI auto-opens command `preloadHost` when metadata provides it, otherwise falls back to `https://<site>`.
