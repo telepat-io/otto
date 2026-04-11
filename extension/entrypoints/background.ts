@@ -14,6 +14,7 @@ import { executeCommand } from '../src/runtime/command-executor.js';
 import { CommandExecutionError } from '../src/runtime/execution-error.js';
 import {
   getNetworkInterceptListenerManager,
+  getTabAudioKeepaliveManager,
 } from '../src/runtime/listener-managers.js';
 import { deriveOnboardingState, type RelayConnectionStatus } from '../src/runtime/onboarding/state.js';
 import { createRedditStreamDomainMapper } from '../src/commands/reddit.com/chat-stream.js';
@@ -99,6 +100,7 @@ export default defineBackground(() => {
   const activeListenerRequestIds = new Set<string>();
   const listenerNameByRequestId = new Map<string, string>();
   const networkInterceptListenerManager = getNetworkInterceptListenerManager(chrome);
+  const tabAudioKeepaliveManager = getTabAudioKeepaliveManager(chrome);
 
   const runMaintenance = (mode: 'bootstrap' | 'keepwarm') => {
     if (maintenanceInFlight) {
@@ -176,6 +178,77 @@ export default defineBackground(() => {
   chrome.runtime.onInstalled.addListener(() => runMaintenance('bootstrap'));
   chrome.runtime.onStartup.addListener(() => runMaintenance('bootstrap'));
 
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.status !== 'loading' && changeInfo.status !== 'complete') {
+      return;
+    }
+
+    withRuntimeErrorLogging(
+      (async () => {
+        const session = await chrome.storage.session.get(['tabSessions', 'tabSessionModes', 'tabSessionReadiness']);
+        const tabSessions = (session.tabSessions as Record<string, number> | undefined) ?? {};
+        const tabSessionModes = (session.tabSessionModes as Record<string, 'normal' | 'keepalive'> | undefined) ?? {};
+        const tabSessionReadiness = (
+          session.tabSessionReadiness as Record<string, 'ready' | 'pending_user_permission' | 'keepalive_active' | 'denied' | 'timed_out'>
+            | undefined
+        ) ?? {};
+
+        const tabSessionId = Object.keys(tabSessions).find((candidate) => tabSessions[candidate] === tabId);
+        if (!tabSessionId) {
+          return;
+        }
+
+        if (tabSessionModes[tabSessionId] !== 'keepalive' || tabSessionReadiness[tabSessionId] !== 'keepalive_active') {
+          return;
+        }
+
+        await tabAudioKeepaliveManager.ensureForManagedTab(tabSessionId, tabId, {
+          timeoutMs: 250,
+        });
+      })(),
+    );
+  });
+
+  chrome.tabs.onRemoved.addListener((tabId) => {
+    tabAudioKeepaliveManager.onTabRemoved(tabId);
+
+    withRuntimeErrorLogging(
+      (async () => {
+        const session = await chrome.storage.session.get([
+          'tabSessions',
+          'tabSessionOwners',
+          'tabSessionModes',
+          'tabSessionReadiness',
+        ]);
+
+        const tabSessions = (session.tabSessions as Record<string, number> | undefined) ?? {};
+        const tabSessionOwners = (session.tabSessionOwners as Record<string, string> | undefined) ?? {};
+        const tabSessionModes = (session.tabSessionModes as Record<string, 'normal' | 'keepalive'> | undefined) ?? {};
+        const tabSessionReadiness = (
+          session.tabSessionReadiness as Record<string, 'ready' | 'pending_user_permission' | 'keepalive_active' | 'denied' | 'timed_out'>
+            | undefined
+        ) ?? {};
+
+        const tabSessionId = Object.keys(tabSessions).find((candidate) => tabSessions[candidate] === tabId);
+        if (!tabSessionId) {
+          return;
+        }
+
+        delete tabSessions[tabSessionId];
+        delete tabSessionOwners[tabSessionId];
+        delete tabSessionModes[tabSessionId];
+        delete tabSessionReadiness[tabSessionId];
+
+        await chrome.storage.session.set({
+          tabSessions,
+          tabSessionOwners,
+          tabSessionModes,
+          tabSessionReadiness,
+        });
+      })(),
+    );
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') {
       return;
@@ -198,6 +271,11 @@ export default defineBackground(() => {
   });
 
   chrome.runtime.onMessage.addListener((message: Envelope | { type?: string; payload?: unknown }, _sender, sendResponse) => {
+    if ((message as { type?: string }).type === 'otto.audioKeepalive.ping') {
+      sendResponse({ ok: true, receivedAt: Date.now() });
+      return false;
+    }
+
     if ((message as { type?: string }).type === 'otto.extensionLog') {
       withRuntimeErrorLogging(
         (async () => {

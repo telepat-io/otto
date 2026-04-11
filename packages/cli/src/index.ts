@@ -47,11 +47,15 @@ type CommandDescriptorLike = {
   site?: string;
   id?: string;
   preloadHost?: string;
+  requiresKeepAlive?: boolean;
 };
 
 type CommandTestInfo = {
   openUrl: string;
+  keepAlive: boolean;
 };
+
+const KEEPALIVE_OPEN_TIMEOUT_MS = 120_000;
 
 type ControllerRegisterResponse = {
   clientId: string;
@@ -709,6 +713,7 @@ async function resolveTestInfo(
     if (response.messageType === 'error') {
       return {
         openUrl: fallback,
+        keepAlive: false,
       };
     }
 
@@ -719,12 +724,22 @@ async function resolveTestInfo(
     };
 
     const descriptors = payload.data?.commands ?? [];
+    const normalizedSite = site.trim().toLowerCase();
+    const normalizedCommand = command.trim();
+    const matched = descriptors.find((descriptor) => {
+      const descriptorSite = String(descriptor.site ?? '').trim().toLowerCase();
+      const descriptorId = String(descriptor.id ?? '').trim();
+      return descriptorSite === normalizedSite && descriptorId === normalizedCommand;
+    });
+
     return {
       openUrl: resolveCommandAutoOpenUrl(site, command, descriptors),
+      keepAlive: matched?.requiresKeepAlive === true,
     };
   } catch {
     return {
       openUrl: fallback,
+      keepAlive: false,
     };
   }
 }
@@ -1908,10 +1923,14 @@ program
       const testInfo = await resolveTestInfo(config, targetNodeId, site, command, timeoutMs, ws);
 
       if (!tabSessionId) {
+        const openTimeoutMs = testInfo.keepAlive ? Math.max(timeoutMs, KEEPALIVE_OPEN_TIMEOUT_MS) : timeoutMs;
         const openResponse = await runCommandWithSocket(ws, targetNodeId, {
           action: 'primitive.tab.open',
-          payload: { url: testInfo.openUrl },
-          timeoutMs,
+          payload: {
+            url: testInfo.openUrl,
+            keepAlive: testInfo.keepAlive,
+          },
+          timeoutMs: openTimeoutMs,
           signal: commandAbortController.signal,
         });
 

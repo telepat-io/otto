@@ -9,6 +9,7 @@ type AnyRecord = Record<string, unknown>;
 
 type MockOptions = {
   sessionSeed?: AnyRecord;
+  disableDefaultKeepaliveSessionState?: boolean;
   tabIds?: number[];
   tabUrls?: Record<number, string>;
   tabUrlSequenceById?: Record<number, Array<string | null | undefined>>;
@@ -25,6 +26,25 @@ type MockOptions = {
 
 function createChromeMock(options: MockOptions = {}) {
   const sessionStore: AnyRecord = { ...(options.sessionSeed ?? {}) };
+  if (!options.disableDefaultKeepaliveSessionState) {
+    const seededTabSessions = (sessionStore.tabSessions as Record<string, unknown> | undefined) ?? {};
+    const seededTabSessionModes = (sessionStore.tabSessionModes as Record<string, unknown> | undefined) ?? {};
+    const seededTabSessionReadiness = (sessionStore.tabSessionReadiness as Record<string, unknown> | undefined) ?? {};
+    for (const tabSessionId of Object.keys(seededTabSessions)) {
+      if (!(tabSessionId in seededTabSessionModes)) {
+        seededTabSessionModes[tabSessionId] = 'keepalive';
+      }
+      if (!(tabSessionId in seededTabSessionReadiness)) {
+        seededTabSessionReadiness[tabSessionId] = 'keepalive_active';
+      }
+    }
+    if (Object.keys(seededTabSessionModes).length > 0) {
+      sessionStore.tabSessionModes = seededTabSessionModes;
+    }
+    if (Object.keys(seededTabSessionReadiness).length > 0) {
+      sessionStore.tabSessionReadiness = seededTabSessionReadiness;
+    }
+  }
   const existingTabs = new Set<number>(options.tabIds ?? []);
   const tabUrls = { ...(options.tabUrls ?? {}) };
   const tabUrlSequenceById = Object.fromEntries(
@@ -41,6 +61,7 @@ function createChromeMock(options: MockOptions = {}) {
   const invalidTabGroupUpdateIds = new Set<number>(options.invalidTabGroupUpdateIds ?? []);
   const invalidTabGroupUpdateErrorValue = options.invalidTabGroupUpdateErrorValue;
   const debuggerAttachErrorValue = options.debuggerAttachErrorValue;
+  const keepaliveEvents: Array<{ mode: 'start' | 'stop'; tabId: number; tabSessionId?: string }> = [];
 
   if (!existingTabs.has(activeTabId)) {
     existingTabs.add(activeTabId);
@@ -99,7 +120,7 @@ function createChromeMock(options: MockOptions = {}) {
         }
         return { id: tabId, windowId: 1, url: tabUrls[tabId] ?? 'about:blank' };
       },
-      async query(_query: { windowId?: number; active?: boolean }) {
+      async query(_query: { windowId?: number; active?: boolean; lastFocusedWindow?: boolean }) {
         void _query;
         const activeUrl = Object.prototype.hasOwnProperty.call(tabUrls, activeTabId)
           ? tabUrls[activeTabId]
@@ -189,7 +210,22 @@ function createChromeMock(options: MockOptions = {}) {
       },
     },
     scripting: {
-      async executeScript() {
+      async executeScript(details: { target?: { tabId?: number }; args?: unknown[] }) {
+        const firstArg = Array.isArray(details.args) ? details.args[0] : undefined;
+        const mode = firstArg && typeof firstArg === 'object'
+          ? (firstArg as Record<string, unknown>).__ottoAudioKeepalive
+          : undefined;
+        if (mode === 'start' || mode === 'stop') {
+          keepaliveEvents.push({
+            mode,
+            tabId: Number(details.target?.tabId ?? -1),
+            tabSessionId: typeof (firstArg as Record<string, unknown>).tabSessionId === 'string'
+              ? String((firstArg as Record<string, unknown>).tabSessionId)
+              : undefined,
+          });
+          return [{ result: { active: mode === 'start' } }];
+        }
+
         const next = scriptResults.shift();
         return [{ result: next ?? null }];
       },
@@ -201,6 +237,7 @@ function createChromeMock(options: MockOptions = {}) {
     sessionStore,
     tabUrls,
     getGroupCreateCount: () => groupCreateCount,
+    getKeepaliveEvents: () => keepaliveEvents.slice(),
   };
 }
 
@@ -292,6 +329,71 @@ test('command.run rejects site mismatch for current tab URL', async () => {
       assert.ok(err instanceof CommandExecutionError);
       const commandErr = err as CommandExecutionError;
       assert.equal(commandErr.code, 'site_mismatch');
+      return true;
+    },
+  );
+});
+
+test('command.run rejects keepalive-required command on normal tab mode', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+      tabSessionModes: {
+        tab_alpha: 'normal',
+      },
+      tabSessionReadiness: {
+        tab_alpha: 'ready',
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'getFeed',
+      input: {},
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'keepalive_required_tab_mode_mismatch');
+      return true;
+    },
+  );
+});
+
+test('command.run rejects keepalive-required command when tab mode is unknown', async () => {
+  const { chromeApi } = createChromeMock({
+    disableDefaultKeepaliveSessionState: true,
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+      tabSessionModes: {},
+      tabSessionReadiness: {},
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'getFeed',
+      input: {},
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'keepalive_required_tab_mode_mismatch');
       return true;
     },
   );
@@ -414,6 +516,37 @@ test('command.run executes when authenticated and returns posts', async () => {
     command: 'getFeed',
     posts: [{ kind: 'content.post', id: 'post-hello', title: 'Hello', author: 'alice' }],
   });
+});
+
+test('command.run ensures tab keepalive before command execution', async () => {
+  resetListenerManagersForTest();
+  const { chromeApi, getKeepaliveEvents } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+      tabSessionModes: {
+        tab_alpha: 'keepalive',
+      },
+      tabSessionReadiness: {
+        tab_alpha: 'keepalive_active',
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{ authenticated: true }, { posts: [] }],
+  });
+
+  await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getFeed',
+    input: {},
+    authMode: 'auto',
+  }));
+
+  const keepaliveEvents = getKeepaliveEvents();
+  assert.ok(keepaliveEvents.some((event) => event.mode === 'start' && event.tabId === 11 && event.tabSessionId === 'tab_alpha'));
 });
 
 test('command.run getFeed accepts optional minReturnedPosts input', async () => {
@@ -1239,8 +1372,66 @@ test('primitive.tab.open stores owner metadata from relay-injected controller cl
   assert.equal(owners[data.tabSessionId!], 'cli_123');
 });
 
+test('primitive.tab.open does not start keepalive when keepAlive is omitted', async () => {
+  resetListenerManagersForTest();
+  const { chromeApi, getKeepaliveEvents } = createChromeMock({
+    tabIds: [11],
+  });
+
+  await executeCommand(chromeApi, buildCommand('primitive.tab.open', {
+    url: 'https://www.reddit.com/',
+  }));
+
+  const keepaliveEvents = getKeepaliveEvents();
+  assert.equal(keepaliveEvents.some((event) => event.mode === 'start'), false);
+});
+
+test('primitive.tab.open starts tab keepalive for managed tab session', async () => {
+  resetListenerManagersForTest();
+  const { chromeApi, getKeepaliveEvents } = createChromeMock({
+    tabIds: [11],
+    scriptResults: [true],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.open', {
+    url: 'https://www.reddit.com/',
+    keepAlive: true,
+  }));
+  const data = result.data as { tabId: number; tabSessionId: string };
+
+  const keepaliveEvents = getKeepaliveEvents();
+  assert.ok(keepaliveEvents.some((event) => event.mode === 'start' && event.tabId === data.tabId && event.tabSessionId === data.tabSessionId));
+});
+
+test('primitive.tab.close stops keepalive for managed tab session', async () => {
+  resetListenerManagersForTest();
+  const { chromeApi, getKeepaliveEvents } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+      tabSessionOwners: {
+        tab_alpha: 'cli_a',
+      },
+    },
+    tabIds: [11],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.close', {
+    tabSessionId: 'tab_alpha',
+  }));
+
+  assert.deepEqual(result.data, {
+    closed: true,
+    tabSessionId: 'tab_alpha',
+  });
+  const keepaliveEvents = getKeepaliveEvents();
+  assert.ok(keepaliveEvents.some((event) => event.mode === 'stop' && event.tabId === 11 && event.tabSessionId === 'tab_alpha'));
+});
+
 test('primitive.tab.close_owned closes only tabs owned by target controller', async () => {
-  const { chromeApi, sessionStore } = createChromeMock({
+  resetListenerManagersForTest();
+  const { chromeApi, sessionStore, getKeepaliveEvents } = createChromeMock({
     sessionSeed: {
       tabSessions: {
         tab_a: 11,
@@ -1272,6 +1463,10 @@ test('primitive.tab.close_owned closes only tabs owned by target controller', as
   assert.deepEqual(sessionStore.tabSessionOwners, {
     tab_b: 'cli_b',
   });
+
+  const keepaliveEvents = getKeepaliveEvents();
+  assert.ok(keepaliveEvents.some((event) => event.mode === 'stop' && event.tabId === 11 && event.tabSessionId === 'tab_a'));
+  assert.ok(keepaliveEvents.some((event) => event.mode === 'stop' && event.tabId === 13 && event.tabSessionId === 'tab_c'));
 });
 
 test('listener.subscribe returns deterministic subscribed payload', async () => {

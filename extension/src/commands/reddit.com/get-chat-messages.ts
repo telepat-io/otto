@@ -165,6 +165,7 @@ export const getChatMessagesCommand: SiteCommand = {
     description: 'Loads recent Reddit chat messages from Matrix room history.',
     tags: ['chat', 'reddit', 'history'],
     requiresAuth: true,
+    requiresKeepAlive: true,
     preloadHost: 'chat.reddit.com',
     inputFields: [
       {

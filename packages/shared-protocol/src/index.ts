@@ -69,6 +69,7 @@ export interface CommandDescriptor {
   description: string;
   tags: string[];
   requiresAuth: boolean;
+  requiresKeepAlive?: boolean;
   preloadHost?: string;
   inputFields?: CommandInputFieldDescriptor[];
   inputAtLeastOneOf?: string[];

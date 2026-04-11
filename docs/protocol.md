@@ -101,6 +101,11 @@ Network interception behavior notes:
 - Node runtime persists ownership by `tabSessionId` to support deterministic orphan cleanup.
 - Relay may dispatch internal `primitive.tab.close_owned` commands to node runtimes when a controller disconnects or times out on heartbeat.
 - `primitive.tab.close_owned` payload includes `controllerClientId` and closes only tabs owned by that controller identity.
+- `primitive.tab.open` supports optional `payload.keepAlive` boolean:
+- omitted or `false`: open normal managed tab session.
+- `true`: open keepalive-intended session and require user consent before open returns success.
+- Keepalive consent wait uses a dedicated longer timeout path in node/CLI flow; callers should not assume the same latency profile as normal tab opens.
+- `command.list` metadata can advertise `requiresKeepAlive=true` per command descriptor; runtimes reject execution on non-keepalive tab sessions with deterministic validation errors.
 - Body capture is best-effort and may emit `payload.data.error=response_body_unavailable` for redirects, cache hits, and evicted buffers.
 
 Listener update event shape:

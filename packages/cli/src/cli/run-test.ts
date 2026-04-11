@@ -5,6 +5,8 @@ import { resolveCleanupSocketStrategy } from '../test-cleanup.js';
 import type { OttoConfig } from '../config.js';
 import { toSocketCloseAlertPayload } from './socket-errors.js';
 
+const KEEPALIVE_OPEN_TIMEOUT_MS = 120_000;
+
 function applyTestInputDefaults(site: string, command: string, input: Record<string, unknown>): Record<string, unknown> {
   const normalizedSite = site.trim().toLowerCase();
   const normalizedCommand = command.trim();
@@ -127,7 +129,7 @@ export async function runTestCommand(
       command: string,
       timeoutMs: number,
       ws?: WebSocket,
-    ) => Promise<{ openUrl: string }>;
+    ) => Promise<{ openUrl: string; keepAlive: boolean }>;
     sendCommandWithSocket: (
       ws: WebSocket,
       targetNodeId: string,
@@ -310,10 +312,14 @@ export async function runTestCommand(
     const testInfo = await deps.resolveTestInfo(config, targetNodeId, site, command, timeoutMs, ws);
 
     if (!tabSessionId) {
+      const openTimeoutMs = testInfo.keepAlive ? Math.max(timeoutMs, KEEPALIVE_OPEN_TIMEOUT_MS) : timeoutMs;
       const openResponse = await deps.runCommandWithSocket(ws, targetNodeId, {
         action: 'primitive.tab.open',
-        payload: { url: testInfo.openUrl },
-        timeoutMs,
+        payload: {
+          url: testInfo.openUrl,
+          keepAlive: testInfo.keepAlive,
+        },
+        timeoutMs: openTimeoutMs,
         signal: commandAbortController.signal,
       });
 

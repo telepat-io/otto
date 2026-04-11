@@ -40,7 +40,7 @@ function createDeps(spy: SpyCalls) {
     showAclMissingGrantHint: () => {},
     showTestFailureFooterAlert: async () => {},
     sendCommandCancelWithSocket: async () => {},
-    resolveTestInfo: async () => ({ openUrl: 'https://example.com' }),
+    resolveTestInfo: async () => ({ openUrl: 'https://example.com', keepAlive: false }),
     sendCommandWithSocket: () => ({
       requestId: 'req_1',
       response: Promise.resolve({
@@ -82,7 +82,7 @@ function createSocketCloseDeps(alertCalls: Array<{ title?: string; payload?: { m
       alertCalls.push({ title, payload });
     },
     sendCommandCancelWithSocket: async () => {},
-    resolveTestInfo: async () => ({ openUrl: 'https://example.com' }),
+    resolveTestInfo: async () => ({ openUrl: 'https://example.com', keepAlive: false }),
     sendCommandWithSocket: () => ({
       requestId: 'req_1',
       response: Promise.resolve({ messageType: 'result', payload: { data: {} } } as Envelope),
@@ -220,7 +220,7 @@ test('runTestCommand waits for interrupt on command.test error when wait-for-int
     showAclMissingGrantHint: () => {},
     showTestFailureFooterAlert: async () => {},
     sendCommandCancelWithSocket: async () => {},
-    resolveTestInfo: async () => ({ openUrl: 'https://www.reddit.com' }),
+    resolveTestInfo: async () => ({ openUrl: 'https://www.reddit.com', keepAlive: false }),
     sendCommandWithSocket: () => ({
       requestId: 'req_1',
       response: Promise.resolve({

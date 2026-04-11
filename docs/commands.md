@@ -53,6 +53,7 @@ Site-scoped command model:
 Command file shape:
 
 - `metadata`: identity, display fields, tags, and `requiresAuth`.
+- `metadata.requiresKeepAlive` (optional): when `true`, runtime requires the target `tabSessionId` to be an active keepalive-mode tab.
 - `metadata.inputFields` (optional): declarative command inputs with field `name`, `type`, `description`, `optional`.
 - `metadata.preloadHost` (optional): host that must be loaded before command `execute` runs.
 - `metadata.inputAtLeastOneOf` (optional): list of input field names where at least one must be provided.
@@ -77,6 +78,8 @@ Framework input validation behavior:
 - Unknown extra input keys are rejected.
 - Runtime passes a sanitized object with only declared fields to command logic.
 - Commands without `metadata.inputFields` remain permissive for backward compatibility.
+- Keepalive enforcement is descriptor-driven and runs before command logic when `metadata.requiresKeepAlive=true`.
+- If tab keepalive mode/readiness state is missing or inactive, runtime rejects with `keepalive_required_tab_mode_mismatch`.
 
 Auth-required flow:
 
@@ -105,6 +108,7 @@ Reddit command notes:
 - `sendChatMessage` includes a command-level `test` hook used by `otto test` for non-side-effect readiness checks, while `command.run` still performs message delivery.
 - `getChatMessages` `test` returns a command-native stream manifest with listener subscription details and includes command-owned poll fallback metadata (`fallback.strategy=command_poll`) for bounded recovery flows.
 - `getFeed` now collects feed post permalinks from `#main-content`, hydrates each post via Reddit `.json` endpoints, and returns generic `content.post` objects with recursive `content.post_comment` trees when available.
+- `getFeed` and `getChatMessages` currently declare `metadata.requiresKeepAlive=true` and are expected to run in keepalive-mode tab sessions.
 - `getFeed` supports optional input `minReturnedPosts` (number). Runtime scrolls page-by-page (`scroll -> wait -> collect`) until at least that many post URLs are discovered or a bounded pagination limit is reached. Returning more than requested is allowed.
 - `getFeed` keeps Reddit-specific extraction and JSON mapping logic scoped under `extension/src/commands/reddit.com/`, while output types remain shared and site-agnostic.
 

@@ -194,6 +194,17 @@ Compatibility behavior:
 - Stale mappings are pruned when tab lookup fails.
 - Internal `primitive.tab.close_owned` closes only sessions whose owner matches provided `controllerClientId`; stale session ownership entries are pruned during close/lookup cleanup.
 
+Managed-tab keepalive behavior:
+
+- Runtime supports dual managed-tab modes: normal and keepalive.
+- `primitive.tab.open` with `payload.keepAlive=true` creates keepalive-intended sessions; omitted/false opens normal sessions.
+- Keepalive injection uses extension `scripting.executeScript` context with WebAudio oscillator (`20kHz`, low non-zero gain) so inactive tabs continue receiving JS/network activity that commands depend on.
+- Keepalive-required sessions use explicit user consent before activation; command execution can enforce keepalive mode via command metadata.
+- Keepalive-required commands reject when tab mode/readiness is unknown or not `keepalive_active` (`keepalive_required_tab_mode_mismatch`).
+- Keepalive is re-ensured on tab lifecycle updates and persists through same-tab reload/navigation for keepalive-active sessions.
+- Keepalive state and mode are cleaned up when managed sessions close (`primitive.tab.close` or `primitive.tab.close_owned`) or when Chrome reports tab removal.
+- Keepalive is tab-scoped and ownership-safe: only tabs tracked in `chrome.storage.session.tabSessions` are targeted.
+
 Persistence notes:
 
 - `chrome.storage.local` holds durable node state across browser restarts (`nodeId`, relay URL, node tokens, pairing metadata).

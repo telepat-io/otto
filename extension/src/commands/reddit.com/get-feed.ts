@@ -18,6 +18,7 @@ export const getFeedCommand: SiteCommand = {
     description: 'Extracts lightweight post summaries from the active Reddit feed page.',
     tags: ['feed', 'reddit'],
     requiresAuth: true,
+    requiresKeepAlive: true,
     preloadHost: 'reddit.com',
     inputFields: [
       {

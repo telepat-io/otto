@@ -11,12 +11,16 @@ import type {
 import { findSiteBundle, findSiteCommand, isSiteMatch, listCommandDescriptors } from '../commands/index.js';
 import type { CommandExecutionContext } from '../commands/types.js';
 import { CommandExecutionError } from './execution-error.js';
-import { getNetworkInterceptListenerManager } from './listener-managers.js';
+import { getNetworkInterceptListenerManager, getTabAudioKeepaliveManager } from './listener-managers.js';
 
 type ChromeLike = typeof chrome;
 
 const TAB_URL_READY_TIMEOUT_MS = 1200;
 const TAB_URL_POLL_INTERVAL_MS = 75;
+const TAB_KEEPALIVE_ENSURE_TIMEOUT_MS = 250;
+
+type TabSessionMode = 'normal' | 'keepalive';
+type TabSessionReadiness = 'ready' | 'pending_user_permission' | 'keepalive_active' | 'denied' | 'timed_out';
 
 type CommandRun = {
   site: string;
@@ -420,6 +424,20 @@ async function waitForCommittedTabUrl(chromeApi: ChromeLike, tabId: number): Pro
   return lastProbe;
 }
 
+async function readTabSessionRuntimeState(
+  chromeApi: ChromeLike,
+  tabSessionId: string,
+): Promise<{ mode?: TabSessionMode; readiness?: TabSessionReadiness }> {
+  const session = await chromeApi.storage.session.get(['tabSessionModes', 'tabSessionReadiness']);
+  const tabSessionModes = (session.tabSessionModes as Record<string, TabSessionMode> | undefined) ?? {};
+  const tabSessionReadiness = (session.tabSessionReadiness as Record<string, TabSessionReadiness> | undefined) ?? {};
+
+  return {
+    mode: tabSessionModes[tabSessionId],
+    readiness: tabSessionReadiness[tabSessionId],
+  };
+}
+
 export function listCommandsForRuntime() {
   return listCommandDescriptors();
 }
@@ -441,6 +459,25 @@ async function executeCommandAction(
   const command = findSiteCommand(bundle, run.commandId);
   if (!command) {
     throw new CommandExecutionError(`Unknown command: ${run.site}/${run.commandId}`, 'unknown_command', actionName, false);
+  }
+
+  const tabRuntimeState = await readTabSessionRuntimeState(chromeApi, tabSessionId);
+  const keepaliveActive = tabRuntimeState.mode === 'keepalive' && tabRuntimeState.readiness === 'keepalive_active';
+  const keepaliveInactive = !keepaliveActive;
+
+  if (command.metadata.requiresKeepAlive === true && keepaliveInactive) {
+    throw new CommandExecutionError(
+      `Command ${bundle.site}/${command.metadata.id} requires a keepalive tab session`,
+      'keepalive_required_tab_mode_mismatch',
+      'validation',
+      false,
+    );
+  }
+
+  if (keepaliveActive) {
+    await getTabAudioKeepaliveManager(chromeApi).ensureForManagedTab(tabSessionId, tabId, {
+      timeoutMs: TAB_KEEPALIVE_ENSURE_TIMEOUT_MS,
+    });
   }
 
   const { context: ctx, cleanup } = buildContext(chromeApi, tabId, tabSessionId, bundle.site);

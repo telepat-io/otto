@@ -8,10 +8,12 @@ type CommandDescriptorLike = {
   site?: string;
   id?: string;
   preloadHost?: string;
+  requiresKeepAlive?: boolean;
 };
 
 export type CommandTestInfo = {
   openUrl: string;
+  keepAlive: boolean;
 };
 
 export async function runCommandOnce(
@@ -70,16 +72,25 @@ export async function resolveTestInfo(params: {
       });
 
     if (response.messageType === 'error') {
-      return { openUrl: fallback };
+      return { openUrl: fallback, keepAlive: false };
     }
 
     const payload = response.payload as { data?: { commands?: CommandDescriptorLike[] } };
     const descriptors = payload.data?.commands ?? [];
+    const normalizedSite = params.site.trim().toLowerCase();
+    const normalizedCommand = params.command.trim();
+    const matched = descriptors.find((descriptor) => {
+      const descriptorSite = String(descriptor.site ?? '').trim().toLowerCase();
+      const descriptorId = String(descriptor.id ?? '').trim();
+      return descriptorSite === normalizedSite && descriptorId === normalizedCommand;
+    });
+
     return {
       openUrl: params.resolveCommandAutoOpenUrl(params.site, params.command, descriptors),
+      keepAlive: matched?.requiresKeepAlive === true,
     };
   } catch {
-    return { openUrl: fallback };
+    return { openUrl: fallback, keepAlive: false };
   }
 }
 

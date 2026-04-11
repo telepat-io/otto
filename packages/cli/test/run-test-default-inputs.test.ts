@@ -36,7 +36,7 @@ function createDeps(
     showAclMissingGrantHint: () => {},
     showTestFailureFooterAlert: async () => {},
     sendCommandCancelWithSocket: async () => {},
-    resolveTestInfo: async () => ({ openUrl: 'https://www.reddit.com' }),
+    resolveTestInfo: async () => ({ openUrl: 'https://www.reddit.com', keepAlive: false }),
     sendCommandWithSocket: (_ws: unknown, _targetNodeId: string, options: {
       payload: {
         input?: Record<string, unknown>;
