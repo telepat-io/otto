@@ -28,6 +28,7 @@ type MockChrome = {
   setFetchBodyError: (requestId: string) => void;
   getDebuggerCommands: () => Array<{ method: string; params: unknown }>;
   getDetachCount: () => number;
+  setAttachError: (error: unknown) => void;
 };
 
 function createMockChrome(): MockChrome {
@@ -40,6 +41,7 @@ function createMockChrome(): MockChrome {
   const tabsRemovedEmitter = new Emitter<[number]>();
   const tabsUpdatedEmitter = new Emitter<[number, { status?: string }]>();
   let detachCount = 0;
+  let attachError: unknown;
 
   const chromeApi = {
     storage: {
@@ -93,6 +95,9 @@ function createMockChrome(): MockChrome {
       async attach(target: chrome.debugger.Debuggee, version: string) {
         void target;
         void version;
+        if (attachError !== undefined) {
+          throw attachError;
+        }
         return;
       },
       async detach(target: chrome.debugger.Debuggee) {
@@ -143,6 +148,9 @@ function createMockChrome(): MockChrome {
     },
     getDetachCount() {
       return detachCount;
+    },
+    setAttachError(error) {
+      attachError = error;
     },
   };
 }
@@ -540,4 +548,71 @@ test('network interception manager emits websocket frame updates', async () => {
   assert.equal(payload.data?.captureSource, 'network');
 
   await manager.unsubscribe('sub_ws');
+});
+
+test('network interception manager reuses shared debugger attachment and skips detach on unsubscribe', async () => {
+  const mock = createMockChrome();
+  mock.setAttachError(new Error('Another debugger is already attached to the tab'));
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_shared', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+
+  const attachFlowCommands = mock.getDebuggerCommands().map((entry) => entry.method);
+  assert.ok(attachFlowCommands.includes('Network.enable'));
+
+  await manager.unsubscribe('sub_shared');
+  assert.equal(mock.getDetachCount(), 0);
+
+  const reuseLog = mock.runtimeMessages.find((entry) => entry.type === 'otto.extensionLog'
+    && ((entry.payload as { type?: string }).type === 'network_listener.reused_existing_attachment'));
+  assert.ok(reuseLog);
+
+  const skippedDetachLog = mock.runtimeMessages.find((entry) => entry.type === 'otto.extensionLog'
+    && ((entry.payload as { type?: string }).type === 'network_listener.detach_skipped_shared_attachment'));
+  assert.ok(skippedDetachLog);
+});
+
+test('network interception manager fails subscribe when shared attach cannot be reused', async () => {
+  const mock = createMockChrome();
+  mock.setAttachError(new Error('Another debugger is already attached to the tab'));
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  const originalSendCommand = (mock.chromeApi.debugger as unknown as {
+    sendCommand: (target: chrome.debugger.Debuggee, method: string, params?: unknown) => Promise<unknown>;
+  }).sendCommand;
+
+  (mock.chromeApi.debugger as unknown as {
+    sendCommand: (target: chrome.debugger.Debuggee, method: string, params?: unknown) => Promise<unknown>;
+  }).sendCommand = async (target, method, params) => {
+    if (method === 'Network.enable') {
+      throw new Error('Network enable failed while probing shared session');
+    }
+    return originalSendCommand(target, method, params);
+  };
+
+  await assert.rejects(
+    () => manager.subscribe('sub_conflict', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      mode: 'network',
+      includeBody: true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, 'network_listener_debugger_conflict');
+      return true;
+    },
+  );
+
+  const reuseFailedLog = mock.runtimeMessages.find((entry) => entry.type === 'otto.extensionLog'
+    && ((entry.payload as { type?: string }).type === 'network_listener.reuse_failed'));
+  assert.ok(reuseFailedLog);
+
+  const unsubscribed = await manager.unsubscribe('sub_conflict');
+  assert.equal(unsubscribed, false);
 });

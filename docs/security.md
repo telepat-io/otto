@@ -58,6 +58,8 @@ Current controls:
 - Queue depth and per-session rate limits are enforced to reduce starvation and abuse pressure.
 - Command auth flow never automates end-user credential submission; failed login preflight returns `manual_login_required` after optional navigation to site login page.
 - `chrome.debugger` interception remains explicit opt-in via listener subscribe actions and cannot suppress Chrome debugger infobar.
+- Command-level debugger focus emulation remains explicit opt-in via `metadata.requiresDebuggerFocus=true`.
+- Debugger attachment reuse is ownership-scoped: runtime detaches only attachments created by that feature path to prevent cross-feature disruption.
 - Fetch-domain interception always continues paused requests to avoid traffic deadlock if body retrieval fails.
 - Hybrid interception duplicate suppression bounds equivalent cross-source response replay, reducing repeated payload forwarding surfaces.
 
@@ -73,3 +75,4 @@ Current controls:
 8. Keep refresh token lifetime bounded via `OTTO_REFRESH_TTL_DAYS` and avoid unnecessarily large values.
 9. Keep `OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION` disabled unless required; when enabling remote registration, set `OTTO_CONTROLLER_REGISTRATION_SECRET` and restrict network ingress.
 10. Treat node ACL grant actions as end-user authority operations and audit `controller_acl_granted` / `controller_acl_revoked` events.
+11. Treat debugger-focus metadata as privileged reliability tooling; enable only for commands with demonstrated background-tab stalling behavior.

@@ -53,6 +53,7 @@ Site-scoped command model:
 Command file shape:
 
 - `metadata`: identity, display fields, tags, and `requiresAuth`.
+- `metadata.requiresDebuggerFocus` (optional): when `true`, runtime enables debugger focus emulation (`Emulation.setFocusEmulationEnabled`) before command logic runs.
 - `metadata.inputFields` (optional): declarative command inputs with field `name`, `type`, `description`, `optional`.
 - `metadata.preloadHost` (optional): host that must be loaded before command `execute` runs.
 - `metadata.inputAtLeastOneOf` (optional): list of input field names where at least one must be provided.
@@ -78,6 +79,19 @@ Framework input validation behavior:
 - Runtime passes a sanitized object with only declared fields to command logic.
 - Commands without `metadata.inputFields` remain permissive for backward compatibility.
 
+Debugger focus emulation behavior:
+
+- `requiresDebuggerFocus=true` is explicit opt-in and command-scoped.
+- Runtime activates debugger focus emulation only after tab/site validation succeeds.
+- Activation failures are deterministic (`debugger_focus_unavailable`, `debugger_focus_conflict`, `debugger_focus_permission_denied`, `debugger_focus_attach_failed`, `debugger_focus_command_failed`).
+- Commands without this metadata are unaffected and do not touch debugger focus emulation.
+
+Why this exists:
+
+- Some page automation flows in background tabs can stall due to browser throttling behavior (for example delayed or skipped callback cadence while tab is unfocused).
+- `requiresDebuggerFocus` gives command owners a precise, explicit switch to request focus emulation only where this mitigation is needed.
+- This avoids blanket debugger attachment across all commands and keeps debugger use aligned with least-privilege behavior.
+
 Auth-required flow:
 
 - If command metadata declares `requiresAuth`, runtime executes `checkLogin` first.
@@ -96,6 +110,9 @@ Reddit command notes:
 - `getChatMessages` supports two modes: with `roomId`, it loads room-scoped history from Matrix `/rooms/{roomId}/messages`; without `roomId`, it loads a bounded recent multi-room snapshot from Matrix `/sync` timeline events. Output is grouped by room (`rooms[]`) with per-room message lists and counts.
 - `getChatMessages` command test streaming subscribes with `listener=network.http_intercept` in `fetch` mode for Reddit Matrix v3 sync traffic (`https://matrix.redditspace.com/_matrix/client/v3/sync*`) and declares command-owned adapter metadata (`options.streamAdapter=reddit.chat.v1`).
 - Adapter mapping converts raw Matrix sync payloads into shared domain chat objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) before controller-visible stream forwarding.
+- `getFeed` currently declares `metadata.requiresDebuggerFocus=true` to opt into debugger focus emulation before execution.
+- `getChatMessages` also declares `metadata.requiresDebuggerFocus=true`; focus emulation and network interception share the same tab debugger session when already attached by Otto runtime.
+- Shared-session behavior is ownership-aware: whichever runtime path attached debugger first owns detach responsibility; the other path reuses the attachment and skips detach.
 - Root cause of prior duplicate stream lines was dual transport visibility in hybrid mode (`Network` + `Fetch`) plus replayed Matrix sync payload semantics.
 - Duplicate suppression now runs in two layers:
 - interception layer suppresses equivalent hybrid cross-source response updates

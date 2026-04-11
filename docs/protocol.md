@@ -102,6 +102,13 @@ Network interception behavior notes:
 - Relay may dispatch internal `primitive.tab.close_owned` commands to node runtimes when a controller disconnects or times out on heartbeat.
 - `primitive.tab.close_owned` payload includes `controllerClientId` and closes only tabs owned by that controller identity.
 - Body capture is best-effort and may emit `payload.data.error=response_body_unavailable` for redirects, cache hits, and evicted buffers.
+- `command.list` descriptors may include `requiresDebuggerFocus=true` for commands that explicitly opt into debugger focus emulation.
+- When an opted-in command runs, node runtime may return deterministic command errors if debugger focus emulation activation fails:
+- `debugger_focus_unavailable`
+- `debugger_focus_conflict`
+- `debugger_focus_permission_denied`
+- `debugger_focus_attach_failed`
+- `debugger_focus_command_failed`
 
 Listener update event shape:
 

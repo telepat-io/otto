@@ -32,6 +32,7 @@ type SubscriptionHooks = {
 type TabState = {
   tabId: number;
   attached: boolean;
+  ownsAttachment: boolean;
   subscriptions: Set<string>;
 };
 
@@ -505,28 +506,68 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
   };
 
   const ensureAttached = async (tabId: number): Promise<void> => {
+    await emitDebugLog(chromeApi, 'network_listener.attach_requested', {
+      tabId,
+    });
+
     const existing = tabStates.get(tabId);
     if (existing?.attached) {
+      await emitDebugLog(chromeApi, 'network_listener.attach_skipped_already_attached', {
+        tabId,
+        ownsAttachment: existing.ownsAttachment,
+      });
       await syncDomainsForTab(tabId);
       return;
     }
 
+    let ownsAttachment = false;
+
     try {
       await chromeApi.debugger.attach({ tabId }, '1.3');
+      ownsAttachment = true;
+      await emitDebugLog(chromeApi, 'network_listener.attach_succeeded', {
+        tabId,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       if (/another debugger is already attached/i.test(message)) {
-        throw new Error('network_listener_debugger_conflict', { cause: error });
+        await emitDebugLog(chromeApi, 'network_listener.attach_conflict_detected', {
+          tabId,
+        });
+        // Another attachment may be from this extension's focus emulation path.
+        // Probe command routing; if it works, reuse the existing session.
+        try {
+          await chromeApi.debugger.sendCommand({ tabId }, 'Network.enable', {});
+          await emitDebugLog(chromeApi, 'network_listener.reused_existing_attachment', {
+            tabId,
+          });
+        } catch {
+          await emitDebugLog(chromeApi, 'network_listener.reuse_failed', {
+            tabId,
+            reason: 'network_enable_failed_after_attach_conflict',
+          });
+          throw new Error('network_listener_debugger_conflict', { cause: error });
+        }
       }
-      if (/cannot access a chrome/i.test(message)) {
+      else if (/cannot access a chrome/i.test(message)) {
+        await emitDebugLog(chromeApi, 'network_listener.attach_failed', {
+          tabId,
+          reason: 'permission_denied',
+        });
         throw new Error('network_listener_debugger_permission_denied', { cause: error });
+      } else {
+        await emitDebugLog(chromeApi, 'network_listener.attach_failed', {
+          tabId,
+          reason: 'attach_failed',
+        });
+        throw new Error('network_listener_attach_failed', { cause: error });
       }
-      throw new Error('network_listener_attach_failed', { cause: error });
     }
 
     tabStates.set(tabId, {
       tabId,
       attached: true,
+      ownsAttachment,
       subscriptions: existing?.subscriptions ?? new Set<string>(),
     });
 
@@ -544,10 +585,19 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       return;
     }
 
-    try {
-      await chromeApi.debugger.detach({ tabId });
-    } catch {
-      // Ignore detach failures for closed tabs.
+    if (tabState.ownsAttachment) {
+      try {
+        await chromeApi.debugger.detach({ tabId });
+        await emitDebugLog(chromeApi, 'network_listener.detached_owned_attachment', {
+          tabId,
+        });
+      } catch {
+        // Ignore detach failures for closed tabs.
+      }
+    } else {
+      await emitDebugLog(chromeApi, 'network_listener.detach_skipped_shared_attachment', {
+        tabId,
+      });
     }
 
     tabStates.delete(tabId);
@@ -1109,6 +1159,7 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
     const tabState = tabStates.get(resolved.tabId) ?? {
       tabId: resolved.tabId,
       attached: false,
+      ownsAttachment: false,
       subscriptions: new Set<string>(),
     };
     tabState.subscriptions.add(requestId);

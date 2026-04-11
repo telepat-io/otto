@@ -104,6 +104,46 @@ Useful event types:
 - `offscreen.authenticated_connected`
 - `background.refresh_setup_completed`
 - `listener_update` with transport updates (`network.response|network.error|network.detached`) for raw network listeners, or shared domain kinds (`chat.message|chat.typing|chat.participant|chat.message_deleted`) for command-adapted chat streams
+- `debugger_focus.ensure_requested`
+- `debugger_focus.attach_attempt`
+- `debugger_focus.attach_succeeded`
+- `debugger_focus.attach_conflict_detected`
+- `debugger_focus.reused_existing_attachment`
+- `debugger_focus.reuse_failed`
+- `debugger_focus.enabled`
+- `debugger_focus.enable_failed`
+- `debugger_focus.detach_after_enable_failure`
+- `debugger_focus.stop_requested`
+- `debugger_focus.detached_owned_attachment`
+- `debugger_focus.detach_skipped_shared_attachment`
+- `network_listener.attach_requested`
+- `network_listener.attach_succeeded`
+- `network_listener.attach_conflict_detected`
+- `network_listener.reused_existing_attachment`
+- `network_listener.reuse_failed`
+- `network_listener.detached_owned_attachment`
+- `network_listener.detach_skipped_shared_attachment`
+
+Debugger focus and shared-session diagnostics:
+
+1. Follow node logs while reproducing unfocused-tab command flow:
+
+`otto logs follow --source node`
+
+2. Confirm focus emulation activation path appears before command progress events:
+- `debugger_focus.ensure_requested`
+- `debugger_focus.attach_attempt|debugger_focus.attach_conflict_detected`
+- `debugger_focus.enabled|debugger_focus.reused_existing_attachment`
+
+3. For commands that also run interception, confirm shared session behavior:
+- `network_listener.attach_conflict_detected` followed by `network_listener.reused_existing_attachment`
+- or `debugger_focus.attach_conflict_detected` followed by `debugger_focus.reused_existing_attachment`
+
+4. Validate ownership-safe teardown on command/tab cleanup:
+- owner path logs `*_detached_owned_attachment`
+- non-owner path logs `*_detach_skipped_shared_attachment`
+
+5. If attach reuse fails, check for external debugger ownership (open DevTools on target tab) and deterministic command error codes.
 
 ## Extension Local-Dev Log Streaming
 

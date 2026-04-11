@@ -65,52 +65,8 @@ async function runInterceptProbe(ctx: Parameters<NonNullable<SiteCommand['test']
   });
 
   try {
-    await ctx.executeScript(async () => {
-      const tokenCandidates = ['chat:matrix-access-token', 'chat:access-token'];
-
-      const readToken = (): string => {
-        for (const key of tokenCandidates) {
-          try {
-            const raw = localStorage.getItem(key);
-            if (!raw) {
-              continue;
-            }
-
-            const parsed = JSON.parse(raw) as unknown;
-            if (typeof parsed === 'string' && parsed.length > 0) {
-              return parsed;
-            }
-
-            if (parsed && typeof parsed === 'object') {
-              const token = (parsed as { token?: unknown }).token;
-              if (typeof token === 'string' && token.length > 0) {
-                return token;
-              }
-            }
-          } catch {
-            continue;
-          }
-        }
-
-        return '';
-      };
-
-      const token = readToken();
-      if (!token) {
-        return;
-      }
-
-      try {
-        await fetch('https://matrix.redditspace.com/_matrix/client/v3/sync?timeout=0', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: 'no-store',
-        });
-      } catch {
-        // Probe is best-effort; fallback path handles failures.
-      }
-    }, []);
+    // Temporary experiment: skip forcing an initial Matrix /sync probe request.
+    // This helps isolate whether backlog fetch pressure triggers Chrome freezes.
 
     const deadline = Date.now() + INTERCEPT_PROBE_WINDOW_MS;
     let sawUpdates = false;
@@ -165,6 +121,7 @@ export const getChatMessagesCommand: SiteCommand = {
     description: 'Loads recent Reddit chat messages from Matrix room history.',
     tags: ['chat', 'reddit', 'history'],
     requiresAuth: true,
+    requiresDebuggerFocus: true,
     preloadHost: 'chat.reddit.com',
     inputFields: [
       {

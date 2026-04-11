@@ -194,6 +194,32 @@ Compatibility behavior:
 - Stale mappings are pruned when tab lookup fails.
 - Internal `primitive.tab.close_owned` closes only sessions whose owner matches provided `controllerClientId`; stale session ownership entries are pruned during close/lookup cleanup.
 
+Debugger focus emulation behavior:
+
+- Commands can opt in using metadata `requiresDebuggerFocus=true`.
+- Runtime enables debugger focus emulation (`Emulation.setFocusEmulationEnabled`) only after tab URL site validation succeeds.
+- Activation failures are deterministic and command-scoped (`debugger_focus_unavailable`, `debugger_focus_conflict`, `debugger_focus_permission_denied`, `debugger_focus_attach_failed`, `debugger_focus_command_failed`).
+- When network interception is also active on the same tab, runtime reuses the existing debugger attachment instead of requiring a second attach.
+- Runtime detaches debugger focus emulation when managed tabs close (`primitive.tab.close` and `primitive.tab.close_owned`).
+
+Why this runtime path was added:
+
+- Certain command flows can stall in background tabs when callback cadence changes under throttling.
+- Focus emulation is a targeted mitigation to improve command progress reliability without forcing every command into debugger mode.
+- Opt-in metadata keeps the behavior explicit, reviewable, and site/command scoped.
+
+Shared debugger-session ownership model:
+
+- Runtime tracks whether each feature path owns debugger attachment for a tab.
+- If debugger is already attached by another Otto feature path, runtime attempts to reuse the active session.
+- Detach happens only for owner paths; shared/reused paths skip detach to avoid breaking sibling feature flows.
+- This is especially important when command runtime focus emulation and network interception are active together on one tab.
+
+Operational notes:
+
+- If external DevTools/debugger owns attachment and runtime cannot issue required commands, activation fails with deterministic conflict-style errors.
+- Successful reuse and ownership decisions are now logged as structured node debug events to support live troubleshooting (`otto logs follow --source node`).
+
 Persistence notes:
 
 - `chrome.storage.local` holds durable node state across browser restarts (`nodeId`, relay URL, node tokens, pairing metadata).

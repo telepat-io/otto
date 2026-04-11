@@ -20,6 +20,7 @@ type MockOptions = {
   invalidTabGroupUpdateIds?: number[];
   invalidTabGroupUpdateErrorValue?: unknown;
   debuggerAttachErrorValue?: unknown;
+  debuggerSendCommandErrorByMethod?: Record<string, unknown>;
   disableDebugger?: boolean;
 };
 
@@ -41,6 +42,8 @@ function createChromeMock(options: MockOptions = {}) {
   const invalidTabGroupUpdateIds = new Set<number>(options.invalidTabGroupUpdateIds ?? []);
   const invalidTabGroupUpdateErrorValue = options.invalidTabGroupUpdateErrorValue;
   const debuggerAttachErrorValue = options.debuggerAttachErrorValue;
+  const debuggerSendCommandErrorByMethod = options.debuggerSendCommandErrorByMethod ?? {};
+  const debuggerCommands: Array<{ method: string; params: unknown }> = [];
 
   if (!existingTabs.has(activeTabId)) {
     existingTabs.add(activeTabId);
@@ -162,7 +165,11 @@ function createChromeMock(options: MockOptions = {}) {
         async detach() {
           return;
         },
-        async sendCommand() {
+        async sendCommand(_target: chrome.debugger.Debuggee, method: string, params?: unknown) {
+          debuggerCommands.push({ method, params });
+          if (Object.prototype.hasOwnProperty.call(debuggerSendCommandErrorByMethod, method)) {
+            throw debuggerSendCommandErrorByMethod[method];
+          }
           return {};
         },
         onEvent: {
@@ -201,6 +208,7 @@ function createChromeMock(options: MockOptions = {}) {
     sessionStore,
     tabUrls,
     getGroupCreateCount: () => groupCreateCount,
+    getDebuggerCommands: () => debuggerCommands.slice(),
   };
 }
 
@@ -416,6 +424,124 @@ test('command.run executes when authenticated and returns posts', async () => {
   });
 });
 
+test('command.run enables debugger focus emulation for opted-in commands', async () => {
+  const { chromeApi, getDebuggerCommands } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{ authenticated: true }, { posts: [] }],
+  });
+
+  await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getFeed',
+    input: {},
+    authMode: 'auto',
+  }));
+
+  const debuggerCommands = getDebuggerCommands();
+  assert.ok(
+    debuggerCommands.some((entry) => entry.method === 'Emulation.setFocusEmulationEnabled'),
+  );
+});
+
+test('command.run enables debugger focus emulation for getChatMessages', async () => {
+  const { chromeApi, getDebuggerCommands } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/' },
+    scriptResults: [{ authenticated: true }, { chunk: [] }],
+  });
+
+  await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getChatMessages',
+    input: {
+      roomId: 'room_1',
+      limit: 20,
+    },
+    authMode: 'strict_fail',
+  }));
+
+  const debuggerCommands = getDebuggerCommands();
+  assert.ok(
+    debuggerCommands.some((entry) => entry.method === 'Emulation.setFocusEmulationEnabled'),
+  );
+});
+
+test('command.run fails deterministically when debugger API is unavailable for opted-in commands', async () => {
+  const { chromeApi } = createChromeMock({
+    disableDebugger: true,
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'getFeed',
+      input: {},
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'debugger_focus_unavailable');
+      assert.equal(commandErr.retryable, false);
+      return true;
+    },
+  );
+});
+
+test('command.run fails deterministically when debugger attach conflicts for opted-in commands', async () => {
+  const { chromeApi } = createChromeMock({
+    debuggerAttachErrorValue: new Error('Another debugger is already attached to the tab'),
+    debuggerSendCommandErrorByMethod: {
+      'Emulation.setFocusEmulationEnabled': new Error('Not attached to this tab by current extension session'),
+    },
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'getFeed',
+      input: {},
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'debugger_focus_conflict');
+      assert.equal(commandErr.retryable, false);
+      return true;
+    },
+  );
+});
+
 test('command.run getFeed accepts optional minReturnedPosts input', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
@@ -469,7 +595,7 @@ test('legacy command.reddit_feed action is routed via command runtime', async ()
 });
 
 test('command.run sendChatMessage returns deterministic payload', async () => {
-  const { chromeApi } = createChromeMock({
+  const { chromeApi, getDebuggerCommands } = createChromeMock({
     sessionSeed: {
       tabSessions: {
         tab_alpha: 11,
@@ -502,6 +628,12 @@ test('command.run sendChatMessage returns deterministic payload', async () => {
     roomId: 'room_1',
     username: 'alice',
   });
+
+  const debuggerCommands = getDebuggerCommands();
+  assert.equal(
+    debuggerCommands.some((entry) => entry.method === 'Emulation.setFocusEmulationEnabled'),
+    false,
+  );
 });
 
 test('command.run getChatMessages normalizes matrix events', async () => {
@@ -784,6 +916,7 @@ test('command.test getChatMessages returns stream listener metadata', async () =
       ],
     },
   });
+
 });
 
 test('command.test getChatMessages returns buffered polling fallback when interception is unavailable', async () => {
@@ -796,7 +929,9 @@ test('command.test getChatMessages returns buffered polling fallback when interc
     },
     tabIds: [11],
     tabUrls: { 11: 'https://chat.reddit.com/' },
-      disableDebugger: true,
+    debuggerSendCommandErrorByMethod: {
+      'Network.enable': new Error('forced interception init failure'),
+    },
     scriptResults: [
       { authenticated: true },
       { ready: true },

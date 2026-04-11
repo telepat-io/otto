@@ -11,7 +11,8 @@ import type {
 import { findSiteBundle, findSiteCommand, isSiteMatch, listCommandDescriptors } from '../commands/index.js';
 import type { CommandExecutionContext } from '../commands/types.js';
 import { CommandExecutionError } from './execution-error.js';
-import { getNetworkInterceptListenerManager } from './listener-managers.js';
+import { DebuggerFocusEmulationError } from './debugger-focus-emulation.js';
+import { getDebuggerFocusEmulationManager, getNetworkInterceptListenerManager } from './listener-managers.js';
 
 type ChromeLike = typeof chrome;
 
@@ -463,6 +464,23 @@ async function executeCommandAction(
       actionName,
       false,
     );
+  }
+
+  if (command.metadata.requiresDebuggerFocus === true) {
+    try {
+      await getDebuggerFocusEmulationManager(chromeApi).ensureForTab(tabId);
+    } catch (error) {
+      if (error instanceof DebuggerFocusEmulationError) {
+        throw new CommandExecutionError(error.message, error.code, actionName, error.retryable);
+      }
+
+      throw new CommandExecutionError(
+        'Unexpected failure while enabling debugger focus emulation',
+        'debugger_focus_attach_failed',
+        actionName,
+        true,
+      );
+    }
   }
 
   const sanitizedInput = validateAndSanitizeCommandInput(command.metadata, run.input, command.metadata.inputFields);

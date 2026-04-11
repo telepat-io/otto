@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import type { CommandPayload } from '@telepat/otto-protocol';
 import { listCommandsForRuntime, runCommandAction, runCommandTestAction } from './command-runtime.js';
 import { CommandExecutionError } from './execution-error.js';
+import { getDebuggerFocusEmulationManager } from './listener-managers.js';
 import { createSingleFlight } from './single-flight.js';
 
 type ChromeLike = typeof chrome;
@@ -238,6 +239,7 @@ export async function resolveTabId(chromeApi: ChromeLike, tabSessionId: string |
 
 export async function executeCommand(chromeApi: ChromeLike, command: CommandPayload): Promise<CommandExecutionResult> {
   const start = Date.now();
+  const debuggerFocusEmulationManager = getDebuggerFocusEmulationManager(chromeApi);
 
   switch (command.action) {
     case 'primitive.tab.open': {
@@ -274,6 +276,7 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
       const tabSessions = await getTabSessions(chromeApi);
       const tabSessionOwners = await getTabSessionOwners(chromeApi);
       const tabId = await resolveTabId(chromeApi, tabSessionId);
+      await debuggerFocusEmulationManager.stopForTab(tabId);
       await chromeApi.tabs.remove(tabId);
       delete tabSessions[tabSessionId];
       delete tabSessionOwners[tabSessionId];
@@ -301,6 +304,7 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
 
       for (const tabSessionId of tabSessionIds) {
         const tabId = tabSessions[tabSessionId];
+        await debuggerFocusEmulationManager.stopForTab(tabId);
         try {
           await chromeApi.tabs.remove(tabId);
           closedCount += 1;
