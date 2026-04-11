@@ -16,7 +16,11 @@ import {
   getNetworkInterceptListenerManager,
 } from '../src/runtime/listener-managers.js';
 import { deriveOnboardingState, type RelayConnectionStatus } from '../src/runtime/onboarding/state.js';
-import { createRedditStreamDomainMapper } from '../src/commands/reddit.com/chat-stream.js';
+import { createRedditStreamDomainMapper, type StreamDomainUpdate } from '../src/commands/reddit.com/chat-stream.js';
+
+const REDDIT_STREAM_DISPATCH_BATCH_SIZE = 40;
+const REDDIT_STREAM_DISPATCH_DELAY_MS = 1000;
+const REDDIT_STREAM_MAX_QUEUED_UPDATES = 2000;
 
 function withRuntimeErrorLogging<T>(promise: Promise<T>): void {
   promise.catch((err) => {
@@ -399,6 +403,60 @@ export default defineBackground(() => {
                   const selfUserId = typeof normalizedOptions.selfUserId === 'string'
                     ? normalizedOptions.selfUserId
                     : undefined;
+                  const queuedMappedUpdates: StreamDomainUpdate[] = [];
+                  let dispatchInFlight = false;
+                  let dispatchScheduled = false;
+
+                  const scheduleDrainMappedUpdates = (): void => {
+                    if (dispatchScheduled || dispatchInFlight) {
+                      return;
+                    }
+
+                    dispatchScheduled = true;
+                    setTimeout(() => {
+                      dispatchScheduled = false;
+                      withRuntimeErrorLogging(drainMappedUpdates());
+                    }, 0);
+                  };
+
+                  const drainMappedUpdates = async (): Promise<void> => {
+                    if (dispatchInFlight) {
+                      return;
+                    }
+
+                    dispatchInFlight = true;
+                    try {
+                      while (queuedMappedUpdates.length > 0) {
+                        const batch = queuedMappedUpdates.splice(0, REDDIT_STREAM_DISPATCH_BATCH_SIZE);
+                        for (const mappedUpdate of batch) {
+                          await emitListenerUpdateToRelay(chrome, cmd.requestId, mappedUpdate.updateType, mappedUpdate.data);
+                        }
+
+                        if (queuedMappedUpdates.length > 0) {
+                          dispatchScheduled = true;
+                          setTimeout(() => {
+                            dispatchScheduled = false;
+                            withRuntimeErrorLogging(drainMappedUpdates());
+                          }, REDDIT_STREAM_DISPATCH_DELAY_MS);
+                          break;
+                        }
+                      }
+                    } finally {
+                      dispatchInFlight = false;
+                    }
+                  };
+
+                  const enqueueMappedUpdates = (updates: StreamDomainUpdate[]): void => {
+                    queuedMappedUpdates.push(...updates);
+
+                    if (queuedMappedUpdates.length > REDDIT_STREAM_MAX_QUEUED_UPDATES) {
+                      const dropCount = queuedMappedUpdates.length - REDDIT_STREAM_MAX_QUEUED_UPDATES;
+                      queuedMappedUpdates.splice(0, dropCount);
+                    }
+
+                    scheduleDrainMappedUpdates();
+                  };
+
                   const mapper = createRedditStreamDomainMapper(selfUserId);
 
                   await networkInterceptListenerManager.subscribe(cmd.requestId, normalizedOptions as {
@@ -416,9 +474,7 @@ export default defineBackground(() => {
                     onUpdate: async (updateType, data) => {
                       const mappedUpdates = mapper.mapNetworkUpdate(updateType, data);
                       if (mappedUpdates.length > 0) {
-                        for (const mappedUpdate of mappedUpdates) {
-                          await emitListenerUpdateToRelay(chrome, cmd.requestId, mappedUpdate.updateType, mappedUpdate.data);
-                        }
+                        enqueueMappedUpdates(mappedUpdates);
                         return;
                       }
 
