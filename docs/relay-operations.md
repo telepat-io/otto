@@ -1,6 +1,6 @@
 # Relay Operations
 
-Last Updated: 2026-04-10
+Last Updated: 2026-04-12
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -180,6 +180,14 @@ Operational troubleshooting checklist:
 3. Confirm target node is online (`node_offline` otherwise).
 4. Confirm replay timestamp/nonce validity (`replay_rejected` and `timestamp_out_of_window`).
 5. Confirm per-tab queue pressure (`tab_busy`, `tab_queue_limit_exceeded`, `queue_wait_timed_out`).
+
+Rate-limit behavior details:
+
+1. Relay enforces session rate limiting across authenticated frames with `OTTO_RATE_LIMIT_PER_MIN`.
+2. Rejected frames receive error envelope `code=rate_limited` and are not processed.
+3. Node `event` frames with `payload.type=listener_update` bypass session rate limiting so high-volume stream updates can continue.
+4. Node `event` frames with `payload.type=extension_log` remain rate-limited and may be dropped under telemetry bursts.
+5. Tuning guidance: reduce extension debug-log production and burst flush size before increasing global `OTTO_RATE_LIMIT_PER_MIN`.
 
 Setup-related operational notes:
 

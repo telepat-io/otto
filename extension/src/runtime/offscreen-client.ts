@@ -14,25 +14,77 @@ let authenticated = false;
 let localDevLogStreamingEnabled = false;
 const outboundQueue: Envelope[] = [];
 const extensionLogQueue = createExtensionLogQueue(300);
+const extensionLogOutboundQueue: Envelope[] = [];
+let extensionLogFlushTimer: number | undefined;
+let lastRateLimitedWarnAtMs = 0;
+
+const MAX_EXTENSION_LOG_OUTBOUND_QUEUE = 600;
+const EXTENSION_LOG_FLUSH_BATCH_SIZE = 25;
+const EXTENSION_LOG_FLUSH_DELAY_MS = 50;
+const EXTENSION_LOG_MAX_WS_BUFFERED_BYTES = 512_000;
+const RATE_LIMIT_WARN_THROTTLE_MS = 10_000;
+
+function queueExtensionLogEnvelope(envelope: Envelope): void {
+  enqueueOutbound(extensionLogOutboundQueue, envelope, MAX_EXTENSION_LOG_OUTBOUND_QUEUE);
+  scheduleExtensionLogFlush();
+}
+
+function scheduleExtensionLogFlush(): void {
+  if (extensionLogFlushTimer !== undefined) {
+    return;
+  }
+
+  extensionLogFlushTimer = setTimeout(() => {
+    extensionLogFlushTimer = undefined;
+    flushExtensionLogOutboundQueue();
+  }, EXTENSION_LOG_FLUSH_DELAY_MS) as unknown as number;
+}
+
+function flushExtensionLogOutboundQueue(): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !authenticated || !localDevLogStreamingEnabled) {
+    return;
+  }
+
+  let sentCount = 0;
+  while (extensionLogOutboundQueue.length > 0 && sentCount < EXTENSION_LOG_FLUSH_BATCH_SIZE) {
+    if (ws.bufferedAmount > EXTENSION_LOG_MAX_WS_BUFFERED_BYTES) {
+      break;
+    }
+
+    const next = extensionLogOutboundQueue.shift();
+    if (!next) {
+      break;
+    }
+
+    ws.send(JSON.stringify(next));
+    sentCount += 1;
+  }
+
+  if (extensionLogOutboundQueue.length > 0) {
+    scheduleExtensionLogFlush();
+  }
+}
 
 function sendOrQueueExtensionLog(entry: ExtensionLogEntry): void {
   if (!localDevLogStreamingEnabled) {
     return;
   }
 
+  const normalizedEntry: ExtensionLogEntry = {
+    ...entry,
+    timestamp: entry.timestamp ?? new Date().toISOString(),
+  };
+
   if (!ws || ws.readyState !== WebSocket.OPEN || !authenticated) {
-    extensionLogQueue.enqueue(entry);
+    extensionLogQueue.enqueue(normalizedEntry);
     return;
   }
 
   const payload: ExtensionLogEventPayload = {
     type: 'extension_log',
-    entry: {
-      ...entry,
-      timestamp: entry.timestamp ?? new Date().toISOString(),
-    },
+    entry: normalizedEntry,
   };
-  ws.send(JSON.stringify(createEnvelope('event', 'node', nanoid(), payload)));
+  queueExtensionLogEnvelope(createEnvelope('event', 'node', nanoid(), payload));
 }
 
 function flushExtensionLogQueue(): void {
@@ -48,7 +100,7 @@ function flushExtensionLogQueue(): void {
         timestamp: next.timestamp ?? new Date().toISOString(),
       },
     };
-    ws.send(JSON.stringify(createEnvelope('event', 'node', nanoid(), payload)));
+    queueExtensionLogEnvelope(createEnvelope('event', 'node', nanoid(), payload));
   }
 }
 
@@ -160,6 +212,10 @@ async function forwardToBackground(message: Envelope): Promise<void> {
 async function connect(): Promise<void> {
   const { relayUrl, nodeId, accessToken, pairingCode, localDevLogStreamingEnabled: localLogFlag } = await loadConfig();
   localDevLogStreamingEnabled = localLogFlag === true;
+  if (!localDevLogStreamingEnabled) {
+    extensionLogQueue.drain();
+    extensionLogOutboundQueue.length = 0;
+  }
 
   if (!accessToken) {
     await publishConnectionStatus('waiting_for_pairing');
@@ -252,11 +308,21 @@ async function connect(): Promise<void> {
       });
       flushOutboundQueue();
       flushExtensionLogQueue();
+      flushExtensionLogOutboundQueue();
       return;
     }
 
     if (envelope.messageType === 'error') {
-      const maybePayload = envelope.payload as { category?: string; message?: string };
+      const maybePayload = envelope.payload as { category?: string; code?: string; message?: string };
+      if (maybePayload.code === 'rate_limited') {
+        const now = Date.now();
+        if (now - lastRateLimitedWarnAtMs >= RATE_LIMIT_WARN_THROTTLE_MS) {
+          lastRateLimitedWarnAtMs = now;
+          console.warn(`[otto:offscreen] relay rate limited node traffic: ${maybePayload.message ?? 'session limit exceeded'}`);
+        }
+        return;
+      }
+
       if (maybePayload.category === 'auth') {
         console.warn(`[otto:offscreen] relay auth error: ${maybePayload.message ?? 'unknown auth failure'}`);
         sendOrQueueExtensionLog({

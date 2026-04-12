@@ -1,6 +1,6 @@
 # Logging and Debugging
 
-Last Updated: 2026-04-10
+Last Updated: 2026-04-12
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -124,6 +124,11 @@ Useful event types:
 - `network_listener.detached_owned_attachment`
 - `network_listener.detach_skipped_shared_attachment`
 
+Listener update log persistence note:
+
+- Relay forwards full `listener_update` payloads to subscribed controllers.
+- Relay operation logs store listener update metadata plus payload shape summary, not full raw listener payload bodies.
+
 Debugger focus and shared-session diagnostics:
 
 1. Follow node logs while reproducing unfocused-tab command flow:
@@ -156,6 +161,25 @@ Behavior:
 - Relay persists these entries as `source: node` and includes them in list/export/follow alongside relay logs.
 - Redaction still applies at relay ingress before persistence/streaming.
 
+### Backpressure, Queueing, and Drop Semantics
+
+- Extension debug-log transport is separate from listener update transport in offscreen runtime.
+- Extension debug logs use a dedicated bounded outbound queue and batched flush with websocket `bufferedAmount` checks.
+- If extension debug-log queue is full, oldest log entries are dropped first (newest entries are retained).
+- Listener updates are routed through command/listener event transport and are not dropped by extension-log queue limits.
+- Relay session rate limiting can reject inbound frames with error code `rate_limited`; rejected frames are not processed.
+- Relay now bypasses session rate limiting for node `listener_update` frames, so stream delivery remains data-plane prioritized.
+- Node `extension_log` frames are still subject to relay session rate limiting.
+
+### Interpreting `rate_limited` Warnings
+
+When offscreen logs `relay rate limited node traffic: Rate limit exceeded for this session`:
+
+- It indicates relay rejected at least one inbound node frame in that minute window.
+- In current runtime, the most likely dropped class is `extension_log` (telemetry), not listener updates.
+- Listener-update stream traffic may still be healthy even while warnings appear.
+- Treat warnings as a signal to reduce debug-log volume, sampling frequency, or flush batch budget before increasing global relay limits.
+
 ## Storage Model
 
 - In-memory log ring for quick API filtering.
@@ -180,6 +204,7 @@ Relevant environment variables:
 - Node disconnect during in-flight execution is surfaced as deterministic terminal `node_disconnected`.
 - Lock lifecycle events (`lock_acquired`, `lock_conflict`, `lock_released`, `lock_expired`) are emitted for troubleshooting concurrency issues.
 - For autonomous debugging, prefer non-TTY + JSON output and bounded log pulls before starting long-lived follow sessions.
+- For high-volume listener streams (for example chat backlog capture), prioritize `--source node` and request-id scoping to avoid unrelated log noise.
 
 ## Command Debugging Playbook
 

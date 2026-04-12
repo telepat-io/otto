@@ -1,6 +1,6 @@
 # Testing
 
-Last Updated: 2026-04-10
+Last Updated: 2026-04-12
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -22,6 +22,7 @@ Owner: Platform
 - Relay security tests for scope enforcement, token revocation, JWT key-rotation fallback, and replay defense
 - Relay auth edge tests for malformed/expired access token rejection and first-wins pairing approval conflict handling
 - Relay abuse-path tests for malformed command rejection and per-session rate-limit enforcement
+- Relay node stream rate-limit routing tests to ensure `listener_update` bypasses session limiter while `extension_log` remains limited
 - Relay WebSocket upgrade tests for node-origin allow-list accept/reject behavior
 - Relay lock lifecycle tests for acquire/conflict/renew/release events and lease-expiry observability
 - Relay terminality tests for accepted command outcomes: completed, failed, timed_out, cancelled, and node_disconnected
@@ -34,6 +35,7 @@ Owner: Platform
 - Relay command-action scope tests (`command.run` allow and `command.test`/`command.list` deny under scoped tokens)
 - Relay command queue invariants tests for same-tab FIFO under `command.run`
 - Extension runtime tests for reconnect backoff, outbound replay queue bounds, and bootstrap keep-warm recovery flow
+- Extension offscreen transport tests for bounded extension debug-log outbound queue behavior and backpressure-aware flush pacing
 - Extension local-dev log queue tests for bounded pre-connect buffering and timestamp normalization
 - Extension pairing-state tests for challenge issuance and approved-token hydration paths
 - Extension command replay tests for idempotency-key dedupe and stale replay pruning

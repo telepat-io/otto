@@ -1,6 +1,6 @@
 # Extension Runtime
 
-Last Updated: 2026-04-10
+Last Updated: 2026-04-12
 Owner: Browser Runtime
 
 ## Runtime Components
@@ -179,6 +179,19 @@ Reconnect diagnostics:
 - Offscreen client flushes queued extension logs after websocket auth completes and continues streaming live runtime log events.
 - Relay persists these as `source: node` and merges them into standard relay log APIs/streams.
 - Sensitive fields remain redacted at relay ingress; extension log payloads must avoid raw credentials.
+
+Transport details:
+
+- Extension debug logs are sent through a dedicated bounded outbound queue in offscreen runtime (separate from listener update queue).
+- Extension debug log flushing is batched and paced; flush pauses when websocket `bufferedAmount` exceeds threshold.
+- When local-dev log streaming is disabled, pending extension debug-log buffers are cleared.
+- Relay `rate_limited` error frames are treated as traffic backpressure signals (not authentication failures) in offscreen runtime.
+- Offscreen warning logs for relay rate-limit signals are throttled to avoid console flood.
+
+Operational implication:
+
+- Under heavy stream traffic, relay `rate_limited` warnings typically indicate dropped extension telemetry frames.
+- Data-plane listener updates continue through their own outbound path and are prioritized over debug-log traffic.
 
 ## tabSessionId Model
 

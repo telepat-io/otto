@@ -1808,6 +1808,105 @@ test('controller session is rate-limited after configured per-minute threshold',
   assert.equal(err.payload?.code, 'rate_limited');
 });
 
+test('node listener_update frames bypass session rate limit while other node events still enforce it', async (t) => {
+  const port = 8825;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port, {
+    OTTO_RATE_LIMIT_PER_MIN: '1',
+  });
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const nodeWs = await connectAuthedNodeWs(port, 'node_listener_rate_limit_suite', 'node_listener_rate_limit');
+
+  t.after(() => {
+    nodeWs.close();
+  });
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'node_listener_update_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'listener_update',
+      updateType: 'network.response',
+      emittedAt: new Date().toISOString(),
+      data: { probe: 1 },
+    },
+  }));
+
+  const firstListenerErr = await nextWsEnvelope(
+    nodeWs,
+    (msg) => msg.messageType === 'error' && msg.requestId === 'node_listener_update_1',
+  );
+  assert.equal(firstListenerErr.payload?.code, 'listener_not_found');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'node_listener_update_2',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'listener_update',
+      updateType: 'network.response',
+      emittedAt: new Date().toISOString(),
+      data: { probe: 2 },
+    },
+  }));
+
+  const secondListenerErr = await nextWsEnvelope(
+    nodeWs,
+    (msg) => msg.messageType === 'error' && msg.requestId === 'node_listener_update_2',
+  );
+  assert.equal(secondListenerErr.payload?.code, 'listener_not_found');
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'node_extension_log_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'extension_log',
+      entry: {
+        level: 'debug',
+        type: 'node.test_log',
+        timestamp: new Date().toISOString(),
+        data: { attempt: 1 },
+      },
+    },
+  }));
+
+  nodeWs.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'event',
+    requestId: 'node_extension_log_2',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: {
+      type: 'extension_log',
+      entry: {
+        level: 'debug',
+        type: 'node.test_log',
+        timestamp: new Date().toISOString(),
+        data: { attempt: 2 },
+      },
+    },
+  }));
+
+  const rateLimitedErr = await nextWsEnvelope(
+    nodeWs,
+    (msg) => msg.messageType === 'error' && msg.requestId === 'node_extension_log_2',
+  );
+  assert.equal(rateLimitedErr.payload?.code, 'rate_limited');
+});
+
 test('controller auth accepts token signed by previous secret during rotation window', async (t) => {
   const port = 8802;
   const oldSecret = 'rotating-old-secret';

@@ -756,15 +756,6 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
         requestHeaders,
       });
 
-      if (tabStates.get(tabId)?.subscriptions.size) {
-        await emitDebugLog(chromeApi, 'network_listener.response_received', {
-          tabId,
-          requestId,
-          url,
-          mimeType,
-          status,
-        });
-      }
       return;
     }
 
@@ -782,16 +773,6 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       byRequest?.delete(requestId);
 
       const matches = matchingSubscriptions(tabId, metadata);
-      if (tabStates.get(tabId)?.subscriptions.size) {
-        await emitDebugLog(chromeApi, 'network_listener.loading_finished', {
-          tabId,
-          requestId,
-          url: metadata.url,
-          mimeType: metadata.mimeType,
-          status: metadata.status,
-          matchCount: matches.length,
-        });
-      }
       if (matches.length === 0) {
         return;
       }
@@ -868,16 +849,6 @@ export function createNetworkInterceptListenerManager(chromeApi: ChromeLike) {
       };
 
       const matches = matchingSubscriptions(tabId, metadata).filter((sub) => sub.mode === 'fetch' || sub.mode === 'hybrid');
-      if (tabStates.get(tabId)?.subscriptions.size) {
-        await emitDebugLog(chromeApi, 'network_listener.fetch_paused', {
-          tabId,
-          requestId,
-          url,
-          mimeType: metadata.mimeType,
-          status: metadata.status,
-          matchCount: matches.length,
-        });
-      }
       if (matches.length === 0) {
         try {
           await chromeApi.debugger.sendCommand({ tabId }, 'Fetch.continueRequest', { requestId });

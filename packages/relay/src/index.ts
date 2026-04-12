@@ -1211,6 +1211,19 @@ function checkRateLimit(clientId: string): boolean {
   return current.count <= RATE_LIMIT_PER_MIN;
 }
 
+function shouldSkipRateLimit(client: Client, msg: Envelope): boolean {
+  if (client.role !== 'node') {
+    return false;
+  }
+
+  if (msg.messageType !== 'event') {
+    return false;
+  }
+
+  const payload = msg.payload as { type?: unknown };
+  return payload.type === 'listener_update';
+}
+
 function isActionAllowed(scopes: string[], action: string): boolean {
   if (scopes.includes('*')) return true;
   return scopes.includes(action);
@@ -2392,7 +2405,7 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    if (!checkRateLimit(client.id)) {
+    if (!shouldSkipRateLimit(client, msg) && !checkRateLimit(client.id)) {
       send(ws, buildError(msg.requestId, 'relay', {
         category: 'auth',
         code: 'rate_limited',
@@ -2499,6 +2512,21 @@ wss.on('connection', (ws) => {
           updateType: parsed.data.updateType,
           emittedAt: parsed.data.emittedAt,
         }));
+        const payloadSummary = (() => {
+          if (parsed.data.data === null) {
+            return { kind: 'null' };
+          }
+          if (Array.isArray(parsed.data.data)) {
+            return { kind: 'array', size: parsed.data.data.length };
+          }
+          if (typeof parsed.data.data === 'object') {
+            return {
+              kind: 'object',
+              keys: Object.keys(parsed.data.data as Record<string, unknown>).slice(0, 20),
+            };
+          }
+          return { kind: typeof parsed.data.data };
+        })();
         emitLog({
           level: 'info',
           source: 'node',
@@ -2506,7 +2534,11 @@ wss.on('connection', (ws) => {
           requestId: msg.requestId,
           nodeId: client.nodeId,
           status: 'update',
-          data: parsed.data,
+          data: {
+            updateType: parsed.data.updateType,
+            emittedAt: parsed.data.emittedAt,
+            payload: payloadSummary,
+          },
         });
         return;
       }
