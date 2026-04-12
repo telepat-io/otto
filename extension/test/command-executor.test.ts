@@ -1099,8 +1099,8 @@ test('command.run enforces inputAtLeastOneOf metadata before execute', async () 
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getUserInfo',
-      input: {},
+      command: 'sendChatMessage',
+      input: { message: 'hello' },
       authMode: 'strict_fail',
     })),
     (err: unknown) => {
@@ -1110,6 +1110,85 @@ test('command.run enforces inputAtLeastOneOf metadata before execute', async () 
       return true;
     },
   );
+});
+
+test('command.run getUserInfo defaults to logged-in user when input is empty', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{
+      name: 'gabidobo',
+      id: '14f0tp',
+      verified: true,
+      created_utc: 1484353734,
+      total_karma: 127,
+      link_karma: 96,
+      comment_karma: 31,
+      snoovatar_img: 'https://i.redd.it/snoovatar/avatars/example.png',
+      subreddit: {
+        display_name_prefixed: 'u/gabidobo',
+        url: '/user/gabidobo/',
+        subscribers: 2,
+      },
+    }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getUserInfo',
+    input: {},
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getUserInfo',
+    user: {
+      kind: 'entity.user',
+      id: 't2_14f0tp',
+      platform: 'reddit',
+      username: 'gabidobo',
+      displayName: 'u/gabidobo',
+      profileUrl: 'https://www.reddit.com/user/gabidobo/',
+      avatarUrl: 'https://i.redd.it/snoovatar/avatars/example.png',
+      bio: undefined,
+      isVerified: true,
+      createdAt: '2017-01-14T00:28:54.000Z',
+      flags: undefined,
+      stats: {
+        followers: 2,
+        reputation: 127,
+        posts: 96,
+        comments: 31,
+      },
+      originalEntity: {
+        name: 'gabidobo',
+        id: '14f0tp',
+        verified: true,
+        created_utc: 1484353734,
+        total_karma: 127,
+        link_karma: 96,
+        comment_karma: 31,
+        snoovatar_img: 'https://i.redd.it/snoovatar/avatars/example.png',
+        subreddit: {
+          display_name_prefixed: 'u/gabidobo',
+          url: '/user/gabidobo/',
+          subscribers: 2,
+        },
+      },
+    },
+    lookup: {
+      username: undefined,
+      id: undefined,
+    },
+  });
 });
 
 test('command.run auto-navigates to preloadHost before execute', async () => {
@@ -1673,23 +1752,38 @@ test('command.run getUserInfo maps reddit profile payload', async () => {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     command: 'getUserInfo',
-    username: 'alice',
-    id: 't2_abc123',
-    avatar: 'https://example.com/avatar.png',
-    createdUtc: 123,
-    isBlocked: false,
-    isMod: false,
-    isEmployee: false,
-    acceptChats: true,
-    raw: {
-      name: 'alice',
-      id: 'abc123',
-      icon_img: 'https://example.com/avatar.png',
-      created_utc: 123,
-      is_blocked: false,
-      is_mod: false,
-      is_employee: false,
-      accept_chats: true,
+    user: {
+      kind: 'entity.user',
+      id: 't2_abc123',
+      platform: 'reddit',
+      username: 'alice',
+      displayName: undefined,
+      profileUrl: undefined,
+      avatarUrl: 'https://example.com/avatar.png',
+      bio: undefined,
+      isVerified: false,
+      createdAt: '1970-01-01T00:02:03.000Z',
+      flags: undefined,
+      stats: {
+        followers: undefined,
+        reputation: undefined,
+        posts: undefined,
+        comments: undefined,
+      },
+      originalEntity: {
+        name: 'alice',
+        id: 'abc123',
+        icon_img: 'https://example.com/avatar.png',
+        created_utc: 123,
+        is_blocked: false,
+        is_mod: false,
+        is_employee: false,
+        accept_chats: true,
+      },
+    },
+    lookup: {
+      username: 'alice',
+      id: undefined,
     },
   });
 });

@@ -1,4 +1,5 @@
 import type { SiteCommand } from '../types.js';
+import type { UserProfile } from '@telepat/otto-protocol';
 
 type UserInfoInput = {
   username?: string;
@@ -13,6 +14,43 @@ function normalizeId(input: string): string {
   return `t2_${trimmed}`;
 }
 
+function normalizeProfileUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/')) {
+    return `https://www.reddit.com${trimmed}`;
+  }
+  return undefined;
+}
+
+function toIsoUtc(seconds: unknown): string | undefined {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
+    return undefined;
+  }
+  return new Date(seconds * 1_000).toISOString();
+}
+
+function pickString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value !== 'string') {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+  return undefined;
+}
+
 export const getUserInfoCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
@@ -21,7 +59,6 @@ export const getUserInfoCommand: SiteCommand = {
     description: 'Fetches profile metadata for a Reddit user by username or account id.',
     tags: ['users', 'reddit'],
     requiresAuth: false,
-    inputAtLeastOneOf: ['username', 'id'],
     inputFields: [
       {
         name: 'username',
@@ -32,7 +69,7 @@ export const getUserInfoCommand: SiteCommand = {
       {
         name: 'id',
         type: 'string',
-        description: 'Reddit account id, with or without t2_ prefix.',
+        description: 'Reddit account id, with or without t2_ prefix. When both username and id are omitted, falls back to logged-in user via /api/me.json.',
         optional: true,
       },
     ],
@@ -42,12 +79,22 @@ export const getUserInfoCommand: SiteCommand = {
     const username = typeof parsed.username === 'string' ? parsed.username.trim().replace(/^u\//, '') : '';
     const id = typeof parsed.id === 'string' ? parsed.id.trim() : '';
 
-    if (!username && !id) {
-      throw new Error('getUserInfo requires input.username or input.id');
-    }
+    const resolveSelf = !username && !id;
 
     const profile = await ctx.executeScript(
-      async (targetUsername: string, targetId: string) => {
+      async (targetUsername: string, targetId: string, shouldResolveSelf: boolean) => {
+        if (shouldResolveSelf) {
+          const response = await fetch('https://www.reddit.com/api/me.json', {
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (!response.ok) {
+            throw new Error(`reddit_me_lookup_failed:${response.status}`);
+          }
+          const body = await response.json() as { data?: Record<string, unknown> };
+          return body.data ?? null;
+        }
+
         if (targetUsername) {
           const response = await fetch(`https://www.reddit.com/user/${encodeURIComponent(targetUsername)}/about.json`, {
             credentials: 'include',
@@ -74,7 +121,7 @@ export const getUserInfoCommand: SiteCommand = {
         const body = await response.json() as Record<string, Record<string, unknown> | undefined>;
         return body[normalizedId] ?? null;
       },
-      [username, id],
+      [username, id, resolveSelf],
     );
 
     const data = profile && typeof profile === 'object' ? profile as Record<string, unknown> : null;
@@ -82,22 +129,59 @@ export const getUserInfoCommand: SiteCommand = {
       throw new Error('reddit_user_not_found');
     }
 
+    const subreddit = data.subreddit && typeof data.subreddit === 'object'
+      ? data.subreddit as Record<string, unknown>
+      : undefined;
+
     const resolvedUsername = typeof data.name === 'string' ? data.name : username || undefined;
     const resolvedIdRaw = typeof data.id === 'string' ? data.id : undefined;
     const resolvedId = resolvedIdRaw ? normalizeId(resolvedIdRaw) : (id ? normalizeId(id) : undefined);
 
-    return {
+    const flags: string[] = [];
+    if (data.is_employee === true) {
+      flags.push('employee');
+    }
+    if (data.is_mod === true) {
+      flags.push('moderator');
+    }
+    if (data.is_blocked === true) {
+      flags.push('blocked');
+    }
+    if (data.is_friend === true) {
+      flags.push('friend');
+    }
+
+    const user: UserProfile = {
+      kind: 'entity.user',
+      id: resolvedId ?? (resolvedUsername ? `reddit:${resolvedUsername}` : 'reddit:unknown'),
+      platform: 'reddit',
       username: resolvedUsername,
-      id: resolvedId,
-      avatar: typeof data.snoovatar_img === 'string'
-        ? data.snoovatar_img
-        : (typeof data.icon_img === 'string' ? data.icon_img : undefined),
-      createdUtc: typeof data.created_utc === 'number' ? data.created_utc : undefined,
-      isBlocked: data.is_blocked === true,
-      isMod: data.is_mod === true,
-      isEmployee: data.is_employee === true,
-      acceptChats: typeof data.accept_chats === 'boolean' ? data.accept_chats : undefined,
-      raw: data,
+      displayName: pickString(subreddit?.title, subreddit?.display_name_prefixed),
+      profileUrl: normalizeProfileUrl(subreddit?.url),
+      avatarUrl: pickString(data.snoovatar_img, data.icon_img),
+      bio: pickString(subreddit?.public_description, subreddit?.description),
+      isVerified: data.verified === true,
+      createdAt: toIsoUtc(data.created_utc),
+      flags: flags.length > 0 ? flags : undefined,
+      stats: {
+        followers: typeof subreddit?.subscribers === 'number' ? subreddit.subscribers : undefined,
+        reputation: typeof data.total_karma === 'number'
+          ? data.total_karma
+          : (typeof data.link_karma === 'number' && typeof data.comment_karma === 'number'
+            ? data.link_karma + data.comment_karma
+            : undefined),
+        posts: typeof data.link_karma === 'number' ? data.link_karma : undefined,
+        comments: typeof data.comment_karma === 'number' ? data.comment_karma : undefined,
+      },
+      originalEntity: data,
+    };
+
+    return {
+      user,
+      lookup: {
+        username: username || undefined,
+        id: id || undefined,
+      },
     };
   },
 };

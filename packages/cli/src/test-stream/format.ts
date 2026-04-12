@@ -7,6 +7,7 @@ import type {
   ErrorPayload,
   ResultPayload,
   StreamDomainObject,
+  UserProfile,
 } from '@telepat/otto-protocol';
 
 type ListenerUpdateEnvelopePayload = {
@@ -297,6 +298,59 @@ function renderPostCollection(
   return lines;
 }
 
+function isUserProfile(value: unknown): value is UserProfile {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return value.kind === 'entity.user' && typeof value.id === 'string' && typeof value.platform === 'string';
+}
+
+function renderUserProfile(value: unknown): string[] {
+  const profile = isUserProfile(value)
+    ? value
+    : (isRecord(value) && isUserProfile(value.user) ? value.user : undefined);
+
+  if (!profile) {
+    return [];
+  }
+
+  const identity = [profile.displayName, profile.username, profile.id]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .join(' | ');
+
+  const lines = [
+    `[otto:test:user] ${identity || profile.id}`,
+    `[otto:test:user] platform=${profile.platform}`,
+  ];
+
+  if (profile.profileUrl) {
+    lines.push(`[otto:test:user] profileUrl=${profile.profileUrl}`);
+  }
+  if (profile.createdAt) {
+    lines.push(`[otto:test:user] createdAt=${profile.createdAt}`);
+  }
+  if (Array.isArray(profile.flags) && profile.flags.length > 0) {
+    lines.push(`[otto:test:user] flags=${profile.flags.join(',')}`);
+  }
+
+  const stats = profile.stats;
+  if (stats) {
+    const statPairs = [
+      typeof stats.followers === 'number' ? `followers=${stats.followers}` : undefined,
+      typeof stats.following === 'number' ? `following=${stats.following}` : undefined,
+      typeof stats.posts === 'number' ? `posts=${stats.posts}` : undefined,
+      typeof stats.comments === 'number' ? `comments=${stats.comments}` : undefined,
+      typeof stats.reputation === 'number' ? `reputation=${stats.reputation}` : undefined,
+    ].filter((part): part is string => typeof part === 'string');
+
+    if (statPairs.length > 0) {
+      lines.push(`[otto:test:user] ${statPairs.join(' ')}`);
+    }
+  }
+
+  return lines;
+}
+
 function renderResultData(
   value: unknown,
   style: {
@@ -315,6 +369,11 @@ function renderResultData(
   const postLines = renderPostCollection(value, style);
   if (postLines.length > 0) {
     return postLines;
+  }
+
+  const userLines = renderUserProfile(value);
+  if (userLines.length > 0) {
+    return userLines;
   }
 
   if (Array.isArray(value)) {

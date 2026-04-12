@@ -197,6 +197,50 @@ test('command result renders generic object summary when posts are absent', () =
   assert.match(lines[1], /records=2/);
 });
 
+test('command result renders normalized user profile details', () => {
+  const renderer = createCommandTestStreamRenderer({
+    site: 'reddit.com',
+    command: 'getUserInfo',
+    jsonOutput: false,
+    useColor: false,
+  });
+
+  const lines = renderer.renderCommandResponse(
+    envelope('result', {
+      ok: true,
+      action: 'command.test',
+      durationMs: 24,
+      commandOutcome: 'completed',
+      data: {
+        user: {
+          kind: 'entity.user',
+          id: 't2_abc123',
+          platform: 'reddit',
+          username: 'alice',
+          displayName: 'Alice',
+          profileUrl: 'https://www.reddit.com/user/alice/',
+          createdAt: '2026-04-12T00:00:00.000Z',
+          flags: ['verified', 'moderator'],
+          stats: {
+            followers: 123,
+            reputation: 456,
+          },
+        },
+      },
+    }, 'command-req-user-1'),
+    'command.test',
+  );
+
+  assert.equal(lines.length, 7);
+  assert.match(lines[0], /command\.test completed/);
+  assert.equal(lines[1], '[otto:test:user] Alice | alice | t2_abc123');
+  assert.equal(lines[2], '[otto:test:user] platform=reddit');
+  assert.equal(lines[3], '[otto:test:user] profileUrl=https://www.reddit.com/user/alice/');
+  assert.equal(lines[4], '[otto:test:user] createdAt=2026-04-12T00:00:00.000Z');
+  assert.equal(lines[5], '[otto:test:user] flags=verified,moderator');
+  assert.equal(lines[6], '[otto:test:user] followers=123 reputation=456');
+});
+
 test('command result colorizes post lines when color output is enabled', () => {
   const renderer = createCommandTestStreamRenderer({
     site: 'reddit.com',

@@ -184,6 +184,7 @@ Command test streaming:
 - `input`: optional JSON object passed to command execution
 - `authMode`: `auto`, `strict_fail`, or `skip`
 - `command.test` executes command test path with the same payload shape as `command.run`.
+- Shared protocol includes a generic `UserProfile` object (`kind=entity.user`) for cross-platform user lookup responses (for example Reddit, X, Facebook) with normalized identity fields, optional `stats`/`flags`, and `originalEntity` for source-specific payloads.
 - Runtime behavior for `command.test`:
 - If command defines `test` hook, runtime executes it.
 - If no `test` hook is defined, runtime falls back to `execute`.

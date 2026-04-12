@@ -101,6 +101,30 @@ export interface UserRef {
   originalEntity?: unknown;
 }
 
+export interface UserProfileStats {
+  followers?: number;
+  following?: number;
+  posts?: number;
+  comments?: number;
+  reputation?: number;
+}
+
+export interface UserProfile {
+  kind: 'entity.user';
+  id: string;
+  platform: string;
+  username?: string;
+  displayName?: string;
+  profileUrl?: string;
+  avatarUrl?: string;
+  bio?: string;
+  isVerified?: boolean;
+  createdAt?: string;
+  flags?: string[];
+  stats?: UserProfileStats;
+  originalEntity?: unknown;
+}
+
 export interface ConversationRef {
   id: string;
   platform?: string;
