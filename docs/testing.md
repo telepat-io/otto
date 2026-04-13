@@ -1,6 +1,6 @@
 # Testing
 
-Last Updated: 2026-04-12
+Last Updated: 2026-04-14
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -43,6 +43,7 @@ Owner: Platform
 - Extension keep-warm pairing recovery tests for expired challenge cleanup and next-cycle challenge reissuance
 - Extension primitive execution tests for deterministic unknown/closed tabSessionId error mapping and stale tabSessionId mapping cleanup
 - Extension command tests for site mismatch, auth preflight redirect, authenticated execution, legacy alias routing, metadata input validation, preload-host checks, and `command.test` fallback/hook execution
+- Extension command-runtime tests for `executeScriptWithDomHelpers` bootstrap behavior and deterministic command script result handling in mocks
 - Extension listener validation tests for `network.http_intercept` option normalization and deterministic validation errors
 - Extension network interception manager tests for `Network.loadingFinished` body capture and `Fetch.continueRequest` safety guarantees
 - Extension network interception manager tests for hybrid cross-source duplicate suppression (`Network`/`Fetch` equivalent response emissions)
@@ -93,6 +94,7 @@ Run in this order after any code change:
 - Example: `otto test reddit.com getFeed`
 - Example: `otto test reddit.com getUserInfo --payload '{"username":"spez"}'`
 - Example: `otto test reddit.com sendChatMessage --payload '{"username":"example_user","message":"hello"}'`
+- Example: `otto test reddit.com sendChatMessage --payload '{"roomId":"room_123","message":"hello"}'`
 - Example: `otto test reddit.com getChatMessages --payload '{"roomId":"!abc123:reddit.com","limit":50}'`
 - Example: `otto test reddit.com getChatMessages --payload '{"limit":50}'`
 - Discovery command: `otto commands list` (optionally `--site reddit.com`)
@@ -140,6 +142,12 @@ Command test hook guidance:
 - For side-effecting commands (for example chat send), keep automated unit/integration tests fully mocked and side-effect free.
 - Reserve live-send verification for explicit manual runs (for example `otto test reddit.com sendChatMessage --payload '{"roomId":"room_123","message":"hello"}'`).
 - For streaming commands, return `stream.listeners` from `test` with listener name and options.
+
+Shadow DOM helper test guidance:
+
+- Commands that rely on nested Shadow DOM selectors should use `ctx.executeScriptWithDomHelpers(...)` instead of duplicating local deep-query helpers.
+- In extension command-runtime unit tests, mock `chrome.scripting.executeScript` should treat helper bootstrap (`installPageDomQueryHelpers`) as a non-consuming injection step so scripted result queues stay deterministic.
+- For Reddit chat room-id send tests, assert direct navigation uses `https://reddit.com/chat/room/<roomId>`.
 
 Input metadata guidance:
 

@@ -1,6 +1,6 @@
 # Extension Runtime
 
-Last Updated: 2026-04-12
+Last Updated: 2026-04-14
 Owner: Browser Runtime
 
 ## Runtime Components
@@ -11,6 +11,7 @@ Owner: Browser Runtime
 - `src/runtime/offscreen-client.ts`: persistent relay WebSocket and heartbeat
 - `src/runtime/command-executor.ts`: primitive and command command execution
 - `src/runtime/command-runtime.ts`: site command resolution, auth preflight, and execution orchestration
+- `src/runtime/page-dom-query.ts`: shared page-side deep selector helper installer for command scripts
 - `src/runtime/network-intercept-listener.ts`: per-tab debugger session management for response interception
 - `src/runtime/listener-managers.ts`: singleton listener-manager access for background and command runtime
 - `src/runtime/options-ui.ts`: relay URL configuration UI logic
@@ -22,6 +23,7 @@ Owner: Browser Runtime
 - Offscreen transport owner: `extension/src/runtime/offscreen-client.ts`
 - Command execution/runtime errors: `extension/src/runtime/command-executor.ts`
 - Replay ledger: `extension/src/runtime/command-replay.ts`
+- Page DOM query helper installer: `extension/src/runtime/page-dom-query.ts`
 - Command registry: `extension/src/commands/index.ts`
 - Command bundles: `extension/src/commands/**`
 
@@ -116,6 +118,15 @@ Command commands:
 - `command.run` executes site-scoped commands using payload `site`, `command`, `input`, and `authMode`.
 - `command.test` executes command test hooks for `otto test` while preserving command context/auth behavior.
 - `command.reddit_feed` is supported as a migration alias.
+
+Command script helper context APIs:
+
+- `ctx.executeScript(...)` runs a script in the tab without helper bootstrap.
+- `ctx.executeScriptWithDomHelpers(...)` first injects `installPageDomQueryHelpers` and then runs the command script.
+- `installPageDomQueryHelpers` sets page globals for recursive Shadow DOM lookup:
+- `window.__ottoDeepQuerySelector(root, selector)`
+- `window.__ottoDeepQuerySelectorAll(root, selector)`
+- Helper install is idempotent and safe to call repeatedly from command runtime.
 
 Command metadata surfaced by `command.list`:
 

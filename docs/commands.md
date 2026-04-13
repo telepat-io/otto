@@ -1,6 +1,6 @@
 # Commands
 
-Last Updated: 2026-04-10
+Last Updated: 2026-04-14
 Owner: Browser Runtime
 
 ## Source-of-Truth Code Paths
@@ -49,6 +49,7 @@ Site-scoped command model:
 - Commands can optionally export `test(ctx, input, helpers)` for `otto test` setup/assertion flows.
 - `command.run` payload carries `site`, `command`, optional `input`, and `authMode` (`auto|strict_fail|skip`).
 - `command.test` payload carries the same fields and runs command-specific test logic when present.
+- Command runtime context exposes both `executeScript(...)` and `executeScriptWithDomHelpers(...)`; prefer the DOM-helper path for Shadow DOM heavy sites.
 
 Command file shape:
 
@@ -92,6 +93,16 @@ Why this exists:
 - `requiresDebuggerFocus` gives command owners a precise, explicit switch to request focus emulation only where this mitigation is needed.
 - This avoids blanket debugger attachment across all commands and keeps debugger use aligned with least-privilege behavior.
 
+DOM helper execution behavior:
+
+- `ctx.executeScriptWithDomHelpers(...)` installs reusable page-side DOM query helpers before running command script logic.
+- Helper install is idempotent for the current page context and does not change command payload contracts.
+- Installed helpers expose deep recursive selectors under page globals:
+- `window.__ottoDeepQuerySelector(root, selector)`
+- `window.__ottoDeepQuerySelectorAll(root, selector)`
+- Use these helpers when selectors may be nested under multiple shadow roots (for example `rs-app` descendants in Reddit chat surfaces).
+- Command scripts should still fail deterministically if helpers are unexpectedly unavailable (for example `otto_dom_query_helper_missing`) rather than silently continuing with partial selectors.
+
 Auth-required flow:
 
 - If command metadata declares `requiresAuth`, runtime executes `checkLogin` first.
@@ -107,6 +118,8 @@ Reddit command notes:
 
 - `checkLogin` now uses Reddit API session probe (`/api/me.json`) with selector fallback to reduce false `manual_login_required` outcomes when the user is already authenticated.
 - `sendChatMessage` supports either existing `roomId` or room creation via `username`, then sends text through Reddit chat composer.
+- `sendChatMessage` uses deep Shadow DOM selector helpers through `ctx.executeScriptWithDomHelpers(...)` for room-create flow, composer lookup, send button lookup, and chat error banner inspection.
+- `sendChatMessage` direct room navigation policy uses `https://reddit.com/chat/room/<roomId>` when `roomId` input is supplied; create-flow room opening may still land on equivalent `chat.reddit.com` room URLs depending on Reddit routing.
 - `getChatMessages` supports two modes: with `roomId`, it loads room-scoped history from Matrix `/rooms/{roomId}/messages`; without `roomId`, it loads a bounded recent multi-room snapshot from Matrix `/sync` timeline events. Output is grouped by room (`rooms[]`) with per-room message lists and counts.
 - `getChatMessages` command test streaming subscribes with `listener=network.http_intercept` in `fetch` mode for Reddit Matrix v3 sync traffic (`https://matrix.redditspace.com/_matrix/client/v3/sync*`) and declares command-owned adapter metadata (`options.streamAdapter=reddit.chat.v1`).
 - Adapter mapping converts raw Matrix sync payloads into shared domain chat objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) before controller-visible stream forwarding.

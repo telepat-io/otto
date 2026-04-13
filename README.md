@@ -286,6 +286,7 @@ Auth-aware behavior:
 Run after any code update:
 
 ```bash
+npm run check
 npm run lint
 npm run build
 npm run -ws --if-present test
