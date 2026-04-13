@@ -1,50 +1,11 @@
-import type { CommandExecutionContext, SiteCommand } from '../types.js';
+import type { SiteCommand } from '../types.js';
+import type { PageDeepQuerySelector, PageDeepQuerySelectorAll } from '../../runtime/page-dom-query.js';
 
 type SendChatMessageInput = {
   username?: string;
   roomId?: string;
   message?: string;
 };
-
-const CHAT_HOME_URL = 'https://chat.reddit.com/';
-
-async function normalizeChatRoomHost(
-  ctx: CommandExecutionContext,
-  options: { allowChatRootRedirect?: boolean } = {},
-): Promise<void> {
-  const currentUrl = await ctx.getTabUrl();
-  if (!currentUrl) {
-    return;
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(currentUrl);
-  } catch {
-    return;
-  }
-
-  if (parsed.hostname !== 'www.reddit.com') {
-    return;
-  }
-
-  let targetUrl: string | null = null;
-  if (parsed.pathname.startsWith('/chat/room/')) {
-    const roomPath = parsed.pathname.replace('/chat/room/', '/room/');
-    targetUrl = `https://chat.reddit.com${roomPath}${parsed.search}${parsed.hash}`;
-  } else if ((parsed.pathname === '/chat' || parsed.pathname === '/chat/') && options.allowChatRootRedirect === true) {
-    targetUrl = 'https://chat.reddit.com/';
-  }
-
-  if (!targetUrl) {
-    return;
-  }
-
-  await ctx.navigateTab(targetUrl);
-  await new Promise((resolve) => {
-    setTimeout(resolve, 300);
-  });
-}
 
 function normalizeSendChatMessageInput(input: Record<string, unknown> | undefined): {
   username: string;
@@ -72,6 +33,7 @@ export const sendChatMessageCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
     id: 'sendChatMessage',
+    preloadHost: 'reddit.com/chat',
     displayName: 'Send Reddit Chat Message',
     description: 'Creates or opens a Reddit chat room and sends a message.',
     tags: ['chat', 'reddit'],
@@ -102,32 +64,54 @@ export const sendChatMessageCommand: SiteCommand = {
     const { username, roomId, message } = normalizeSendChatMessageInput(input);
     assertSendChatMessageInput({ username, roomId, message });
     const createRoomByUsername = async (targetUsername: string): Promise<string> => {
-      const roomSeed = await ctx.executeScript(
-        async (usernameValue: string) => {
+      const roomSeed = await ctx.executeScriptWithDomHelpers(
+        async (usernameValue: string, debugEnabled: boolean) => {
           const wait = (ms: number) => new Promise((resolve) => {
             setTimeout(resolve, ms);
           });
 
+          const pageWindow = window as Window & {
+            __ottoDeepQuerySelector?: PageDeepQuerySelector;
+          };
+          const deepQuerySelector = pageWindow.__ottoDeepQuerySelector;
+          if (typeof deepQuerySelector !== 'function') {
+            throw new Error('otto_dom_query_helper_missing');
+          }
+
+          const logDebug = (phase: string, data: Record<string, unknown> = {}): void => {
+            if (!debugEnabled) {
+              return;
+            }
+
+            console.log('[otto:reddit:send-chat:create-room]', {
+              phase,
+              path: window.location.pathname,
+              ...data,
+            });
+          };
+
           const getRoomCreateShadow = (): ShadowRoot | null => {
-            const app = document.querySelector('rs-app');
-            const roomCreation = app?.shadowRoot?.querySelector('rs-room-creation');
-            const roomCreate = roomCreation?.shadowRoot?.querySelector('rs-direct-chat-creation');
+            const roomCreate = deepQuerySelector(document, 'rs-direct-chat-creation');
             return roomCreate?.shadowRoot ?? null;
           };
 
           const queryDeep = (selector: string): Element | null => {
-            const app = document.querySelector('rs-app');
-            const appShadow = app?.shadowRoot;
-            const roomCreation = appShadow?.querySelector('rs-room-creation');
-            const roomCreationShadow = roomCreation?.shadowRoot;
-            const roomCreateShadow = getRoomCreateShadow();
-            return (
-              document.querySelector(selector)
-              || appShadow?.querySelector(selector)
-              || roomCreationShadow?.querySelector(selector)
-              || roomCreateShadow?.querySelector(selector)
-              || null
-            );
+            return deepQuerySelector(document, selector);
+          };
+
+          const queryUsersMultiselectInput = (): HTMLInputElement | null => {
+            const usersMultiselect = deepQuerySelector(document, 'rs-users-multiselect');
+            if (!(usersMultiselect instanceof HTMLElement)) {
+              return null;
+            }
+
+            const shadowRoot = usersMultiselect.shadowRoot;
+            if (!shadowRoot) {
+              return null;
+            }
+
+            const input = deepQuerySelector(shadowRoot, 'input');
+            return input instanceof HTMLInputElement ? input : null;
           };
 
           const waitFor = async (predicate: () => boolean, timeoutMs: number, intervalMs: number) => {
@@ -141,19 +125,21 @@ export const sendChatMessageCommand: SiteCommand = {
             return false;
           };
 
-          const app = document.querySelector('rs-app');
-          const roomCreationLink = app?.shadowRoot?.querySelector('a[href="/room/create"]');
+          const roomCreationLink = queryDeep('a[href="/room/create"]');
+          logDebug('room_create_link_lookup', { found: roomCreationLink instanceof HTMLAnchorElement });
           if (!(roomCreationLink instanceof HTMLAnchorElement)) {
             throw new Error('reddit_chat_room_create_link_missing');
           }
           roomCreationLink.click();
+          logDebug('room_create_clicked');
 
-          const hasUserSearch = await waitFor(() => Boolean(queryDeep('rs-users-multiselect input')), 15000, 150);
+          const hasUserSearch = await waitFor(() => Boolean(queryUsersMultiselectInput()), 15000, 150);
+          logDebug('user_search_ready', { hasUserSearch });
           if (!hasUserSearch) {
             throw new Error('reddit_chat_user_search_timeout');
           }
 
-          const userInput = queryDeep('rs-users-multiselect input');
+          const userInput = queryUsersMultiselectInput();
           if (!(userInput instanceof HTMLInputElement)) {
             throw new Error('reddit_chat_user_search_input_missing');
           }
@@ -186,6 +172,7 @@ export const sendChatMessageCommand: SiteCommand = {
             }
             await wait(250);
           }
+          logDebug('user_selection_complete', { selected });
 
           if (!selected) {
             throw new Error('reddit_chat_user_not_found_in_create_flow');
@@ -217,54 +204,81 @@ export const sendChatMessageCommand: SiteCommand = {
             }
 
             submit.click();
+            logDebug('create_submit_clicked', { buttonCount: roomButtons.length });
 
             await wait(250);
           }
 
           const hasTextarea = await waitFor(() => Boolean(queryDeep('textarea')), 30000, 150);
+          logDebug('room_textarea_ready', { hasTextarea });
           if (!hasTextarea) {
             throw new Error(`reddit_chat_textarea_timeout:${JSON.stringify({ path: window.location.pathname })}`);
           }
 
           // Return the current path so we know which room was opened
           const finalPath = window.location.pathname;
-          return finalPath.startsWith('/room/') ? finalPath.replace('/room/', '') : 'unknown';
+          const roomId = finalPath.startsWith('/chat/room/') ? finalPath.replace('/chat/room/', '') : 'unknown';
+          logDebug('create_room_complete', { finalPath, roomId });
+          return {
+            roomId,
+            finalPath,
+            openedExistingRoom,
+          };
         },
-        [targetUsername],
+        [targetUsername, ctx.debug.enabled],
       );
 
-      if (roomSeed === undefined || typeof roomSeed !== 'string') {
-        throw new Error('reddit_chat_create_submit_unconfirmed:missing_result_payload');
+      const tabUrl = await ctx.getTabUrl();
+      const roomResult = roomSeed as {
+        roomId?: unknown;
+        finalPath?: unknown;
+        openedExistingRoom?: unknown;
+      } | undefined;
+      const resolvedRoomId = typeof roomSeed === 'string'
+        ? roomSeed
+        : (typeof roomResult?.roomId === 'string' ? roomResult.roomId : '');
+
+      await ctx.debug.log('reddit.send_chat.create_room_result', {
+        targetUsername,
+        tabUrl,
+        roomSeed,
+        resultType: typeof roomSeed,
+        resolvedRoomIdLength: resolvedRoomId.length,
+        finalPath: typeof roomResult?.finalPath === 'string' ? roomResult.finalPath : undefined,
+      });
+
+      if (!resolvedRoomId) {
+        throw new Error(`reddit_chat_create_submit_unconfirmed:missing_result_payload:${JSON.stringify({
+          tabUrl,
+          roomSeed,
+          resultType: typeof roomSeed,
+          finalPath: typeof roomResult?.finalPath === 'string' ? roomResult.finalPath : undefined,
+        })}`);
       }
 
-      return roomSeed;
+      return resolvedRoomId;
     };
 
     const sendInOpenRoom = async (outboundMessage: string, targetUsername: string): Promise<Record<string, unknown>> => {
       const runSendAttempt = async (): Promise<unknown> => {
-        return await ctx.executeScript(
+        return await ctx.executeScriptWithDomHelpers(
           async (messageValue: string, usernameValue: string) => {
           const wait = (ms: number) => new Promise((resolve) => {
             setTimeout(resolve, ms);
           });
 
-          const gatherRoots = (): ParentNode[] => {
-            const roots: ParentNode[] = [document];
-            const app = document.querySelector('rs-app');
-            if (app?.shadowRoot) {
-              roots.push(app.shadowRoot);
-            }
-            return roots;
+          const pageWindow = window as Window & {
+            __ottoDeepQuerySelector?: PageDeepQuerySelector;
+            __ottoDeepQuerySelectorAll?: PageDeepQuerySelectorAll;
           };
+          const deepQuerySelector = pageWindow.__ottoDeepQuerySelector;
+          const deepQuerySelectorAll = pageWindow.__ottoDeepQuerySelectorAll;
+          if (typeof deepQuerySelector !== 'function' || typeof deepQuerySelectorAll !== 'function') {
+            throw new Error('otto_dom_query_helper_missing');
+          }
 
           const queryAny = (selector: string): Element | null => {
-            for (const root of gatherRoots()) {
-              const match = root.querySelector(selector);
-              if (match) {
-                return match;
-              }
-            }
-            return null;
+            return deepQuerySelector(document, selector);
           };
 
           const findComposer = (): HTMLTextAreaElement | HTMLElement | null => {
@@ -272,18 +286,17 @@ export const sendChatMessageCommand: SiteCommand = {
             if (textarea instanceof HTMLTextAreaElement) {
               return textarea;
             }
-            for (const root of gatherRoots()) {
-              const contentEditable = root.querySelector('[contenteditable="true"], [role="textbox"]');
-              if (contentEditable instanceof HTMLElement) {
-                return contentEditable;
-              }
+
+            const contentEditable = queryAny('[contenteditable="true"], [role="textbox"]');
+            if (contentEditable instanceof HTMLElement) {
+              return contentEditable;
             }
+
             return null;
           };
 
           const findSendButton = (): HTMLButtonElement | null => {
-            const buttons = gatherRoots()
-              .flatMap((root) => Array.from(root.querySelectorAll('button')))
+            const buttons = deepQuerySelectorAll(document, 'button')
               .filter((candidate): candidate is HTMLButtonElement => candidate instanceof HTMLButtonElement);
 
             for (const button of buttons) {
@@ -358,10 +371,7 @@ export const sendChatMessageCommand: SiteCommand = {
             throw new Error(`reddit_chat_send_unconfirmed:${JSON.stringify(diagnostics())}`);
           }
 
-          const alertsBanner = queryAny('rs-alerts-banner');
-          const banner = alertsBanner instanceof HTMLElement
-            ? alertsBanner.shadowRoot?.querySelector('faceplate-banner')
-            : null;
+          const banner = queryAny('faceplate-banner');
           if (banner instanceof HTMLElement) {
             const appearance = banner.getAttribute('appearance');
             const messageText = banner.getAttribute('msg') ?? '';
@@ -373,8 +383,8 @@ export const sendChatMessageCommand: SiteCommand = {
             }
           }
 
-          const currentRoomId = window.location.pathname.startsWith('/room/')
-            ? window.location.pathname.replace('/room/', '')
+          const currentRoomId = window.location.pathname.startsWith('/chat/room/')
+            ? window.location.pathname.replace('/chat/room/', '')
             : undefined;
 
             return {
@@ -388,10 +398,9 @@ export const sendChatMessageCommand: SiteCommand = {
         );
       };
 
-      const maxAttempts = 20;
+      const maxAttempts = 3;
       let lastKnownUrl: string | null = null;
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        await normalizeChatRoomHost(ctx, { allowChatRootRedirect: false });
         lastKnownUrl = await ctx.getTabUrl();
         const sendResult = await runSendAttempt();
         if (sendResult && typeof sendResult === 'object' && (sendResult as { sent?: unknown }).sent === true) {
@@ -413,14 +422,11 @@ export const sendChatMessageCommand: SiteCommand = {
 
     let activeRoomId = roomId;
     if (activeRoomId) {
-      await ctx.navigateTab(`https://chat.reddit.com/room/${encodeURIComponent(activeRoomId)}`);
+      await ctx.navigateTab(`https://reddit.com/chat/room/${encodeURIComponent(activeRoomId)}`);
     } else {
-      await ctx.navigateTab(CHAT_HOME_URL);
       const createdRoomId = await createRoomByUsername(username);
       activeRoomId = createdRoomId;
     }
-
-    await normalizeChatRoomHost(ctx, { allowChatRootRedirect: true });
 
     const sent = await sendInOpenRoom(message, username);
     const resolvedUsername = (typeof sent.username === 'string' && sent.username.length > 0)

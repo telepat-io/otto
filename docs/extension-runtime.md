@@ -135,7 +135,8 @@ Command auth flow:
 - `command.run`: execute command `execute` function.
 - `command.test`: invoke optional command `test` hook; if absent, run `execute` directly.
 8. Ensure `preloadHost` before every call into command `execute` (auto-navigate when current host does not match).
-9. User logs in manually and reruns command when required.
+9. After preload host URL commit, runtime waits in a bounded loop for page readiness (`document.readyState === complete`) before entering command `execute`.
+10. User logs in manually and reruns command when required.
 
 Reddit auth details:
 
@@ -149,6 +150,7 @@ URL readiness behavior:
 - If committed URL is present but does not match command site, runtime returns `site_mismatch` (`retryable=false`).
 - Runtime still never executes command logic before site validation succeeds.
 - When `preloadHost` is configured, runtime auto-navigates to the host before execute and returns `preload_host_mismatch` only if the committed URL host still does not match.
+- The same preload gate is shared by `command.run` and `command.test` execute paths, including test-hook fallback via `helpers.execute(...)`.
 
 ## MV3 Resilience
 
@@ -179,6 +181,13 @@ Reconnect diagnostics:
 - Offscreen client flushes queued extension logs after websocket auth completes and continues streaming live runtime log events.
 - Relay persists these as `source: node` and merges them into standard relay log APIs/streams.
 - Sensitive fields remain redacted at relay ingress; extension log payloads must avoid raw credentials.
+
+Command script debugging behavior:
+
+- Runtime adds a command debug context (`ctx.debug`) for all site commands.
+- Command code emits bounded structured debug events via `ctx.debug.log(...)` by default.
+- In-page `ctx.executeScript(...)` code can emit `console.log` checkpoints; these appear in the target tab DevTools console.
+- Runtime forwards command debug events as node extension logs with type `command.script_debug`, visible via `otto logs follow --source node`.
 
 Transport details:
 

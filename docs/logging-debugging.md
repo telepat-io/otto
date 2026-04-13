@@ -154,12 +154,20 @@ Debugger focus and shared-session diagnostics:
 
 In extension popup/options UI, enabling "Send extension debug logs to relay (local dev)" turns on extension-originated structured logs.
 
+Command-level DOM automation debugging traces are enabled by default via command runtime debug events and are intended for local troubleshooting.
+
 Behavior:
 
 - Once relay URL is saved, extension starts queueing log objects immediately (including pre-connect stages).
 - Queued entries flush to relay after node websocket auth succeeds.
 - Relay persists these entries as `source: node` and includes them in list/export/follow alongside relay logs.
 - Redaction still applies at relay ingress before persistence/streaming.
+
+Where command debug output appears:
+
+- Target tab DevTools console: `console.log` calls inside `ctx.executeScript(...)` functions.
+- CLI command failures/results: enriched error payload fragments from command code.
+- Node logs: structured `command.script_debug` entries visible in `otto logs follow --source node`.
 
 ### Backpressure, Queueing, and Drop Semantics
 

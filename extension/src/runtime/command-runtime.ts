@@ -13,11 +13,16 @@ import type { CommandExecutionContext } from '../commands/types.js';
 import { CommandExecutionError } from './execution-error.js';
 import { DebuggerFocusEmulationError } from './debugger-focus-emulation.js';
 import { getDebuggerFocusEmulationManager, getNetworkInterceptListenerManager } from './listener-managers.js';
+import { installPageDomQueryHelpers } from './page-dom-query.js';
 
 type ChromeLike = typeof chrome;
 
 const TAB_URL_READY_TIMEOUT_MS = 1200;
 const TAB_URL_POLL_INTERVAL_MS = 75;
+const PRELOAD_DOCUMENT_READY_TIMEOUT_MS = 10000;
+const PRELOAD_DOCUMENT_READY_POLL_INTERVAL_MS = 200;
+const PRELOAD_DOCUMENT_READY_DELAY_MS = 1000;
+const COMMAND_DEBUG_MAX_DATA_BYTES = 4096;
 
 type CommandRun = {
   site: string;
@@ -29,6 +34,53 @@ type CommandRun = {
 const COMMAND_INPUT_TYPES: CommandInputFieldType[] = ['string', 'number', 'boolean', 'object', 'array'];
 
 type CommandMode = 'run' | 'test';
+
+function truncateDebugText(value: string, maxBytes = COMMAND_DEBUG_MAX_DATA_BYTES): string {
+  if (value.length <= maxBytes) {
+    return value;
+  }
+
+  return `${value.slice(0, maxBytes)}...[truncated]`;
+}
+
+function sanitizeDebugData(data: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!data) {
+    return undefined;
+  }
+
+  try {
+    const serialized = JSON.stringify(data);
+    if (typeof serialized !== 'string') {
+      return undefined;
+    }
+
+    return {
+      serialized: truncateDebugText(serialized),
+    };
+  } catch {
+    return {
+      serializationError: 'debug_data_not_serializable',
+    };
+  }
+}
+
+async function emitCommandDebugLog(
+  chromeApi: ChromeLike,
+  data: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await chromeApi.runtime.sendMessage({
+      type: 'otto.extensionLog',
+      payload: {
+        level: 'debug',
+        type: 'command.script_debug',
+        data,
+      },
+    });
+  } catch {
+    // Keep command execution deterministic even if debug-log transport is unavailable.
+  }
+}
 
 function parseCommandRunPayload(command: CommandPayload): CommandRun {
   if (command.action === 'command.reddit_feed') {
@@ -250,6 +302,8 @@ async function ensureCommandPreloadHost(
       false,
     );
   }
+
+  await waitForPreloadDocumentReady(chromeApi, tabId);
 }
 
 function buildContext(
@@ -257,6 +311,7 @@ function buildContext(
   tabId: number,
   tabSessionId: string,
   site: string,
+  commandDebugEnabled: boolean,
 ): { context: CommandExecutionContext; cleanup: () => Promise<void> } {
   const interceptionStops = new Map<string, () => Promise<void>>();
 
@@ -264,6 +319,24 @@ function buildContext(
     chromeApi,
     tabId,
     tabSessionId,
+    debug: {
+      enabled: commandDebugEnabled,
+      async log(event, data) {
+        if (!commandDebugEnabled) {
+          return;
+        }
+
+        const payload = {
+          site,
+          tabSessionId,
+          tabId,
+          event,
+          ...(sanitizeDebugData(data) ?? {}),
+        };
+        console.debug('[otto:command-debug]', payload);
+        await emitCommandDebugLog(chromeApi, payload);
+      },
+    },
     async getTabUrl() {
       const tab = await chromeApi.tabs.get(tabId);
       return tab.url ?? null;
@@ -272,6 +345,21 @@ function buildContext(
       await chromeApi.tabs.update(tabId, { url });
     },
     async executeScript(func, args) {
+      return await executeScriptWithRetry(
+        chromeApi,
+        tabId,
+        func,
+        args,
+      );
+    },
+    async executeScriptWithDomHelpers(func, args) {
+      await executeScriptWithRetry(
+        chromeApi,
+        tabId,
+        installPageDomQueryHelpers,
+        [],
+      );
+
       return await executeScriptWithRetry(
         chromeApi,
         tabId,
@@ -421,6 +509,33 @@ async function waitForCommittedTabUrl(chromeApi: ChromeLike, tabId: number): Pro
   return lastProbe;
 }
 
+function isDocumentReadyForCommandPreload(): boolean {
+  return document.readyState === 'complete';
+}
+
+async function waitForPreloadDocumentReady(chromeApi: ChromeLike, tabId: number): Promise<void> {
+  const deadline = Date.now() + PRELOAD_DOCUMENT_READY_TIMEOUT_MS;
+  while (Date.now() <= deadline) {
+    try {
+      const ready = await executeScriptWithRetry(
+        chromeApi,
+        tabId,
+        isDocumentReadyForCommandPreload,
+        [],
+      );
+
+      if (ready) {
+        await wait(PRELOAD_DOCUMENT_READY_DELAY_MS)
+        return;
+      }
+    } catch {
+      // Ignore transient readiness probe failures and keep polling until timeout.
+    }
+
+    await wait(PRELOAD_DOCUMENT_READY_POLL_INTERVAL_MS);
+  }
+}
+
 export function listCommandsForRuntime() {
   return listCommandDescriptors();
 }
@@ -444,7 +559,14 @@ async function executeCommandAction(
     throw new CommandExecutionError(`Unknown command: ${run.site}/${run.commandId}`, 'unknown_command', actionName, false);
   }
 
-  const { context: ctx, cleanup } = buildContext(chromeApi, tabId, tabSessionId, bundle.site);
+  const commandDebugEnabled = true;
+  const { context: ctx, cleanup } = buildContext(
+    chromeApi,
+    tabId,
+    tabSessionId,
+    bundle.site,
+    commandDebugEnabled,
+  );
   const urlProbe = await waitForCommittedTabUrl(chromeApi, tabId);
   const tabUrl = urlProbe.url;
   if (!tabUrl) {

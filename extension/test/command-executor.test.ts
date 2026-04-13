@@ -9,9 +9,11 @@ type AnyRecord = Record<string, unknown>;
 
 type MockOptions = {
   sessionSeed?: AnyRecord;
+  localSeed?: AnyRecord;
   tabIds?: number[];
   tabUrls?: Record<number, string>;
   tabUrlSequenceById?: Record<number, Array<string | null | undefined>>;
+  documentReadyStateSequenceByTabId?: Record<number, Array<'loading' | 'interactive' | 'complete'>>;
   defaultTabUrl?: string | null;
   scriptResults?: unknown[];
   initialActiveTabId?: number;
@@ -26,13 +28,19 @@ type MockOptions = {
 
 function createChromeMock(options: MockOptions = {}) {
   const sessionStore: AnyRecord = { ...(options.sessionSeed ?? {}) };
+  const localStore: AnyRecord = { ...(options.localSeed ?? {}) };
+  const runtimeMessages: unknown[] = [];
   const existingTabs = new Set<number>(options.tabIds ?? []);
   const tabUrls = { ...(options.tabUrls ?? {}) };
   const tabUrlSequenceById = Object.fromEntries(
     Object.entries(options.tabUrlSequenceById ?? {}).map(([tabId, sequence]) => [tabId, [...sequence]]),
   ) as Record<string, Array<string | null | undefined>>;
+  const documentReadyStateSequenceByTabId = Object.fromEntries(
+    Object.entries(options.documentReadyStateSequenceByTabId ?? {}).map(([tabId, sequence]) => [tabId, [...sequence]]),
+  ) as Record<string, Array<'loading' | 'interactive' | 'complete'>>;
   const defaultTabUrl = options.defaultTabUrl === undefined ? 'https://www.reddit.com/' : options.defaultTabUrl;
   const scriptResults = [...(options.scriptResults ?? [])];
+  const executeScriptFunctionCalls: string[] = [];
   let nextTabId = Math.max(0, ...(options.tabIds ?? [0])) + 1;
   let activeTabId = options.initialActiveTabId ?? (options.tabIds?.[0] ?? 1);
   let nextGroupId = 700;
@@ -62,6 +70,27 @@ function createChromeMock(options: MockOptions = {}) {
         async set(values: AnyRecord) {
           Object.assign(sessionStore, values);
         },
+      },
+      local: {
+        async get(keys: string[]) {
+          const out: AnyRecord = {};
+          for (const key of keys) out[key] = localStore[key];
+          return out;
+        },
+        async set(values: AnyRecord) {
+          Object.assign(localStore, values);
+        },
+        async remove(keys: string[]) {
+          for (const key of keys) {
+            delete localStore[key];
+          }
+        },
+      },
+    },
+    runtime: {
+      async sendMessage(message: unknown) {
+        runtimeMessages.push(message);
+        return { ok: true };
       },
     },
     tabs: {
@@ -196,7 +225,17 @@ function createChromeMock(options: MockOptions = {}) {
       },
     },
     scripting: {
-      async executeScript() {
+      async executeScript(injection: chrome.scripting.ScriptInjection<unknown[], unknown>) {
+        executeScriptFunctionCalls.push(injection.func?.name ?? 'anonymous');
+        if (injection.func?.name === 'installPageDomQueryHelpers') {
+          return [{ result: null }];
+        }
+        if (injection.func?.name === 'isDocumentReadyForCommandPreload') {
+          const tabId = injection.target.tabId;
+          const sequence = documentReadyStateSequenceByTabId[String(tabId)];
+          const state = sequence && sequence.length > 0 ? sequence.shift() : 'complete';
+          return [{ result: state === 'complete' }];
+        }
         const next = scriptResults.shift();
         return [{ result: next ?? null }];
       },
@@ -207,8 +246,10 @@ function createChromeMock(options: MockOptions = {}) {
     chromeApi,
     sessionStore,
     tabUrls,
+    getRuntimeMessages: () => runtimeMessages.slice(),
     getGroupCreateCount: () => groupCreateCount,
     getDebuggerCommands: () => debuggerCommands.slice(),
+    getExecuteScriptFunctionCalls: () => executeScriptFunctionCalls.slice(),
   };
 }
 
@@ -612,7 +653,7 @@ test('command.run sendChatMessage returns deterministic payload', async () => {
     },
     scriptResults: [
       { authenticated: true },
-      { submitted: true },
+      { roomId: 'room_1', finalPath: '/room/room_1', openedExistingRoom: false },
       { sent: true, roomId: 'room_1', username: 'alice' },
     ],
   });
@@ -642,6 +683,86 @@ test('command.run sendChatMessage returns deterministic payload', async () => {
   assert.equal(
     debuggerCommands.some((entry) => entry.method === 'Emulation.setFocusEmulationEnabled'),
     true,
+  );
+});
+
+test('command.run sendChatMessage emits command script debug logs by default', async () => {
+  const { chromeApi, getRuntimeMessages } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    tabUrlSequenceById: {
+      11: [
+        'https://www.reddit.com/',
+        'https://www.reddit.com/',
+        'https://chat.reddit.com/room/room_1',
+      ],
+    },
+    scriptResults: [
+      { authenticated: true },
+      { roomId: 'room_1', finalPath: '/room/room_1', openedExistingRoom: false },
+      { sent: true, roomId: 'room_1', username: 'alice' },
+    ],
+  });
+
+  await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'sendChatMessage',
+    input: {
+      username: 'alice',
+      message: 'hello',
+    },
+    authMode: 'strict_fail',
+  }));
+
+  const debugMessages = getRuntimeMessages().filter((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return false;
+    }
+    const envelope = entry as { type?: unknown; payload?: { type?: unknown } };
+    return envelope.type === 'otto.extensionLog' && envelope.payload?.type === 'command.script_debug';
+  });
+
+  assert.ok(debugMessages.length > 0);
+});
+
+test('command.run sendChatMessage returns missing_result_payload diagnostics when create room payload is empty', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      null,
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'sendChatMessage',
+      input: {
+        username: 'alice',
+        message: 'hello',
+      },
+      authMode: 'strict_fail',
+    })),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /reddit_chat_create_submit_unconfirmed:missing_result_payload/);
+      assert.match(error.message, /tabUrl/);
+      return true;
+    },
   );
 });
 
@@ -1233,6 +1354,44 @@ test('command.run auto-navigates to preloadHost before execute', async () => {
   });
 });
 
+test('command.run waits for preload document readiness before execute', async () => {
+  const { chromeApi, getExecuteScriptFunctionCalls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    documentReadyStateSequenceByTabId: {
+      11: ['loading', 'complete'],
+    },
+    scriptResults: [{ authenticated: true }, { chunk: [] }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getChatMessages',
+    input: { roomId: 'room_1' },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getChatMessages',
+    scope: 'room',
+    roomId: 'room_1',
+    totalCount: 0,
+    roomCount: 0,
+    rooms: [],
+  });
+
+  const readinessCalls = getExecuteScriptFunctionCalls().filter((name) => name === 'isDocumentReadyForCommandPreload');
+  assert.equal(readinessCalls.length, 2);
+});
+
 test('command.test falls back to execute when command test hook is absent', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
@@ -1293,6 +1452,43 @@ test('command.test falls back to execute and honors preloadHost compatibility', 
   });
 });
 
+test('command.test waits for preload document readiness before execute fallback', async () => {
+  const { chromeApi, getExecuteScriptFunctionCalls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    documentReadyStateSequenceByTabId: {
+      11: ['loading', 'complete'],
+    },
+    scriptResults: [
+      { authenticated: true },
+      { posts: [{ kind: 'content.post', id: 'post-ready-test', title: 'Ready in test', author: 'otto' }] },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getFeed',
+    input: {},
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getFeed',
+    posts: [{ kind: 'content.post', id: 'post-ready-test', title: 'Ready in test', author: 'otto' }],
+  });
+
+  const readinessCalls = getExecuteScriptFunctionCalls().filter((name) => name === 'isDocumentReadyForCommandPreload');
+  assert.equal(readinessCalls.length, 2);
+});
+
 test('command.test uses sendChatMessage test hook to execute mocked send flow', async () => {
   const { chromeApi, tabUrls } = createChromeMock({
     sessionSeed: {
@@ -1311,7 +1507,7 @@ test('command.test uses sendChatMessage test hook to execute mocked send flow', 
     },
     scriptResults: [
       { authenticated: true },
-      { submitted: true },
+      { roomId: 'room_1', finalPath: '/room/room_1', openedExistingRoom: false },
       { sent: true, roomId: 'room_1', username: 'alice', attempts: 1 },
     ],
   });
@@ -1367,7 +1563,7 @@ test('command.test sendChatMessage with roomId opens direct room URL using mocke
     authMode: 'strict_fail',
   }));
 
-  assert.equal(tabUrls[11], 'https://chat.reddit.com/room/room_99');
+  assert.equal(tabUrls[11], 'https://reddit.com/chat/room/room_99');
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',

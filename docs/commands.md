@@ -149,6 +149,7 @@ Preload host notes:
 
 - Matching is host-based using runtime site match semantics.
 - Runtime auto-navigates to `preloadHost` before `execute` when needed.
+- After preload host commit, runtime performs a bounded page-readiness probe (`document.readyState === complete`) before command `execute` starts.
 - If navigation finishes on a different host, runtime returns `preload_host_mismatch`.
 
 ## Command Network Interception API

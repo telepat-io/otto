@@ -21,13 +21,23 @@ export type CommandNetworkInterceptionHandle = {
   stop: () => Promise<void>;
 };
 
+export type CommandDebugContext = {
+  enabled: boolean;
+  log: (event: string, data?: Record<string, unknown>) => Promise<void>;
+};
+
 export type CommandExecutionContext = {
   chromeApi: ChromeLike;
   tabId: number;
   tabSessionId: string;
+  debug: CommandDebugContext;
   getTabUrl: () => Promise<string | null>;
   navigateTab: (url: string) => Promise<void>;
   executeScript: <TArgs extends unknown[], TResult>(
+    func: (...args: TArgs) => TResult,
+    args: TArgs,
+  ) => Promise<TResult>;
+  executeScriptWithDomHelpers: <TArgs extends unknown[], TResult>(
     func: (...args: TArgs) => TResult,
     args: TArgs,
   ) => Promise<TResult>;

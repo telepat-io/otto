@@ -205,6 +205,7 @@ Command result/error behavior:
 - If tab URL is not yet committed during immediate post-open execution, runtime returns transient execution error (`tab_url_not_ready`, `retryable=true`).
 - Site mismatch after URL commit returns deterministic execution error (`site_mismatch`, `retryable=false`).
 - If a command declares `preloadHost`, runtime auto-navigates to that host before execute and returns `preload_host_mismatch` only when post-navigation host still does not match.
+- After preload host commit, runtime performs a bounded page-readiness wait (`document.readyState === complete`) before entering execute logic.
 - If a command declares `inputFields`, runtime validates required/typed input and rejects unknown keys before command logic (`missing_command_input`, `invalid_command_input_type`, `unexpected_command_input`).
 - If a command declares `inputAtLeastOneOf`, runtime rejects missing cross-field requirements before command logic (`missing_command_input_one_of`).
 - Unauthenticated website session on `requiresAuth` command returns `manual_login_required` after optional login navigation.
