@@ -603,8 +603,16 @@ test('command.run sendChatMessage returns deterministic payload', async () => {
     },
     tabIds: [11],
     tabUrls: { 11: 'https://www.reddit.com/' },
+    tabUrlSequenceById: {
+      11: [
+        'https://www.reddit.com/',
+        'https://www.reddit.com/',
+        'https://chat.reddit.com/room/room_1',
+      ],
+    },
     scriptResults: [
       { authenticated: true },
+      { submitted: true },
       { sent: true, roomId: 'room_1', username: 'alice' },
     ],
   });
@@ -625,6 +633,7 @@ test('command.run sendChatMessage returns deterministic payload', async () => {
     site: 'reddit.com',
     command: 'sendChatMessage',
     sent: true,
+    attempts: 1,
     roomId: 'room_1',
     username: 'alice',
   });
@@ -632,7 +641,7 @@ test('command.run sendChatMessage returns deterministic payload', async () => {
   const debuggerCommands = getDebuggerCommands();
   assert.equal(
     debuggerCommands.some((entry) => entry.method === 'Emulation.setFocusEmulationEnabled'),
-    false,
+    true,
   );
 });
 
@@ -1284,7 +1293,7 @@ test('command.test falls back to execute and honors preloadHost compatibility', 
   });
 });
 
-test('command.test uses sendChatMessage test hook for non-side-effect readiness checks', async () => {
+test('command.test uses sendChatMessage test hook to execute mocked send flow', async () => {
   const { chromeApi, tabUrls } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -1293,9 +1302,17 @@ test('command.test uses sendChatMessage test hook for non-side-effect readiness 
     },
     tabIds: [11],
     tabUrls: { 11: 'https://www.reddit.com/' },
+    tabUrlSequenceById: {
+      11: [
+        'https://www.reddit.com/',
+        'https://www.reddit.com/',
+        'https://chat.reddit.com/room/room_1',
+      ],
+    },
     scriptResults: [
       { authenticated: true },
-      { ready: true, mode: 'create-room' },
+      { submitted: true },
+      { sent: true, roomId: 'room_1', username: 'alice', attempts: 1 },
     ],
   });
 
@@ -1310,15 +1327,54 @@ test('command.test uses sendChatMessage test hook for non-side-effect readiness 
     authMode: 'strict_fail',
   }));
 
-  assert.equal(tabUrls[11], 'https://chat.reddit.com/');
+  assert.ok(
+    tabUrls[11] === 'https://chat.reddit.com/' || tabUrls[11] === 'https://chat.reddit.com/room/room_1',
+  );
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
     command: 'sendChatMessage',
-    ready: true,
-    mode: 'create-room',
+    sent: true,
+    attempts: 1,
     username: 'alice',
-    roomId: undefined,
+    roomId: 'room_1',
+  });
+});
+
+test('command.test sendChatMessage with roomId opens direct room URL using mocked send flow', async () => {
+  const { chromeApi, tabUrls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      { sent: true, roomId: 'room_99', attempts: 1 },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'sendChatMessage',
+    input: {
+      roomId: 'room_99',
+      message: 'hello from test',
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.equal(tabUrls[11], 'https://chat.reddit.com/room/room_99');
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'sendChatMessage',
+    sent: true,
+    roomId: 'room_99',
+    attempts: 1,
   });
 });
 

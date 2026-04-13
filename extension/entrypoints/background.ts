@@ -552,6 +552,20 @@ export default defineBackground(() => {
             const code = err instanceof CommandExecutionError ? err.code : 'command_failed';
             const stage = err instanceof CommandExecutionError ? err.stage : 'execution';
             const retryable = err instanceof CommandExecutionError ? err.retryable : true;
+            await forwardExtensionLog(chrome, {
+              level: 'error',
+              type: 'background.command_failed',
+              requestId: cmd.requestId,
+              action: cmd.payload.action,
+              status: 'error',
+              data: {
+                code,
+                stage,
+                retryable,
+                message,
+                tabSessionId: cmd.payload.tabSessionId,
+              },
+            });
             const errorResponse = createEnvelope('error', 'node', cmd.requestId, {
               category: 'execution',
               code,

@@ -137,7 +137,8 @@ Command test hook guidance:
 - For simple commands, skip test hook and rely on automatic execute fallback.
 - Keep setup bounded and deterministic; avoid unbounded polling loops.
 - Prefer asserting preconditions in test hook and keep business extraction logic in execute.
-- Prefer test hooks for side-effecting commands (for example chat send) so `otto test` can validate readiness without mutating user data.
+- For side-effecting commands (for example chat send), keep automated unit/integration tests fully mocked and side-effect free.
+- Reserve live-send verification for explicit manual runs (for example `otto test reddit.com sendChatMessage --payload '{"roomId":"room_123","message":"hello"}'`).
 - For streaming commands, return `stream.listeners` from `test` with listener name and options.
 
 Input metadata guidance:

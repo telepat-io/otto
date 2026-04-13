@@ -12,6 +12,7 @@ import {
   formatLogEntryJson,
   type HumanLogEntryParts,
   type LogEntry,
+  type LogLevel,
   type LogSource,
 } from './logs-options.js';
 
@@ -172,10 +173,14 @@ function LogsFollowScreen({
   config,
   source,
   jsonOutput,
+  level,
+  eventType,
 }: {
   config: OttoConfig;
   source?: LogSource;
   jsonOutput: boolean;
+  level?: LogLevel;
+  eventType?: string;
 }): React.JSX.Element {
   const { exit } = useApp();
   const [status, setStatus] = useState<'connecting' | 'subscribed' | 'failed'>('connecting');
@@ -221,6 +226,15 @@ function LogsFollowScreen({
             const payload = msg.payload as { type?: string; entry?: unknown };
             if (payload.type === 'log') {
               const entry = (payload.entry ?? {}) as LogEntry;
+              if (level && entry.level !== level) {
+                return;
+              }
+              if (eventType) {
+                const entryType = typeof entry.type === 'string' ? entry.type : '';
+                if (entryType !== eventType) {
+                  return;
+                }
+              }
               const next = jsonOutput
                 ? { id: nanoid(), line: formatLogEntryJson(entry) }
                 : { id: nanoid(), human: buildHumanLogEntryParts(entry) };
@@ -255,7 +269,7 @@ function LogsFollowScreen({
         ws.close();
       }
     };
-  }, [config, jsonOutput, source]);
+  }, [config, eventType, jsonOutput, level, source]);
 
   const visibleEntries = entries.slice(-200);
 
@@ -263,6 +277,8 @@ function LogsFollowScreen({
     <Box flexDirection="column" paddingX={1}>
       <Text color="cyan" bold>Otto Logs Follow</Text>
       <Text dimColor>Source filter: {source ?? 'all'}</Text>
+      <Text dimColor>Level filter: {level ?? 'all'}</Text>
+      <Text dimColor>Type filter: {eventType ?? 'all'}</Text>
       {status === 'connecting' ? <Spinner label="Connecting and subscribing to logs" /> : null}
       {status === 'subscribed' ? <StatusMessage variant="success">Subscribed to live relay logs</StatusMessage> : null}
       {status === 'failed' ? <StatusMessage variant="error">Log stream failed</StatusMessage> : null}
@@ -304,8 +320,22 @@ export async function runCommandTui(config: OttoConfig, options: CommandTuiOptio
   await app.waitUntilExit();
 }
 
-export async function runLogsFollowTui(config: OttoConfig, source: LogSource | undefined, jsonOutput: boolean): Promise<void> {
-  const app = render(<LogsFollowScreen config={config} source={source} jsonOutput={jsonOutput} />);
+export async function runLogsFollowTui(
+  config: OttoConfig,
+  source: LogSource | undefined,
+  jsonOutput: boolean,
+  level: LogLevel | undefined,
+  eventType: string | undefined,
+): Promise<void> {
+  const app = render(
+    <LogsFollowScreen
+      config={config}
+      source={source}
+      jsonOutput={jsonOutput}
+      level={level}
+      eventType={eventType}
+    />,
+  );
   await app.waitUntilExit();
 }
 

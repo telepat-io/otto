@@ -2,7 +2,7 @@ import { type Command } from 'commander';
 import type { Envelope, NetworkInterceptListenerOptions } from '@telepat/otto-protocol';
 import type WebSocket from 'ws';
 import type { OttoConfig } from '../config.js';
-import type { LogSource } from '../logs-options.js';
+import type { LogLevel, LogSource } from '../logs-options.js';
 
 export function registerObserveCommands(params: {
   program: Command;
@@ -32,8 +32,20 @@ export function registerObserveCommands(params: {
   ) => Promise<void>;
   openControllerSocket: (config: OttoConfig) => Promise<WebSocket>;
   startControllerHeartbeat: (ws: WebSocket) => () => void;
-  runLogsFollowTui: (config: OttoConfig, source: LogSource | undefined, jsonOutput: boolean) => Promise<void>;
-  followLogsOnce: (config: OttoConfig, source: LogSource | undefined, jsonOutput: boolean) => Promise<void>;
+  runLogsFollowTui: (
+    config: OttoConfig,
+    source: LogSource | undefined,
+    jsonOutput: boolean,
+    level: LogLevel | undefined,
+    eventType: string | undefined,
+  ) => Promise<void>;
+  followLogsOnce: (
+    config: OttoConfig,
+    source: LogSource | undefined,
+    jsonOutput: boolean,
+    level: LogLevel | undefined,
+    eventType: string | undefined,
+  ) => Promise<void>;
 }): void {
   const commands = params.program.command('commands').description('Discover available commands from target node');
 
@@ -192,17 +204,23 @@ export function registerObserveCommands(params: {
   logs
     .command('follow')
     .description('Follow live relay logs')
+    .option('--level <level>', 'debug|info|warn|error')
+    .option('--type <type>', 'Filter by event type (for example result|error)')
     .option('--source <source>', 'relay|controller|node|all')
     .option('--json', 'Output full JSON log entries', false)
     .action(async (opts) => {
       const config = params.loadConfig();
+      const level = params.parseLogLevelOption(opts.level);
+      const eventType = typeof opts.type === 'string' && opts.type.trim().length > 0
+        ? opts.type.trim()
+        : undefined;
       const source = params.parseLogSourceOption(opts.source);
       const jsonOutput = Boolean(opts.json);
       if (process.stdout.isTTY && process.stdin.isTTY) {
-        await params.runLogsFollowTui(config, source, jsonOutput);
+        await params.runLogsFollowTui(config, source, jsonOutput, level, eventType);
         return;
       }
-      await params.followLogsOnce(config, source, jsonOutput);
+      await params.followLogsOnce(config, source, jsonOutput, level, eventType);
     });
 
   logs

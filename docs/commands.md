@@ -119,7 +119,8 @@ Reddit command notes:
 - command adapter layer suppresses repeated semantic chat object emissions
 - Shared domain objects emitted by command adapters should include `originalEntity` when source entities are available (including nested refs like `from`/`to`/`conversation`) so controllers can keep normalized + source-specific context together.
 - `getUserInfo` supports lookup by `username` or account id; when neither is provided it defaults to the logged-in account via `/api/me.json`. It returns a generic `user` profile object (`kind=entity.user`) designed for cross-site parity (`platform`, `id`, `username`, `displayName`, `avatarUrl`, `profileUrl`, `stats`, `flags`, `createdAt`, `originalEntity`).
-- `sendChatMessage` includes a command-level `test` hook used by `otto test` for non-side-effect readiness checks, while `command.run` still performs message delivery.
+- `sendChatMessage` includes a command-level `test` hook that routes through command execution so manual `otto test` runs can validate end-to-end message delivery.
+- Automated repository tests keep `sendChatMessage` send behavior fully mocked; they do not perform live Reddit sends.
 - `getChatMessages` `test` returns a command-native stream manifest with listener subscription details and includes command-owned poll fallback metadata (`fallback.strategy=command_poll`) for bounded recovery flows.
 - `getFeed` now collects feed post permalinks from `#main-content`, hydrates each post via Reddit `.json` endpoints, and returns generic `content.post` objects with recursive `content.post_comment` trees when available.
 - `getFeed` supports optional input `minReturnedPosts` (number). Runtime scrolls page-by-page (`scroll -> wait -> collect`) until at least that many post URLs are discovered or a bounded pagination limit is reached. Returning more than requested is allowed.

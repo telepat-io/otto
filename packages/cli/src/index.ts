@@ -28,6 +28,7 @@ import {
   parseLogLevelOption,
   parseLogSourceOption,
   type LogEntry,
+  type LogLevel,
   type LogSource,
 } from './logs-options.js';
 import { createCommandTestStreamRenderer } from './test-stream/format.js';
@@ -729,7 +730,13 @@ async function resolveTestInfo(
   }
 }
 
-async function followLogsOnce(config: OttoConfig, source: LogSource | undefined, jsonOutput: boolean): Promise<void> {
+async function followLogsOnce(
+  config: OttoConfig,
+  source: LogSource | undefined,
+  jsonOutput: boolean,
+  level: LogLevel | undefined,
+  eventType: string | undefined,
+): Promise<void> {
   const ws = await openControllerSocket(config);
   const stopHeartbeat = startControllerHeartbeat(ws);
   const requestId = nanoid();
@@ -749,6 +756,15 @@ async function followLogsOnce(config: OttoConfig, source: LogSource | undefined,
       const payload = msg.payload as { type?: string; entry?: unknown };
       if (payload.type === 'log') {
         const entry = (payload.entry ?? {}) as LogEntry;
+        if (level && entry.level !== level) {
+          return;
+        }
+        if (eventType) {
+          const entryType = typeof entry.type === 'string' ? entry.type : '';
+          if (entryType !== eventType) {
+            return;
+          }
+        }
         const line = jsonOutput ? formatLogEntryJson(entry) : formatLogEntryHuman(entry);
         console.log(line);
       }
@@ -1934,6 +1950,12 @@ program
           }
           await showTestFailureFooterAlert(errorPayload, 'otto test failed during primitive.tab.open');
           process.exitCode = 1;
+          if (shouldWaitForInterrupt) {
+            console.log('[otto:test] waiting for interrupt (Ctrl+C)');
+            await new Promise<void>((resolve) => {
+              resolveWaitForInterrupt = resolve;
+            });
+          }
           return;
         }
 
@@ -1992,6 +2014,12 @@ program
         }
         await showTestFailureFooterAlert(errorPayload);
         process.exitCode = 1;
+        if (shouldWaitForInterrupt) {
+          console.log('[otto:test] waiting for interrupt (Ctrl+C)');
+          await new Promise<void>((resolve) => {
+            resolveWaitForInterrupt = resolve;
+          });
+        }
         return;
       }
 
@@ -2288,17 +2316,23 @@ logs
 logs
   .command('follow')
   .description('Follow live relay logs')
+  .option('--level <level>', 'debug|info|warn|error')
+  .option('--type <type>', 'Filter by event type (for example result|error)')
   .option('--source <source>', 'relay|controller|node|all')
   .option('--json', 'Output full JSON log entries', false)
   .action(async (opts) => {
     const config = loadConfig();
+    const level = parseLogLevelOption(opts.level);
+    const eventType = typeof opts.type === 'string' && opts.type.trim().length > 0
+      ? opts.type.trim()
+      : undefined;
     const source = parseLogSourceOption(opts.source);
     const jsonOutput = Boolean(opts.json);
     if (process.stdout.isTTY && process.stdin.isTTY) {
-      await runLogsFollowTui(config, source, jsonOutput);
+      await runLogsFollowTui(config, source, jsonOutput, level, eventType);
       return;
     }
-    await followLogsOnce(config, source, jsonOutput);
+    await followLogsOnce(config, source, jsonOutput, level, eventType);
   });
 
 logs

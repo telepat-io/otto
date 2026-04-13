@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import WebSocket from 'ws';
 import { createEnvelope, type Envelope } from '@telepat/otto-protocol';
 import type { OttoConfig } from '../config.js';
-import type { LogEntry, LogSource } from '../logs-options.js';
+import type { LogEntry, LogLevel, LogSource } from '../logs-options.js';
 
 type CommandDescriptorLike = {
   site?: string;
@@ -87,6 +87,8 @@ export async function followLogsOnce(params: {
   config: OttoConfig;
   source: LogSource | undefined;
   jsonOutput: boolean;
+  level: LogLevel | undefined;
+  eventType: string | undefined;
   openControllerSocket: (config: OttoConfig) => Promise<WebSocket>;
   startControllerHeartbeat: (ws: WebSocket) => () => void;
   formatLogEntryJson: (entry: LogEntry) => string;
@@ -111,6 +113,15 @@ export async function followLogsOnce(params: {
       const payload = msg.payload as { type?: string; entry?: unknown };
       if (payload.type === 'log') {
         const entry = (payload.entry ?? {}) as LogEntry;
+        if (params.level && entry.level !== params.level) {
+          return;
+        }
+        if (params.eventType) {
+          const entryType = typeof entry.type === 'string' ? entry.type : '';
+          if (entryType !== params.eventType) {
+            return;
+          }
+        }
         const line = params.jsonOutput ? params.formatLogEntryJson(entry) : params.formatLogEntryHuman(entry);
         console.log(line);
       }
