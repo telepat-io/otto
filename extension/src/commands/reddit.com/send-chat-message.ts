@@ -282,7 +282,10 @@ export const sendChatMessageCommand: SiteCommand = {
           };
 
           const findComposer = (): HTMLTextAreaElement | HTMLElement | null => {
-            const textarea = queryAny('textarea');
+            const composerHost = deepQuerySelector(document, 'rs-message-composer');
+            const textarea = composerHost instanceof HTMLElement && composerHost.shadowRoot
+              ? deepQuerySelector(composerHost.shadowRoot, 'textarea')
+              : null;
             if (textarea instanceof HTMLTextAreaElement) {
               return textarea;
             }
@@ -398,23 +401,13 @@ export const sendChatMessageCommand: SiteCommand = {
         );
       };
 
-      const maxAttempts = 3;
-      let lastKnownUrl: string | null = null;
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        lastKnownUrl = await ctx.getTabUrl();
-        const sendResult = await runSendAttempt();
-        if (sendResult && typeof sendResult === 'object' && (sendResult as { sent?: unknown }).sent === true) {
-          return {
-            ...(sendResult as Record<string, unknown>),
-            attempts: attempt,
-          };
-        }
-
-        if (attempt < maxAttempts) {
-          await new Promise((resolve) => {
-            setTimeout(resolve, 250);
-          });
-        }
+      const lastKnownUrl = await ctx.getTabUrl();
+      const sendResult = await runSendAttempt();
+      if (sendResult && typeof sendResult === 'object' && (sendResult as { sent?: unknown }).sent === true) {
+        return {
+          ...(sendResult as Record<string, unknown>),
+          attempts: 1,
+        };
       }
 
       throw new Error(`reddit_chat_send_unconfirmed:${JSON.stringify({ reason: 'missing_result_payload', url: lastKnownUrl })}`);
