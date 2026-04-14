@@ -14,6 +14,15 @@
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/telepat-io/otto.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/telepat-io/otto/issues"
+  },
+  "homepage": "https://docs.telepat.io/otto/",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:run": "tsx src/index.ts",

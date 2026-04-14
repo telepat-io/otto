@@ -7,6 +7,15 @@
   "bin": {
     "otto-relay": "dist/index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/telepat-io/otto.git",
+    "directory": "packages/relay"
+  },
+  "bugs": {
+    "url": "https://github.com/telepat-io/otto/issues"
+  },
+  "homepage": "https://docs.telepat.io/otto/",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",

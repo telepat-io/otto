@@ -23,7 +23,7 @@ export type ExtensionInstallResult = {
   releaseBaseUrl?: string;
 };
 
-const DEFAULT_RELEASE_BASE_URL = 'https://github.com/telepat/otto/releases/download';
+const DEFAULT_RELEASE_BASE_URL = 'https://github.com/telepat-io/otto/releases/download';
 
 function resolveRepoRootForBuild(repoPath?: string): string | null {
   if (repoPath) {

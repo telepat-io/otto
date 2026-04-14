@@ -240,7 +240,7 @@ Settings ownership boundary:
 
 Release artifact contract used by setup:
 
-- Release base URL default: `https://github.com/telepat/otto/releases/download`
+- Release base URL default: `https://github.com/telepat-io/otto/releases/download`
 - Expected tag segment: `v<cli-version>`
 - Expected zip asset: `otto-extension-<version>-chrome-mv3.zip`
 - Expected checksum asset: `otto-extension-<version>-chrome-mv3.zip.sha256`

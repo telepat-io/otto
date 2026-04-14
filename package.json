@@ -2,7 +2,7 @@
   "name": "otto",
   "version": "0.1.0",
   "description": "Otto remote browser automation monorepo",
-  "private": true,
+  "private": false,
   "type": "module",
   "workspaces": [
     "packages/*",
@@ -28,6 +28,14 @@
     "chrome-extension",
     "relay"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/telepat-io/otto.git"
+  },
+  "bugs": {
+    "url": "https://github.com/telepat-io/otto/issues"
+  },
+  "homepage": "https://docs.telepat.io/otto/",
   "author": "Telepat",
   "license": "MIT",
   "devDependencies": {
