@@ -250,7 +250,8 @@ CI/CD and release channels:
 
 - Pull requests and `main` commits run package-scoped quality gates in parallel for CLI, relay, shared protocol, and extension (`check`, `lint`, `build`, `test` where present).
 - Docs site deploys to GitHub Pages on `main` when docs/site paths change.
-- Release Please manages only the CLI package release stream from `packages/cli` and creates semver tags (`v<version>`).
+- Release Please manages linked version bumps for CLI, relay, and protocol packages from `packages/cli`, `packages/relay`, and `packages/shared-protocol`.
+- Release tags include `v<version>` for CLI and component-prefixed tags for relay/protocol (`relay-v<version>`, `protocol-v<version>`).
 - CLI npm publishing runs only from published semver releases (`v<version>`) and verifies tag/package version alignment before publish.
 - Extension artifacts are published only on semver CLI releases (`v<version>`) as `otto-extension-<version>-chrome-mv3.zip` plus checksum, so `otto setup` download mode remains compatible.
 
