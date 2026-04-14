@@ -11,18 +11,30 @@ module.exports = {
     {
       type: 'category',
       label: 'Guides',
-      items: ['guides/architecture', 'guides/pairing-auth']
+      items: [
+        'guides/architecture',
+        'guides/pairing-auth',
+        'guides/command-authoring',
+        'guides/controller-implementation',
+        'guides/listener-development',
+        'guides/troubleshooting-advanced'
+      ]
     },
     {
       type: 'category',
       label: 'Reference',
       items: [
         'reference/cli-reference',
+        'reference/error-codes',
+        'reference/configuration',
+        'reference/relay-api',
         'reference/protocol',
         'reference/commands',
         'reference/extension-runtime',
         'reference/relay-operations',
         'reference/logging-debugging',
+        'reference/tab-lock-model',
+        'reference/tab-management',
         'reference/faq'
       ]
     },
