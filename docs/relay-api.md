@@ -102,6 +102,7 @@ Logs query response:
 ## Related Docs
 
 - `docs/controller-implementation.md`
+- `docs/agent-automation.md`
 - `docs/snippets.md`
 - `docs/protocol.md`
 - `docs/error-codes.md`

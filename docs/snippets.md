@@ -127,6 +127,7 @@ curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/auth/refresh" \
 ## Related Docs
 
 - docs/controller-implementation.md
+- docs/agent-automation.md
 - docs/relay-api.md
 - docs/protocol.md
 - docs/use-cases.md

@@ -60,6 +60,7 @@ Use one request id to trace controller, relay, and node behavior.
 
 - docs/command-authoring.md
 - docs/controller-implementation.md
+- docs/agent-automation.md
 - docs/listener-development.md
 - docs/troubleshooting-advanced.md
 - docs/snippets.md

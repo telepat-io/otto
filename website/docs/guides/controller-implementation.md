@@ -306,6 +306,7 @@ For long-running sessions:
 
 - `reference/protocol`
 - `reference/relay-api`
+- `guides/agent-automation`
 - `reference/snippets`
 - `guides/use-cases`
 - `reference/error-codes`

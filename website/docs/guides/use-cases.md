@@ -135,6 +135,7 @@ Checklist:
 
 - guides/command-authoring
 - guides/controller-implementation
+- guides/agent-automation
 - guides/listener-development
 - guides/troubleshooting-advanced
 - reference/snippets

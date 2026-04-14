@@ -53,6 +53,8 @@ Sources:
 
 Use these patterns for deterministic autonomous debugging workflows.
 
+For full end-to-end agent onboarding and controller operation flow, see `guides/agent-automation`.
+
 Historical queries (bounded and machine-readable):
 
 - Prefer `otto logs list` or `otto logs export` over `logs follow` when an agent only needs recent evidence.

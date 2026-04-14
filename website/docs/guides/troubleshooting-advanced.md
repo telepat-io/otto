@@ -102,6 +102,7 @@ On interrupted tests:
 ## Related Docs
 
 - `reference/error-codes`
+- `guides/agent-automation`
 - `reference/tab-lock-model`
 - `reference/tab-management`
 - `reference/logging-debugging`

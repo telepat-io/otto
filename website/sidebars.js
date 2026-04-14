@@ -16,6 +16,7 @@ module.exports = {
         'guides/pairing-auth',
         'guides/command-authoring',
         'guides/controller-implementation',
+        'guides/agent-automation',
         'guides/listener-development',
         'guides/use-cases',
         'guides/troubleshooting-advanced',

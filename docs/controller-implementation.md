@@ -166,6 +166,7 @@ Ping frame:
 
 - `docs/protocol.md`
 - `docs/relay-api.md`
+- `docs/agent-automation.md`
 - `docs/snippets.md`
 - `docs/use-cases.md`
 - `docs/error-codes.md`

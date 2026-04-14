@@ -194,6 +194,7 @@ curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/auth/refresh" \
 ## Related Docs
 
 - guides/controller-implementation
+- guides/agent-automation
 - guides/command-authoring
 - guides/listener-development
 - guides/use-cases
