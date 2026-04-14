@@ -1,7 +1,7 @@
 {
   "name": "otto",
   "version": "0.1.0",
-  "description": "Otto remote browser automation monorepo",
+  "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "private": true,
   "type": "module",
   "workspaces": [

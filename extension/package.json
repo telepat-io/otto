@@ -1,6 +1,7 @@
 {
   "name": "@telepat/otto-extension",
   "version": "0.1.0",
+  "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "private": true,
   "type": "module",
   "repository": {

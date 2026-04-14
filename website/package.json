@@ -1,5 +1,6 @@
 {
   "name": "otto-docs",
+  "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "private": true,
   "repository": {
     "type": "git",
