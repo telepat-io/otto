@@ -246,6 +246,19 @@ Release artifact contract used by setup:
 - Expected checksum asset: `otto-extension-<version>-chrome-mv3.zip.sha256`
 - Checksum file can be `sha256sum` style (`<hash> <filename>`) or OpenSSL style (`SHA256(...) = <hash>`)
 
+CI/CD and release channels:
+
+- Pull requests and `main` commits run package-scoped quality gates in parallel for CLI, relay, shared protocol, and extension (`check`, `lint`, `build`, `test` where present).
+- Release Please manages only the CLI package release stream from `packages/cli` and creates semver tags (`v<version>`).
+- CLI npm publishing is automatic when Release Please creates a CLI release and can be run manually through workflow dispatch fallback.
+- Extension artifacts are published in two channels:
+	- every commit on `main` gets an immutable prerelease tag (`ext-main-<shortsha>`) with extension zip + checksum assets;
+	- every semver CLI release (`v<version>`) also receives `otto-extension-<version>-chrome-mv3.zip` and checksum assets so `otto setup` download mode remains compatible.
+
+Required repository secrets:
+
+- `NPM_TOKEN` for npm publish workflows.
+
 ## Command Framework
 
 Command model:

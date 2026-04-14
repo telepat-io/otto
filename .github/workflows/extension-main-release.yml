@@ -1,0 +1,76 @@
+name: Extension Main Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: extension-main-release-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  release-extension-main:
+    name: Build and publish extension prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Extension quality gates
+        run: |
+          npm run --workspace @telepat/otto-extension check
+          npm run --workspace @telepat/otto-extension lint
+          npm run --workspace @telepat/otto-extension build
+          npm run --workspace @telepat/otto-extension test
+
+      - name: Package extension zip
+        run: npm run --workspace @telepat/otto-extension zip
+
+      - id: prep
+        name: Prepare release assets
+        run: |
+          set -euo pipefail
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          TAG="ext-main-${SHORT_SHA}"
+          ZIP_NAME="otto-extension-main-${SHORT_SHA}-chrome-mv3.zip"
+          CHECKSUM_NAME="${ZIP_NAME}.sha256"
+
+          mapfile -t ZIP_FILES < <(find extension -type f -name '*.zip')
+          if [ "${#ZIP_FILES[@]}" -eq 0 ]; then
+            echo "No extension zip artifact found after wxt zip"
+            exit 1
+          fi
+
+          cp "${ZIP_FILES[0]}" "$ZIP_NAME"
+          shasum -a 256 "$ZIP_NAME" > "$CHECKSUM_NAME"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "checksum_name=$CHECKSUM_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Publish prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prep.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Extension main ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: |
+            ${{ steps.prep.outputs.zip_name }}
+            ${{ steps.prep.outputs.checksum_name }}

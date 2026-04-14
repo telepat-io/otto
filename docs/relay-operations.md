@@ -1,6 +1,6 @@
 # Relay Operations
 
-Last Updated: 2026-04-12
+Last Updated: 2026-04-14
 Owner: Platform
 
 ## Source-of-Truth Code Paths
@@ -195,3 +195,22 @@ Setup-related operational notes:
 2. Pairing and command routing remain relay responsibilities after setup handoff.
 3. Controller config (`~/.otto/config.json`) and extension settings (`chrome.storage.*`) are independent by design.
 4. In non-interactive mode, setup JSON output includes relay daemon readiness metadata for automation diagnostics.
+
+## CI/CD Release Operations
+
+GitHub Actions workflows:
+
+- `.github/workflows/ci.yml`: package-scoped quality gates on pull requests and `main` (`check`, `lint`, `build`, `test` where present).
+- `.github/workflows/release-please.yml`: Release Please automation for `packages/cli` and conditional npm publish of `@telepat/otto`.
+- `.github/workflows/npm-publish-cli.yml`: manual fallback publish (`workflow_dispatch`) with semver/tag/ancestry validation.
+- `.github/workflows/extension-main-release.yml`: immutable extension prerelease on every `main` commit (`ext-main-<shortsha>`).
+- `.github/workflows/extension-release-assets.yml`: attaches semver extension assets to `v<version>` releases for setup compatibility.
+
+Required repository secrets:
+
+- `NPM_TOKEN`: npm registry token for CLI publish workflows.
+
+Extension release channels:
+
+1. Per-main prerelease assets for rapid internal install/debug cycles.
+2. Semver-tagged release assets (`otto-extension-<version>-chrome-mv3.zip` + `.sha256`) consumed by `otto setup` download strategy.

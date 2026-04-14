@@ -36,6 +36,13 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Run docs dev: `npm run docs:start`
 - Build docs site: `npm run docs:build`
 
+## CI and Release Workflows
+- CI package quality gates live in `.github/workflows/ci.yml` and should keep per-package checks independent.
+- Release Please for CLI lives in `.github/workflows/release-please.yml` and `release-please-config.json`.
+- Manual CLI npm publish fallback lives in `.github/workflows/npm-publish-cli.yml`.
+- Extension main-commit prereleases live in `.github/workflows/extension-main-release.yml`.
+- Keep semver-tagged extension assets attached to `v<version>` releases via `.github/workflows/extension-release-assets.yml` so `otto setup` download contract remains valid.
+
 ## Required Validation After Any Update
 - Always run, in order, at the end of any code update:
 - `npm run check`
