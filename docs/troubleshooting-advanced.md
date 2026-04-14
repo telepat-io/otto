@@ -40,5 +40,6 @@ Use this guide for deep debugging across controller, relay, and extension node w
 ## Related Docs
 
 - `docs/error-codes.md`
+- `docs/relay-api.md`
 - `docs/tab-lock-model.md`
 - `docs/tab-management.md`

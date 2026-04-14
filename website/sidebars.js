@@ -17,6 +17,7 @@ module.exports = {
         'guides/command-authoring',
         'guides/controller-implementation',
         'guides/listener-development',
+        'guides/use-cases',
         'guides/troubleshooting-advanced'
       ]
     },

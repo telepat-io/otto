@@ -15,7 +15,7 @@ Use this documentation to onboard quickly, operate Otto safely, and implement si
 ## Documentation map
 
 - Getting Started: installation, setup, and first command flow.
-- Guides: architecture, pairing/auth, command authoring, listener development, controller implementation, and advanced troubleshooting.
+- Guides: architecture, pairing/auth, command authoring, listener development, controller implementation, practical use cases, and advanced troubleshooting.
 - Reference: protocol, commands, runtime behavior, relay operations, relay API endpoints, configuration, error codes, lock model, tab lifecycle, logging, and FAQ.
 - Technical: security and testing controls.
 - Contributing: local development and docs deployment notes.

@@ -62,4 +62,5 @@ This guide explains how to add and validate a new site command in Otto extension
 - `docs/commands.md`
 - `docs/protocol.md`
 - `docs/listener-development.md`
+- `docs/use-cases.md`
 - `docs/error-codes.md`

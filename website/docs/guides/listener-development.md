@@ -135,6 +135,7 @@ Example fallback payload:
 ## Related Docs
 
 - `guides/command-authoring`
+- `guides/use-cases`
 - `reference/protocol`
 - `reference/extension-runtime`
 - `reference/logging-debugging`

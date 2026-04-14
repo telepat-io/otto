@@ -56,4 +56,5 @@ If stream probe cannot confirm traffic in bounded window, return fallback metada
 
 - `docs/commands.md`
 - `docs/protocol.md`
+- `docs/use-cases.md`
 - `docs/logging-debugging.md`

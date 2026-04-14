@@ -59,4 +59,5 @@ This guide explains how to implement a custom controller client against Otto rel
 
 - `docs/protocol.md`
 - `docs/relay-api.md`
+- `docs/use-cases.md`
 - `docs/error-codes.md`

@@ -197,4 +197,5 @@ Minimum test matrix:
 - `reference/commands`
 - `reference/protocol`
 - `guides/listener-development`
+- `guides/use-cases`
 - `reference/error-codes`

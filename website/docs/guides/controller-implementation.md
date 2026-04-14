@@ -145,5 +145,6 @@ For long-running sessions:
 
 - `reference/protocol`
 - `reference/relay-api`
+- `guides/use-cases`
 - `reference/error-codes`
 - `reference/tab-lock-model`
