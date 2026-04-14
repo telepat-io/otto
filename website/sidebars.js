@@ -29,6 +29,7 @@ module.exports = {
         'reference/error-codes',
         'reference/configuration',
         'reference/relay-api',
+        'reference/snippets',
         'reference/protocol',
         'reference/commands',
         'reference/extension-runtime',

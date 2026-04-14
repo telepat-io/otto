@@ -62,3 +62,4 @@ Use one request id to trace controller, relay, and node behavior.
 - docs/controller-implementation.md
 - docs/listener-development.md
 - docs/troubleshooting-advanced.md
+- docs/snippets.md

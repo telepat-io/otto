@@ -137,4 +137,5 @@ Checklist:
 - guides/controller-implementation
 - guides/listener-development
 - guides/troubleshooting-advanced
+- reference/snippets
 - reference/error-codes

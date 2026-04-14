@@ -34,6 +34,78 @@ Reference implementation paths:
 - `packages/cli/src/node-resolution.ts`
 - `packages/relay/src/index.ts`
 
+### Endpoint-by-endpoint HTTP Transcript
+
+Register client:
+
+```http
+POST /api/controller/register
+Content-Type: application/json
+
+{"name":"my-controller","description":"automation worker"}
+```
+
+```json
+{
+	"clientId": "clt_abc123",
+	"name": "my-controller",
+	"description": "automation worker",
+	"avatarSeed": "my-controller",
+	"clientSecret": "cs_xxx",
+	"createdAt": 1776162000000
+}
+```
+
+Issue tokens:
+
+```http
+POST /api/controller/token
+Content-Type: application/json
+
+{"clientId":"clt_abc123","clientSecret":"cs_xxx"}
+```
+
+```json
+{
+	"clientId": "clt_abc123",
+	"controllerId": "ctl_123",
+	"scopes": ["command.list", "command.run", "command.test", "listener.subscribe", "listener.unsubscribe", "primitive.tab.open", "primitive.tab.close", "primitive.tab.navigate", "primitive.tab.query", "primitive.dom.extract_text"],
+	"accessToken": "<jwt>",
+	"refreshToken": "<refresh>"
+}
+```
+
+Resolve connected nodes:
+
+```http
+GET /api/nodes/connected
+Authorization: Bearer <accessToken>
+```
+
+```json
+{
+	"nodes": [
+		{"nodeId":"node_local_1"}
+	]
+}
+```
+
+Refresh access token:
+
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+
+{"refreshToken":"<refresh>"}
+```
+
+```json
+{
+	"accessToken": "<new-jwt>",
+	"refreshToken": "<new-refresh>"
+}
+```
+
 ## WebSocket Lifecycle
 
 Required message order:
@@ -56,6 +128,95 @@ ws.send(envelope('auth', { accessToken }));
 await waitForMessage('auth_ack');
 
 startHeartbeat(ws);
+```
+
+### Frame-level WebSocket Transcript
+
+Controller hello:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "hello",
+	"requestId": "req_hello_1",
+	"timestamp": "2026-04-14T13:10:00.000Z",
+	"senderRole": "controller",
+	"payload": {
+		"role": "controller",
+		"capabilities": ["commands", "logs"]
+	}
+}
+```
+
+Relay hello ack:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "hello_ack",
+	"requestId": "req_hello_1",
+	"timestamp": "2026-04-14T13:10:00.010Z",
+	"senderRole": "relay",
+	"payload": {
+		"accepted": true,
+		"heartbeatIntervalMs": 8000
+	}
+}
+```
+
+Controller auth:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "auth",
+	"requestId": "req_auth_1",
+	"timestamp": "2026-04-14T13:10:00.020Z",
+	"senderRole": "controller",
+	"payload": {
+		"accessToken": "<jwt>"
+	}
+}
+```
+
+Relay auth ack:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "auth_ack",
+	"requestId": "req_auth_1",
+	"timestamp": "2026-04-14T13:10:00.030Z",
+	"senderRole": "relay",
+	"payload": {
+		"accepted": true,
+		"role": "controller"
+	}
+}
+```
+
+Heartbeat ping/pong:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "ping",
+	"requestId": "req_ping_1",
+	"timestamp": "2026-04-14T13:10:08.000Z",
+	"senderRole": "controller",
+	"payload": {"ts": 1776162608000}
+}
+```
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "pong",
+	"requestId": "req_ping_1",
+	"timestamp": "2026-04-14T13:10:08.005Z",
+	"senderRole": "relay",
+	"payload": {"ok": true}
+}
 ```
 
 ## Command Envelope Requirements
@@ -145,6 +306,7 @@ For long-running sessions:
 
 - `reference/protocol`
 - `reference/relay-api`
+- `reference/snippets`
 - `guides/use-cases`
 - `reference/error-codes`
 - `reference/tab-lock-model`

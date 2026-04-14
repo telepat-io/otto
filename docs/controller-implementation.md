@@ -21,6 +21,113 @@ This guide explains how to implement a custom controller client against Otto rel
 4. Keep heartbeat (`ping`/`pong`) active.
 5. Route commands to explicit `targetNodeId`.
 
+## HTTP Transcript
+
+Register client:
+
+```http
+POST /api/controller/register
+Content-Type: application/json
+
+{"name":"my-controller","description":"automation worker"}
+```
+
+```json
+{
+	"clientId": "clt_abc123",
+	"clientSecret": "cs_xxx",
+	"createdAt": 1776162000000
+}
+```
+
+Issue token:
+
+```http
+POST /api/controller/token
+Content-Type: application/json
+
+{"clientId":"clt_abc123","clientSecret":"cs_xxx"}
+```
+
+```json
+{
+	"clientId": "clt_abc123",
+	"controllerId": "ctl_123",
+	"accessToken": "<jwt>",
+	"refreshToken": "<refresh>"
+}
+```
+
+Connected nodes:
+
+```http
+GET /api/nodes/connected
+Authorization: Bearer <accessToken>
+```
+
+```json
+{
+	"nodes": [{"nodeId":"node_local_1"}]
+}
+```
+
+Refresh token:
+
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+
+{"refreshToken":"<refresh>"}
+```
+
+```json
+{
+	"accessToken": "<new-jwt>",
+	"refreshToken": "<new-refresh>"
+}
+```
+
+## WebSocket Transcript
+
+Hello frame:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "hello",
+	"requestId": "req_hello_1",
+	"timestamp": "2026-04-14T13:10:00.000Z",
+	"senderRole": "controller",
+	"payload": {"role": "controller", "capabilities": ["commands", "logs"]}
+}
+```
+
+Auth frame:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "auth",
+	"requestId": "req_auth_1",
+	"timestamp": "2026-04-14T13:10:00.020Z",
+	"senderRole": "controller",
+	"payload": {"accessToken": "<jwt>"}
+}
+```
+
+Ping frame:
+
+```json
+{
+	"protocolVersion": "1.0",
+	"messageType": "ping",
+	"requestId": "req_ping_1",
+	"timestamp": "2026-04-14T13:10:08.000Z",
+	"senderRole": "controller",
+	"payload": {"ts": 1776162608000}
+}
+```
+
 ## Command Envelope Requirements
 
 | Field | Required | Notes |
@@ -59,5 +166,6 @@ This guide explains how to implement a custom controller client against Otto rel
 
 - `docs/protocol.md`
 - `docs/relay-api.md`
+- `docs/snippets.md`
 - `docs/use-cases.md`
 - `docs/error-codes.md`

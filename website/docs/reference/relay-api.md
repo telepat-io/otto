@@ -472,5 +472,6 @@ curl -sS "$OTTO_RELAY_HTTP_URL/api/logs?source=node&latest=100" \
 ## Related Docs
 
 - `guides/controller-implementation`
+- `reference/snippets`
 - `reference/protocol`
 - `reference/error-codes`
