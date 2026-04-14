@@ -33,6 +33,8 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Run relay dev: `npm run dev:relay`
 - Run CLI dev: `npm run dev:cli`
 - Run extension dev: `npm run dev:ext`
+- Run docs dev: `npm run docs:start`
+- Build docs site: `npm run docs:build`
 
 ## Required Validation After Any Update
 - Always run, in order, at the end of any code update:
@@ -114,6 +116,12 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Retain existing keyboard escape affordances (`q`, `Esc`, `Ctrl+C`) in interactive screens.
 - Keep custom Ink rendering only where needed for streaming behavior (for example, `Static` log follow output).
 
+## Docs Site Guidance
+- Docusaurus site root: `website/`
+- Docs content source for site navigation: `website/docs/**`
+- Keep docs information architecture aligned with sections: Getting Started, Guides, Reference, Technical, Contributing.
+- Keep `website/src/css/custom.css` aligned with Snoopy docs theme values unless a deliberate design update is requested.
+
 ## Reference Docs
 - Architecture: `docs/overview.md`
 - Protocol semantics: `docs/protocol.md`
@@ -122,3 +130,4 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Relay operations: `docs/relay-operations.md`
 - Testing matrix: `docs/testing.md`
 - Security controls: `docs/security.md`
+- Docusaurus docs home: `website/docs/index.md`

@@ -14,6 +14,10 @@
     "dev:relay": "npm --workspace @telepat/otto-relay run dev",
     "dev:cli": "npm --workspace @telepat/otto-cli run dev",
     "dev:ext": "npm --workspace @telepat/otto-extension run dev",
+    "docs:start": "npm --prefix website run start",
+    "docs:build": "npm --prefix website run build",
+    "docs:serve": "npm --prefix website run serve",
+    "docs:deploy": "npm --prefix website run deploy",
     "e2e:manual": "npm --workspace @telepat/otto-relay run e2e:manual",
     "check": "npm run -ws check",
     "lint": "npm run -ws lint"

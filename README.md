@@ -292,6 +292,30 @@ npm run build
 npm run -ws --if-present test
 ```
 
+## Docs Site
+
+Otto docs site uses Docusaurus in `website/` with sectioned content under `website/docs/`.
+
+Run locally:
+
+```bash
+npm run docs:start
+```
+
+Build and serve production output:
+
+```bash
+npm run docs:build
+npm run docs:serve
+```
+
+Deployment defaults:
+
+- `DOCS_URL=https://docs.telepat.io`
+- `DOCS_BASE_URL=/otto/`
+- `GITHUB_OWNER=telepat-io`
+- `GITHUB_REPO=otto`
+
 ## Reference Docs
 
 - Architecture: `docs/overview.md`
