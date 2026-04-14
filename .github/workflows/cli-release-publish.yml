@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish-cli:
-    name: Publish CLI from semver release tag
+  publish-packages:
+    name: Publish npm packages from semver release tag
     if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     permissions:
@@ -33,7 +33,7 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      - name: Validate tag format and package version
+      - name: Validate tag format and package versions
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
@@ -45,24 +45,48 @@ jobs:
           fi
 
           RELEASE_VERSION="${RELEASE_TAG#v}"
-          PKG_VERSION=$(node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('packages/cli/package.json','utf8')); process.stdout.write(pkg.version);")
+          CLI_VERSION=$(node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('packages/cli/package.json','utf8')); process.stdout.write(pkg.version);")
+          RELAY_VERSION=$(node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('packages/relay/package.json','utf8')); process.stdout.write(pkg.version);")
+          PROTOCOL_VERSION=$(node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('packages/shared-protocol/package.json','utf8')); process.stdout.write(pkg.version);")
 
-          if [ "$PKG_VERSION" != "$RELEASE_VERSION" ]; then
-            echo "CLI package version ($PKG_VERSION) does not match release tag version ($RELEASE_VERSION)"
+          if [ "$CLI_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "CLI package version ($CLI_VERSION) does not match release tag version ($RELEASE_VERSION)"
+            exit 1
+          fi
+
+          if [ "$RELAY_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "Relay package version ($RELAY_VERSION) does not match release tag version ($RELEASE_VERSION)"
+            exit 1
+          fi
+
+          if [ "$PROTOCOL_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "Protocol package version ($PROTOCOL_VERSION) does not match release tag version ($RELEASE_VERSION)"
             exit 1
           fi
 
       - name: Install dependencies
         run: npm ci
 
-      - name: CLI quality gates
+      - name: Package quality gates
         run: |
+          npm run --workspace @telepat/otto-protocol check
+          npm run --workspace @telepat/otto-protocol lint
+          npm run --workspace @telepat/otto-protocol build
+
+          npm run --workspace @telepat/otto-relay check
+          npm run --workspace @telepat/otto-relay lint
+          npm run --workspace @telepat/otto-relay build
+          npm run --workspace @telepat/otto-relay test
+
           npm run --workspace @telepat/otto check
           npm run --workspace @telepat/otto lint
           npm run --workspace @telepat/otto build
           npm run --workspace @telepat/otto test
 
-      - name: Publish
-        run: npm publish --workspace @telepat/otto --access public --provenance
+      - name: Publish protocol, relay, and CLI
+        run: |
+          npm publish --workspace @telepat/otto-protocol --access public --provenance
+          npm publish --workspace @telepat/otto-relay --access public --provenance
+          npm publish --workspace @telepat/otto --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

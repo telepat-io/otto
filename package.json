@@ -2,7 +2,7 @@
   "name": "otto",
   "version": "0.1.0",
   "description": "Otto remote browser automation monorepo",
-  "private": false,
+  "private": true,
   "type": "module",
   "workspaces": [
     "packages/*",
