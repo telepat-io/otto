@@ -3,7 +3,7 @@
 Last Updated: 2026-04-14
 Owner: Browser Runtime
 
-This guide covers listener-based stream integrations for command modules.
+This guide covers listener-based stream integrations for command modules. The key design rule is separation of concerns: runtime owns transport lifecycle and safety, while command modules own site-specific parsing and stream shaping.
 
 ## Invariant
 
@@ -11,16 +11,7 @@ Keep runtime listener infrastructure generic and command adapter logic site-spec
 
 ## Lifecycle Model
 
-Terminal commands:
-
-- `listener.subscribe`
-- `listener.unsubscribe`
-
-Async updates:
-
-- `event` frames
-- `payload.type=listener_update`
-- correlated by original subscribe `requestId`
+`listener.subscribe` and `listener.unsubscribe` are terminal commands that return normal result or error envelopes. Stream data is emitted asynchronously as `event` frames with `payload.type=listener_update`, correlated by the original subscribe `requestId`.
 
 ## network.http_intercept Options
 
@@ -39,18 +30,15 @@ Async updates:
 
 ## Stream Adapter Guidance
 
-- Parse site payloads into shared objects (`chat.message`, `content.post`, others).
-- Add `originalEntity` only when safe and useful.
-- Keep payloads compact to avoid serialization pressure.
+Adapter modules should map raw transport payloads into shared-domain objects such as `chat.message` or `content.post`, and attach `originalEntity` only when it is safe and operationally useful. Keep objects compact to avoid cross-context serialization pressure during sustained streams.
 
 ## Dedupe
 
-1. Transport-level duplicate suppression for hybrid cross-surface duplicates.
-2. Domain-level duplicate suppression in command adapters.
+Duplicate suppression is intentionally layered. Runtime transport suppression handles hybrid cross-surface duplicates, and command adapters handle semantic duplicates that can still appear in replayed site payloads.
 
 ## Fallback
 
-If stream probe cannot confirm traffic in bounded window, return fallback metadata and use execute fallback helper.
+If a bounded stream probe cannot confirm traffic, return fallback metadata and use execute fallback helpers rather than leaving stream state ambiguous.
 
 ## Related Docs
 

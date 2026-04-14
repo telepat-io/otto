@@ -7,21 +7,26 @@ This guide explains how to implement a custom controller client against Otto rel
 
 ## Required Capabilities
 
-1. Acquire and refresh controller tokens.
-2. Execute hello/auth websocket lifecycle.
-3. Send commands with `targetNodeId` and `replayNonce`.
-4. Correlate responses/events by `requestId`.
-5. Handle streams, listeners, and cancellation.
+Your controller must handle token lifecycle, websocket auth sequencing, request correlation, and deterministic stream teardown. Missing any one of these typically causes flaky automation behavior under reconnects or long-running streams.
 
 ## Core Flow
 
-1. Bootstrap credentials and token over relay HTTP API.
-2. Open websocket and send `hello` then `auth`.
-3. Wait for `auth_ack` before command frames.
-4. Keep heartbeat (`ping`/`pong`) active.
-5. Route commands to explicit `targetNodeId`.
+1. Bootstrap credentials and access token over relay HTTP endpoints.
+2. Open websocket and send `hello`, then `auth`.
+3. Wait for `auth_ack` before sending command frames.
+4. Keep heartbeat (`ping`/`pong`) active for long-lived sessions.
+5. Route commands with explicit `targetNodeId` and replay-safe payload fields.
 
 ## HTTP Transcript
+
+The HTTP layer establishes controller identity and token state before websocket traffic starts.
+
+| Purpose | Endpoint |
+| --- | --- |
+| Register controller client | `POST /api/controller/register` |
+| Exchange client credentials for token pair | `POST /api/controller/token` |
+| Discover connected nodes | `GET /api/nodes/connected` |
+| Refresh token pair | `POST /api/auth/refresh` |
 
 Register client:
 
@@ -89,6 +94,8 @@ Content-Type: application/json
 
 ## WebSocket Transcript
 
+After HTTP bootstrap, websocket handshake/auth must be ordered and strict.
+
 Hello frame:
 
 ```json
@@ -142,25 +149,15 @@ Ping frame:
 
 ## Listener and Streaming
 
-1. Send `command.test`.
-2. Read `stream.listeners` from result.
-3. Send `listener.subscribe` per manifest.
-4. Process async `listener_update` events.
-5. Correlate updates to subscribe request id.
-6. Teardown with unsubscribe or cancel.
+Streaming should be treated as a two-phase flow: command phase and listener phase. Send `command.test`, extract `stream.listeners`, subscribe per manifest, and process async `listener_update` events keyed to subscribe request ids. Teardown should be explicit through unsubscribe and/or `command_cancel` targeting the original stream command request.
 
 ## Retry Guidance
 
-- Retry auth expiry after refresh.
-- Retry lock/timeouts with bounded backoff.
-- Do not retry validation errors.
-- Prefer idempotency keys for safe retries.
+Retry auth-expiry failures after refresh, and retry lock/timeouts with bounded backoff. Do not retry validation errors. Use idempotency keys where applicable so safe retries return cached terminal outcomes instead of duplicating side effects.
 
 ## ACL and Node Targeting
 
-- `targetNodeId` is always required.
-- Node owner must grant ACL access for controller client.
-- Missing grant yields deterministic auth error.
+`targetNodeId` is always required at command time. Node owners control ACL grants per controller client, and missing grants fail deterministically with `acl_missing_node_grant`.
 
 ## Related Docs
 

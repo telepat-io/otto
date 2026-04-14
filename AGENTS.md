@@ -125,7 +125,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 
 ## Docs Site Guidance
 - Docusaurus site root: `website/`
-- Docs content source for site navigation: `website/docs/**`
+- Docs content source for site navigation: `docs/**` (repository root)
 - Keep docs information architecture aligned with sections: Getting Started, Guides, Reference, Technical, Contributing.
 - Keep `website/src/css/custom.css` aligned with Snoopy docs theme values unless a deliberate design update is requested.
 
@@ -137,4 +137,4 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Relay operations: `docs/relay-operations.md`
 - Testing matrix: `docs/testing.md`
 - Security controls: `docs/security.md`
-- Docusaurus docs home: `website/docs/index.md`
+- Docusaurus docs home source: `docs/index.md`

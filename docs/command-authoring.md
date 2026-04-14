@@ -3,24 +3,22 @@
 Last Updated: 2026-04-14
 Owner: Browser Runtime
 
-This guide explains how to add and validate a new site command in Otto extension runtime.
+This guide explains how to add a site command in Otto extension runtime without breaking protocol, auth, or lifecycle guarantees. It is written for command authors who need a reliable implementation flow and a compact validation checklist.
 
 ## Source-of-Truth Code Paths
 
-- `extension/src/commands/types.ts`
-- `extension/src/commands/index.ts`
-- `extension/src/runtime/command-runtime.ts`
-- `extension/src/runtime/command-executor.ts`
+| Concern | Source |
+| --- | --- |
+| Command types and metadata contracts | `extension/src/commands/types.ts` |
+| Site command registration | `extension/src/commands/index.ts` |
+| Site command orchestration | `extension/src/runtime/command-runtime.ts` |
+| Action execution dispatch | `extension/src/runtime/command-executor.ts` |
 
 ## Implementation Steps
 
-1. Create a command file in `extension/src/commands/<site>/`.
-2. Define metadata with correct `site`, `id`, and auth flags.
-3. Declare `inputFields` and optional `inputAtLeastOneOf`.
-4. Implement bounded `execute(ctx, input, authMode)` logic.
-5. Optional: implement `test(ctx, input, helpers)` for stream readiness and fallback.
-6. Register command in site bundle index.
-7. Add tests for validation, auth, and fallback behavior.
+Start by creating a command module under `extension/src/commands/<site>/` and declaring metadata that matches actual runtime behavior. Metadata should not be treated as documentation only; runtime uses it to gate execution and sanitize inputs before your handler runs. Implement `execute(ctx, input, authMode)` with bounded work and deterministic errors. When command behavior needs setup, stream manifests, or assertions, add an optional `test(ctx, input, helpers)` hook and keep it deterministic.
+
+After implementation, register the command in the site bundle index and add tests that cover validation, auth preflight behavior, and execute/test fallback semantics.
 
 ## Metadata Contract Table
 
@@ -36,26 +34,22 @@ This guide explains how to add and validate a new site command in Otto extension
 
 ## Runtime Validation Behavior
 
-- Unknown keys: `unexpected_command_input`
-- Missing required keys: `missing_command_input`
-- Invalid types: `invalid_command_input_type`
-- Missing one-of group: `missing_command_input_one_of`
+Runtime validation is strict when metadata declares input contracts. Unknown keys produce `unexpected_command_input`, missing required fields produce `missing_command_input`, type mismatches produce `invalid_command_input_type`, and unmet cross-field constraints produce `missing_command_input_one_of`.
 
 ## Safety Rules
 
-- Never automate credential submission.
-- Keep site-scoped URL validation strict.
-- Return deterministic errors for expected precondition failures.
-- Do not leak sensitive values in outputs.
+Never automate credential submission, keep site URL validation strict, and return deterministic precondition errors instead of silent retries. Command output should avoid sensitive values and remain stable enough for CLI and agent parsing.
 
 ## Testing Matrix
 
-1. Successful execution with valid input.
-2. Missing required input.
-3. Unexpected input key.
-4. Requires-auth command with unauthenticated page state.
-5. command.test stream declaration path.
-6. command.test fallback execute path.
+| Scenario | Why it matters |
+| --- | --- |
+| Successful execution with valid input | Confirms happy-path contract and payload shape |
+| Missing required input | Verifies metadata validation gating |
+| Unexpected input key | Prevents hidden/legacy payload drift |
+| Requires-auth command on unauthenticated page | Verifies explicit manual login handoff |
+| `command.test` stream declaration path | Confirms stream lifecycle and listener manifest behavior |
+| `command.test` execute fallback path | Ensures compatibility for commands without custom test hook |
 
 ## Related Docs
 

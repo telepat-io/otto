@@ -3,167 +3,105 @@
 Last Updated: 2026-04-14
 Owner: Browser Runtime
 
+Otto command docs serve two audiences at once: command authors implementing extension bundles, and controller users validating behavior through CLI execution. The command model is site-scoped, metadata-driven, and intentionally strict at runtime so handlers receive sanitized inputs in a validated tab context.
+
 ## Source-of-Truth Code Paths
 
-- Extension command execution and command dispatch: `extension/src/runtime/command-executor.ts`
-- Extension command runtime orchestration: `extension/src/runtime/command-runtime.ts`
-- Extension site command registry and modules: `extension/src/commands/**`
-- Shared action contracts: `packages/shared-protocol/src/index.ts`
-- Relay command routing and terminalization: `packages/relay/src/index.ts`
+| Concern | Source |
+| --- | --- |
+| Command dispatch and execution | `extension/src/runtime/command-executor.ts` |
+| Site command orchestration | `extension/src/runtime/command-runtime.ts` |
+| Site command bundles | `extension/src/commands/**` |
+| Shared action contracts | `packages/shared-protocol/src/index.ts` |
+| Relay terminalization and routing | `packages/relay/src/index.ts` |
 
-## Design Goals
+## Action Surface
 
-- Keep command authoring simple and local to extension runtime.
-- Make commands discoverable and testable by humans and agents.
-- Support website-specific auth preflight without credential automation.
-- Preserve relay invariants (target node, queueing, terminal outcomes).
+The protocol exposes low-level primitive actions and higher-level site command actions. CLI entrypoints wrap these actions and keep the controller-side workflow consistent for both humans and automation.
 
-## Implemented v1 Actions
+| Group | Actions |
+| --- | --- |
+| Primitive | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query`, `primitive.dom.extract_text` |
+| Command | `command.list`, `command.run`, `command.test`, `command.reddit_feed` (legacy alias) |
+| Common CLI entrypoints | `otto commands list`, `otto test <site> <command>`, `otto cmd --action ...` |
 
-Primitive actions:
+`otto test` keeps the auto-registered tester controller identity by default. Pass `--cleanup-test-controller` when you need ephemeral test-controller lifecycle.
 
-- `primitive.tab.open`
-- `primitive.tab.close`
-- `primitive.tab.navigate`
-- `primitive.tab.query`
-- `primitive.dom.extract_text`
+## Site Command Model
 
-Command actions:
+Commands are grouped by site under `extension/src/commands/<site>/`. Each site bundle provides auth primitives (`checkLogin`, `gotoLogin`) plus one or more command modules exporting metadata and execution logic. Runtime payloads for `command.run` and `command.test` share the same shape (`site`, `command`, optional `input`, optional `authMode`) so test paths can mirror production execution.
 
-- `command.list`
-- `command.run`
-- `command.test`
-- `command.reddit_feed` (legacy alias)
+For command script execution, runtime exposes both `executeScript(...)` and `executeScriptWithDomHelpers(...)`. Use the DOM-helper variant when selectors can traverse nested shadow roots.
 
-CLI entrypoints:
+## Command Contract
 
-- `otto commands list [--site <site>]`
-- `otto test <site> <command> [--payload <json>] [--timeout <ms>] [--auth-mode auto|strict_fail|skip] [--json]`
-- `otto test` retains auto-registered `otto-tester` controller identity by default; pass `--cleanup-test-controller` to remove it after the run.
+Each command file combines declarative metadata with execution hooks.
 
-Site-scoped command model:
+| Field | Required | Purpose |
+| --- | --- | --- |
+| `metadata` | Yes | Identity, display metadata, tags, auth requirement |
+| `metadata.requiresDebuggerFocus` | No | Opt-in focus emulation gate for throttling-sensitive flows |
+| `metadata.inputFields` | No | Declarative input schema (`name`, `type`, `description`, `optional`) |
+| `metadata.inputAtLeastOneOf` | No | Cross-field minimum presence constraint |
+| `metadata.preloadHost` | No | Host gate enforced before execute path |
+| `execute(ctx, input, authMode)` | Yes | Main command behavior |
+| `test(ctx, input, helpers)` | No | Dedicated `command.test` hook |
 
-- Commands are grouped by website in `extension/src/commands/<site>/`.
-- Each site bundle must provide built-ins: `checkLogin` and `gotoLogin`.
-- Custom commands export metadata plus an `execute(ctx, input, authMode)` function.
-- Commands can optionally export `test(ctx, input, helpers)` for `otto test` setup/assertion flows.
-- `command.run` payload carries `site`, `command`, optional `input`, and `authMode` (`auto|strict_fail|skip`).
-- `command.test` payload carries the same fields and runs command-specific test logic when present.
-- Command runtime context exposes both `executeScript(...)` and `executeScriptWithDomHelpers(...)`; prefer the DOM-helper path for Shadow DOM heavy sites.
+Supported declarative input types are `string`, `number`, `boolean`, `object`, and `array`.
 
-Command file shape:
+When `metadata.inputFields` is present, runtime performs strict validation before command logic: required-field enforcement, exact type checking (no coercion), unknown-key rejection, optional `inputAtLeastOneOf` checks, and sanitization to declared keys only. Commands without `inputFields` remain permissive for compatibility.
 
-- `metadata`: identity, display fields, tags, and `requiresAuth`.
-- `metadata.requiresDebuggerFocus` (optional): when `true`, runtime enables debugger focus emulation (`Emulation.setFocusEmulationEnabled`) before command logic runs.
-- `metadata.inputFields` (optional): declarative command inputs with field `name`, `type`, `description`, `optional`.
-- `metadata.preloadHost` (optional): host that must be loaded before command `execute` runs.
-- `metadata.inputAtLeastOneOf` (optional): list of input field names where at least one must be provided.
-- `execute(ctx, input, authMode)`: implementation logic.
-- `test(ctx, input, helpers)` (optional): programmatic test entrypoint used by `command.test`.
-- Site bundle exports: `checkLogin`, `gotoLogin`, `commands[]`.
+## Runtime Execution Flow
 
-Input field type support (v1):
+Runtime command orchestration is intentionally ordered so failures are deterministic and easy to debug.
 
-- `string`
-- `number`
-- `boolean`
-- `object`
-- `array`
+1. Parse command payload (`command.run`, `command.test`, or legacy alias mapping).
+2. Resolve site bundle and command metadata.
+3. Resolve and validate `tabSessionId` plus site URL match.
+4. Validate/sanitize declared input metadata when present.
+5. Run auth preflight for `requiresAuth` commands.
+6. Apply preload host gate when configured.
+7. Execute command mode (`execute` for run, `test` hook with execute fallback for test).
+8. Return normalized terminal result or structured error.
 
-Framework input validation behavior:
+Commands requiring auth never automate credential entry. In `authMode=auto`, runtime may navigate to login and returns `manual_login_required` for explicit human handoff.
 
-- When `metadata.inputFields` is present, runtime validates payload input before command logic.
-- Required fields (default) must exist unless `optional=true`.
-- Declared types must match exactly (no coercion).
-- `inputAtLeastOneOf` enforces cross-field minimum presence for conditional input contracts.
-- Unknown extra input keys are rejected.
-- Runtime passes a sanitized object with only declared fields to command logic.
-- Commands without `metadata.inputFields` remain permissive for backward compatibility.
+## Focus Emulation and DOM Helper Guidance
 
-Debugger focus emulation behavior:
+`requiresDebuggerFocus` is a command-scoped opt-in for flows affected by background-tab throttling. Runtime activates focus emulation only after site/tab validation succeeds, and activation failures remain deterministic (`debugger_focus_unavailable`, `debugger_focus_conflict`, `debugger_focus_permission_denied`, `debugger_focus_attach_failed`, `debugger_focus_command_failed`).
 
-- `requiresDebuggerFocus=true` is explicit opt-in and command-scoped.
-- Runtime activates debugger focus emulation only after tab/site validation succeeds.
-- Activation failures are deterministic (`debugger_focus_unavailable`, `debugger_focus_conflict`, `debugger_focus_permission_denied`, `debugger_focus_attach_failed`, `debugger_focus_command_failed`).
-- Commands without this metadata are unaffected and do not touch debugger focus emulation.
+`executeScriptWithDomHelpers(...)` installs idempotent deep-query helpers in page context:
 
-Why this exists:
-
-- Some page automation flows in background tabs can stall due to browser throttling behavior (for example delayed or skipped callback cadence while tab is unfocused).
-- `requiresDebuggerFocus` gives command owners a precise, explicit switch to request focus emulation only where this mitigation is needed.
-- This avoids blanket debugger attachment across all commands and keeps debugger use aligned with least-privilege behavior.
-
-DOM helper execution behavior:
-
-- `ctx.executeScriptWithDomHelpers(...)` installs reusable page-side DOM query helpers before running command script logic.
-- Helper install is idempotent for the current page context and does not change command payload contracts.
-- Installed helpers expose deep recursive selectors under page globals:
 - `window.__ottoDeepQuerySelector(root, selector)`
 - `window.__ottoDeepQuerySelectorAll(root, selector)`
-- Use these helpers when selectors may be nested under multiple shadow roots (for example `rs-app` descendants in Reddit chat surfaces).
-- Command scripts should still fail deterministically if helpers are unexpectedly unavailable (for example `otto_dom_query_helper_missing`) rather than silently continuing with partial selectors.
 
-Auth-required flow:
-
-- If command metadata declares `requiresAuth`, runtime executes `checkLogin` first.
-- In `auto` mode, failed login checks trigger `gotoLogin` and return deterministic `manual_login_required`.
-- End users complete authentication manually in the browser, then rerun the command.
+Command logic should still fail explicitly if helper install is unexpectedly unavailable.
 
 Current bundled sites:
 
 - `reddit.com` (`getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`)
 - `news.ycombinator.com` (`getFrontPage`)
 
-Reddit command notes:
+## Reddit Bundle Notes
 
-- `checkLogin` now uses Reddit API session probe (`/api/me.json`) with selector fallback to reduce false `manual_login_required` outcomes when the user is already authenticated.
-- `sendChatMessage` supports either existing `roomId` or room creation via `username`, then sends text through Reddit chat composer.
-- `sendChatMessage` uses deep Shadow DOM selector helpers through `ctx.executeScriptWithDomHelpers(...)` for room-create flow, composer lookup, send button lookup, and chat error banner inspection.
-- `sendChatMessage` direct room navigation policy uses `https://reddit.com/chat/room/<roomId>` when `roomId` input is supplied; create-flow room opening may still land on equivalent `chat.reddit.com` room URLs depending on Reddit routing.
-- `getChatMessages` supports two modes: with `roomId`, it loads room-scoped history from Matrix `/rooms/{roomId}/messages`; without `roomId`, it loads a bounded recent multi-room snapshot from Matrix `/sync` timeline events. Output is grouped by room (`rooms[]`) with per-room message lists and counts.
-- `getChatMessages` command test streaming subscribes with `listener=network.http_intercept` in `fetch` mode for Reddit Matrix v3 sync traffic (`https://matrix.redditspace.com/_matrix/client/v3/sync*`) and declares command-owned adapter metadata (`options.streamAdapter=reddit.chat.v1`).
-- Adapter mapping converts raw Matrix sync payloads into shared domain chat objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) before controller-visible stream forwarding.
-- `getFeed` currently declares `metadata.requiresDebuggerFocus=true` to opt into debugger focus emulation before execution.
-- `getChatMessages` also declares `metadata.requiresDebuggerFocus=true`; focus emulation and network interception share the same tab debugger session when already attached by Otto runtime.
-- Shared-session behavior is ownership-aware: whichever runtime path attached debugger first owns detach responsibility; the other path reuses the attachment and skips detach.
-- Root cause of prior duplicate stream lines was dual transport visibility in hybrid mode (`Network` + `Fetch`) plus replayed Matrix sync payload semantics.
-- Duplicate suppression now runs in two layers:
-- interception layer suppresses equivalent hybrid cross-source response updates
-- command adapter layer suppresses repeated semantic chat object emissions
-- Shared domain objects emitted by command adapters should include `originalEntity` when source entities are available (including nested refs like `from`/`to`/`conversation`) so controllers can keep normalized + source-specific context together.
-- `getUserInfo` supports lookup by `username` or account id; when neither is provided it defaults to the logged-in account via `/api/me.json`. It returns a generic `user` profile object (`kind=entity.user`) designed for cross-site parity (`platform`, `id`, `username`, `displayName`, `avatarUrl`, `profileUrl`, `stats`, `flags`, `createdAt`, `originalEntity`).
-- `sendChatMessage` includes a command-level `test` hook that routes through command execution so manual `otto test` runs can validate end-to-end message delivery.
-- Automated repository tests keep `sendChatMessage` send behavior fully mocked; they do not perform live Reddit sends.
-- `getChatMessages` `test` returns a command-native stream manifest with listener subscription details and includes command-owned poll fallback metadata (`fallback.strategy=command_poll`) for bounded recovery flows.
-- `getFeed` now collects feed post permalinks from `#main-content`, hydrates each post via Reddit `.json` endpoints, and returns generic `content.post` objects with recursive `content.post_comment` trees when available.
-- `getFeed` supports optional input `minReturnedPosts` (number). Runtime scrolls page-by-page (`scroll -> wait -> collect`) until at least that many post URLs are discovered or a bounded pagination limit is reached. Returning more than requested is allowed.
-- `getFeed` keeps Reddit-specific extraction and JSON mapping logic scoped under `extension/src/commands/reddit.com/`, while output types remain shared and site-agnostic.
+Reddit commands are the most feature-rich bundle and therefore the best reference for advanced patterns. `checkLogin` uses an API-first session probe (`/api/me.json`) with bounded selector fallback. `sendChatMessage` supports either direct room sends (`roomId`) or room creation flow (`username`), and both flows rely on deep Shadow DOM helper execution. `getChatMessages` supports room-scoped history and multi-room snapshots, and its test path can return stream manifests for command-native follow mode.
 
-## Runtime Execution Lifecycle
+`getFeed` and `getChatMessages` both opt into `requiresDebuggerFocus` because these flows are sensitive to background-tab throttling. Listener adapters map Matrix traffic into shared-domain objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) and apply semantic dedupe on top of interception-layer dedupe. Where source payloads are available, adapters should include `originalEntity` (including nested references) so controllers can reconcile normalized data with source-specific context.
 
-1. Parse `command.run`/`command.test` payload or alias mapping (`command.reddit_feed`).
-2. Resolve site bundle and command id.
-3. Resolve and validate `tabSessionId`.
-4. Ensure active tab URL matches target site bundle.
-5. Validate and sanitize command input from metadata when declared.
-6. Run auth preflight if required (`checkLogin` then optional `gotoLogin`).
-7. Run command execution path:
-- `command.run`: call `execute` directly.
-- `command.test`: call `test` when defined, otherwise fall back to `execute`.
-- For commands returning `stream.listeners` from `test`, CLI subscribes to listener updates and stays active until `Ctrl+C`; cancellation targets the original `command.test` request so relay can deterministically close stream sessions.
-- `otto test` defaults to human-readable stream lines for easier debugging; use `--json` to print full raw envelope objects for every command and stream frame.
-- For non-stream commands that return structured payload data (for example `getFeed` posts), `otto test` now prints compact summary lines in non-JSON mode after command status.
-- For streaming commands, `otto test --timeout` bounds only the initial `command.test` response window; once stream listeners are active, relay does not enforce a stream duration timeout.
-- Long-running controller sessions should send heartbeat `ping` frames and expect relay `pong` responses.
-8. Enforce `metadata.preloadHost` before any call into `execute`.
-9. Return normalized command result object.
+| Reddit command | Key behavior |
+| --- | --- |
+| `getFeed` | Hydrates post permalinks via `.json`, supports optional `minReturnedPosts`, returns shared `content.post` trees |
+| `getUserInfo` | Looks up by username/id or defaults to current session, returns shared `entity.user` profile |
+| `sendChatMessage` | Supports `roomId` direct send or username-based room create + send; test hook covers end-to-end flow |
+| `getChatMessages` | Reads Matrix history/sync and can emit stream manifest with `network.http_intercept` + adapter hint |
 
-Preload host notes:
+## Command Test and Stream Lifecycle
 
-- Matching is host-based using runtime site match semantics.
-- Runtime auto-navigates to `preloadHost` before `execute` when needed.
-- After preload host commit, runtime performs a bounded page-readiness probe (`document.readyState === complete`) before command `execute` starts.
-- If navigation finishes on a different host, runtime returns `preload_host_mismatch`.
+`otto test` invokes `command.test` first. If a command does not export a `test` hook, runtime falls back to `execute`. For stream-capable commands, `test` can return `stream.listeners`; CLI then subscribes and keeps the session open until interrupted. `--timeout` applies only to the initial `command.test` response window, not to active stream follow duration.
+
+Non-JSON output remains human-oriented, including compact summary lines for structured command payloads, while `--json` preserves full envelope objects. Long-lived streams should keep heartbeat traffic active (`ping`/`pong`) and teardown should target the original `command.test` request via `command_cancel` so relay can terminalize stream sessions deterministically.
+
+Preload host gates are host-based and enforced before execute logic. If runtime auto-navigation lands on a mismatched host, the command fails with `preload_host_mismatch`.
 
 ## Command Network Interception API
 
@@ -230,43 +168,18 @@ await stream.stop();
 return { capturedCount: captured.length, captured };
 ```
 
-Update types emitted by runtime interception manager:
+Update types emitted by runtime interception manager are `network.response`, `network.error`, and `network.detached`.
 
-- `network.response`
-- `network.error`
-- `network.detached`
+`mode=hybrid` may observe both CDP surfaces for the same response. Runtime suppression emits at most one equivalent response update per subscription within a bounded window, and command adapters should still apply object-level dedupe against replayed source semantics.
 
-Hybrid interception semantics:
-
-- `mode=hybrid` may observe both CDP surfaces for the same response.
-- Runtime suppression emits at most one equivalent response update per subscription in a short bounded window.
-- Command adapters should still defend against replayed source payload semantics with object-level dedupe.
-
-Operational limits and caveats:
-
-- `mode=network` is passive and may miss bodies for redirects/cache/evicted buffers.
-- `mode=fetch` and `mode=hybrid` may add latency because requests are paused at response stage.
-- Body payloads are capped (`maxBodyBytes`) and may be flagged as truncated.
-- Sensitive headers are redacted when `includeHeaders=true`.
-- Binary bodies may be base64-encoded in emitted data.
+Operationally, `mode=network` is passive and can miss bodies for redirect/cache/eviction cases, while `mode=fetch`/`hybrid` can add latency because requests are paused at response stage. Body size is capped by `maxBodyBytes`, sensitive headers are redacted when included, and binary bodies may be base64-encoded.
 
 ## Error Contract (Current)
 
-Common deterministic codes:
-
-- `unknown_site`
-- `unknown_command`
-- `site_mismatch`
-- `missing_tab_session`
-- `unknown_tab_session`
-- `manual_login_required`
-
-Reddit-specific execution errors (command-level messages/codes):
-
-- `reddit_user_not_found`
-- `reddit_user_unmessageable`
-- `reddit_rate_limited`
-- `reddit_matrix_token_missing`
+| Class | Codes |
+| --- | --- |
+| Common deterministic codes | `unknown_site`, `unknown_command`, `site_mismatch`, `missing_tab_session`, `unknown_tab_session`, `manual_login_required` |
+| Reddit-specific execution codes | `reddit_user_not_found`, `reddit_user_unmessageable`, `reddit_rate_limited`, `reddit_matrix_token_missing` |
 
 ## Authoring Guidelines
 
@@ -279,23 +192,20 @@ Reddit-specific execution errors (command-level messages/codes):
 
 Developer test flow:
 
-- Use `otto test <site> <command>` for local execution.
-- `otto test reddit.com getFeed` defaults `input.minReturnedPosts=20` when `--payload` does not provide it.
-- If `targetNodeId` is missing or stale and exactly one node is connected, CLI auto-selects that connected node.
-- If multiple nodes are connected, CLI requires explicit `--node-id`.
-- If `--tab-session` is omitted, CLI auto-opens command `preloadHost` when metadata provides it, otherwise falls back to `https://<site>`.
-- Auto-opened test tabs are closed automatically when the command completes; pass `--wait-for-interrupt` to keep the test session attached until `Ctrl+C` so you can inspect the tab before teardown.
-- Non-TTY mode emits JSON and returns non-zero exit code on terminal errors for automation.
-- Use `otto commands list [--site <site>]` to inspect available metadata exposed by the node runtime.
-- `otto test` now sends `command.test` action.
-- If a command does not define `test`, runtime automatically falls back to `execute`.
+1. Use `otto commands list [--site <site>]` to inspect command metadata and declared inputs.
+2. Run `otto test <site> <command>` for local execution.
+3. If `targetNodeId` is missing/stale and only one node is connected, CLI auto-selects it; with multiple nodes, pass `--node-id`.
+4. If `--tab-session` is omitted, CLI auto-opens `preloadHost` when present, otherwise `https://<site>`.
+5. For streaming tests, keep session open until `Ctrl+C` (or use `--wait-for-interrupt` to inspect tab state before cleanup).
+
+`otto test reddit.com getFeed` defaults `input.minReturnedPosts=20` when payload omits it. Non-TTY mode emits JSON and returns non-zero on terminal errors.
 
 Command test hook contract:
 
 - `test(ctx, input, helpers)` is optional.
-- `helpers.authMode` mirrors the command payload auth mode.
-- `helpers.execute(inputOverride?)` runs the normal command execute path with preload validation.
-- Recommended pattern: do deterministic setup/assertions in `test`, then call `helpers.execute()`.
+- `helpers.authMode` mirrors command payload auth mode.
+- `helpers.execute(inputOverride?)` runs the normal execute path with preload checks.
+- Recommended pattern is bounded setup/assertions in `test`, then `helpers.execute()`.
 
 Recommended setup prerequisites:
 
@@ -308,8 +218,4 @@ Ownership boundary reminder:
 - `otto settings` affects controller defaults only.
 - Extension runtime configuration for node connectivity is managed in extension options.
 
-Command constraints:
-
-- Bounded runtime and payload size
-- Clear warning/error return schema
-- Sensitivity tags for redaction policy
+Command constraints remain the same: bounded runtime and payloads, explicit warning/error schemas, and sensitivity-aware output suitable for redaction policy.

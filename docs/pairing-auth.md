@@ -1,43 +1,26 @@
 # Pairing and Auth
 
-Last Updated: 2026-04-10
+Last Updated: 2026-04-14
 Owner: Security
 
 ## Source-of-Truth Code Paths
 
-- Pairing and token endpoints: `packages/relay/src/index.ts`
-- CLI auth and pair commands: `packages/cli/src/index.ts`
-- Extension pairing polling and token hydration: `extension/src/runtime/background-bootstrap.ts`
+| Concern | Source |
+| --- | --- |
+| Pairing, token, refresh, revoke endpoints | `packages/relay/src/index.ts` |
+| CLI auth, pair, revoke, and controller client commands | `packages/cli/src/index.ts` |
+| Extension pairing poll and token hydration | `extension/src/runtime/background-bootstrap.ts` |
 
 ## Pairing Flow
 
-1. Node requests pairing challenge:
+Pairing exists to establish a trusted node-controller relationship without sharing raw credentials between roles. The node requests a challenge, relay issues a short approval code, controller approves that code, and node polls challenge state until approved token material is available.
 
-- `POST /api/pairing/request`
-- Payload: `{ nodeId }`
-
-2. Relay issues challenge:
-
-- `challengeId`
-- short `code` (for CLI approval)
-- `expiresAt`
-
-3. Controller inspects pending challenges:
-
-- `GET /api/pairing/pending`
-
-4. Controller approves challenge:
-
-- `POST /api/pairing/approve`
-- Payload: `{ code }`
-
-5. Relay returns controller token pair immediately and stores node token pair inside challenge status.
-
-6. Node polls challenge state:
-
-- `GET /api/pairing/status?challengeId=...`
-
-When approved, node stores `nodeAccessToken` and `nodeRefreshToken`.
+| Step | Endpoint | Notes |
+| --- | --- | --- |
+| Node requests challenge | `POST /api/pairing/request` | Payload: `{ nodeId }` |
+| Controller inspects pending | `GET /api/pairing/pending` | Optional visibility step |
+| Controller approves code | `POST /api/pairing/approve` | Payload: `{ code }` |
+| Node checks status | `GET /api/pairing/status?challengeId=...` | On approval, node stores `nodeAccessToken` and `nodeRefreshToken` |
 
 CLI workflow:
 
@@ -54,22 +37,13 @@ Setup workflow integration:
 
 ## Independent Controller Client Flow
 
-Controller clients can register independently of node pairing and this is the recommended path for persistent controller identities.
+Controller clients can register independently of pairing, and this is the recommended model for long-lived controller identities.
 
-1. Register controller client identity:
-
-- `POST /api/controller/register`
-- Payload: `{ name: string, description: string, avatarSeed?: string }`
-- Response includes one-time `clientSecret`, stable `clientId`, and normalized metadata fields.
-- Registration rejects normalized name collisions with `controller_name_conflict`.
-
-2. Exchange client credentials for controller token pair:
-
-- `POST /api/controller/token`
-- Payload: `{ clientId, clientSecret }`
-- Response: `{ accessToken, refreshToken, scopes, controllerId, clientId }`
-- Client secret is only used for this credential exchange and is not sent with runtime command frames.
-- Runtime command authorization uses bearer access tokens, token scopes, and node-owned ACL grants.
+| Phase | Endpoint | Notes |
+| --- | --- | --- |
+| Register controller client | `POST /api/controller/register` | Returns one-time `clientSecret` and stable `clientId`; rejects normalized name collisions with `controller_name_conflict` |
+| Exchange credentials | `POST /api/controller/token` | Payload: `{ clientId, clientSecret }`; returns access/refresh tokens and scopes |
+| Grant node access | `POST /api/controller/access` | Node bearer token required; grants are node-owned ACL decisions |
 
 CLI onboarding commands for this flow:
 
@@ -93,11 +67,6 @@ Secret handling behavior:
 - Environment variable fallback: `OTTO_CONTROLLER_CLIENT_SECRET`.
 - `OTTO_CONTROLLER_CLIENT_SECRET` takes precedence over keychain lookup.
 - Relay stores only salted client-secret hashes at rest (never plaintext secrets).
-
-3. Node-owned ACL grant controls target-node access:
-
-- `GET /api/controller/access` (node bearer token required)
-- `POST /api/controller/access` with `{ clientId, grant, expiresAt? }` (node bearer token required)
 
 Default behavior is least privilege: newly registered controller clients start with no node grants.
 Relay enforces ACL on every node-targeted command and returns `acl_missing_node_grant` when denied.
@@ -130,12 +99,7 @@ This keeps onboarding from becoming stuck at "waiting for challenge" after brows
 
 ## WebSocket Auth Flow
 
-After `hello`, each client sends:
-
-- `auth` with `{ accessToken }`
-
-Relay verifies token signature and claims (`iss`, `aud`, role, and optional node binding), then replies with `auth_ack`.
-`auth_ack` includes effective role and scopes for the authenticated session.
+After `hello`, each client sends `auth` with `{ accessToken }`. Relay verifies signature and claims (`iss`, `aud`, role, and optional node binding), then responds with `auth_ack` containing effective role and scopes.
 
 Unauthenticated clients cannot send command, lock, or subscription frames.
 
@@ -146,23 +110,18 @@ Command streaming note:
 
 Scope behavior:
 
-- Controller command authorization is action-based.
-- Default scopes include primitive actions and command actions (`command.list`, `command.run`).
-- Narrow scope tokens are supported and enforced deterministically (`forbidden_action`).
+Controller command authorization is action-based. Default scopes include primitive actions and command actions (`command.list`, `command.run`), while narrow-scope tokens are supported and enforced deterministically with `forbidden_action` on violations.
 
 ## Refresh Flow
 
-- HTTP: `POST /api/auth/refresh` with `{ refreshToken }`
-- WebSocket: `refresh` frame (same token payload)
-
-Refresh returns new access token without changing current refresh token.
-HTTP refresh now also rotates refresh token and invalidates the previous token.
-Refresh sessions are persisted by relay runtime storage so valid refresh tokens survive relay process restarts.
+Refresh can be performed over HTTP (`POST /api/auth/refresh` with `{ refreshToken }`) or websocket (`refresh` frame with the same token payload). Refresh returns a new access token, and HTTP refresh also rotates refresh tokens by invalidating the prior token. Relay persists refresh sessions in runtime storage so valid sessions survive relay restarts.
 
 Default token lifetimes:
 
-- Access token: `15m` (configurable via `OTTO_TOKEN_TTL_MINUTES`)
-- Refresh token: `30d` (configurable via `OTTO_REFRESH_TTL_DAYS`)
+| Token | Default lifetime | Config |
+| --- | --- | --- |
+| Access token | `15m` | `OTTO_TOKEN_TTL_MINUTES` |
+| Refresh token | `30d` | `OTTO_REFRESH_TTL_DAYS` |
 
 Common usage:
 
@@ -171,28 +130,17 @@ Common usage:
 
 ## Revoke Flow
 
-- HTTP: `POST /api/auth/revoke` with `{ refreshToken }`
-- Response: `{ revoked: boolean }`
-
-When revoked, the refresh token cannot mint new access tokens.
-CLI support: run `otto revoke` to revoke the stored refresh token and clear local controller credentials.
+Revoke uses `POST /api/auth/revoke` with `{ refreshToken }` and returns `{ revoked: boolean }`. After revocation, that refresh token can no longer mint access tokens. CLI wraps this behavior via `otto revoke`, which also clears local controller credentials.
 
 ## Claims and Rotation
 
-- Access tokens include `iss`, `aud`, role, identity bindings, and action scopes.
-- Relay validates issuer and audience on every access-token verification.
-- Secret rotation supports a dual-key verification window using `OTTO_TOKEN_SECRET` and optional `OTTO_TOKEN_PREVIOUS_SECRET`.
-- Pairing approval returns controller scopes, and those scopes are enforced on command actions.
+Access tokens include issuer, audience, role, identity bindings, and action scopes. Relay validates issuer and audience on every access-token verification. Secret rotation supports dual-key verification using `OTTO_TOKEN_SECRET` and optional `OTTO_TOKEN_PREVIOUS_SECRET`, allowing controlled key rollover without immediate session invalidation.
 
 ## Security Notes
 
-- Access tokens are short-lived (15m).
-- Refresh tokens are longer-lived (30d default).
-- Token claims enforce role and node/controller scope.
-- Extension-origin checks apply to browser-originated node WebSocket upgrades.
+Access tokens are intentionally short-lived and refresh tokens are longer-lived. Claims enforce role and scope boundaries, and extension-origin checks apply to browser-originated node websocket upgrades.
 
 Command auth note:
 
-- Command-level website login state is separate from relay token authentication.
-- Relay auth controls API access; command `requiresAuth` controls website session prerequisites.
+Command-level website login state is separate from relay token authentication: relay auth controls API access, while command `requiresAuth` controls website session prerequisites.
 

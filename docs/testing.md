@@ -3,193 +3,92 @@
 Last Updated: 2026-04-14
 Owner: Platform
 
+This page describes how Otto validates behavior across relay, extension, and CLI surfaces. It is organized by test intent rather than package internals, so you can quickly choose the right level of verification before or after a change.
+
 ## Source-of-Truth Code Paths
 
-- Relay integration suite: `packages/relay/test/integration.test.mjs`
-- Extension runtime tests: `extension/test/*.test.ts`
-- CLI setup/settings unit suite: `packages/cli/test/setup-settings.test.ts`
-- Manual E2E harness: `packages/relay/scripts/manual-e2e.mjs`
-
-## Baseline Checks
-
-- `npm run check` for workspace type checks
-- Contract validation in shared protocol package
-- Relay integration tests for pairing, logs endpoints, and WebSocket auth paths
-- Relay logs filter tests for `source` and `latest` query handling, including invalid query rejection
-- Relay log stream tests for source-filtered `logs_subscribe` behavior
-- Relay listener lifecycle tests for subscribe activation, async `listener_update` routing, unsubscribe teardown, and post-unsubscribe rejection
-- Relay extension-log ingestion tests for authenticated node `extension_log` event handling
-- Relay security tests for scope enforcement, token revocation, JWT key-rotation fallback, and replay defense
-- Relay auth edge tests for malformed/expired access token rejection and first-wins pairing approval conflict handling
-- Relay abuse-path tests for malformed command rejection and per-session rate-limit enforcement
-- Relay node stream rate-limit routing tests to ensure `listener_update` bypasses session limiter while `extension_log` remains limited
-- Relay WebSocket upgrade tests for node-origin allow-list accept/reject behavior
-- Relay lock lifecycle tests for acquire/conflict/renew/release events and lease-expiry observability
-- Relay terminality tests for accepted command outcomes: completed, failed, timed_out, cancelled, and node_disconnected
-- Relay queue contention tests for `wait_with_timeout` terminal queue timeout behavior
-- Relay concurrency fairness tests for per-tab FIFO ordering with cross-tab parallel routing under multi-controller load
-- Relay sustained mixed-load fairness tests for FIFO preservation across controllers targeting the same tab while other tabs continue routing
-- Relay queue limit tests for per-tab queue depth rejection and per-controller queued-depth rejection across tabs
-- Relay burst fairness tests to verify same-tab queued command drain order remains FIFO across controllers under sustained load
-- Relay command-action scope tests (`command.run` allow and `command.list` deny under scoped tokens)
-- Relay command-action scope tests (`command.run` allow and `command.test`/`command.list` deny under scoped tokens)
-- Relay command queue invariants tests for same-tab FIFO under `command.run`
-- Extension runtime tests for reconnect backoff, outbound replay queue bounds, and bootstrap keep-warm recovery flow
-- Extension offscreen transport tests for bounded extension debug-log outbound queue behavior and backpressure-aware flush pacing
-- Extension local-dev log queue tests for bounded pre-connect buffering and timestamp normalization
-- Extension pairing-state tests for challenge issuance and approved-token hydration paths
-- Extension command replay tests for idempotency-key dedupe and stale replay pruning
-- Extension restart reconciliation tests for stale tab-session pruning and automation tab-group rebuild after worker restart
-- Extension keep-warm pairing recovery tests for expired challenge cleanup and next-cycle challenge reissuance
-- Extension primitive execution tests for deterministic unknown/closed tabSessionId error mapping and stale tabSessionId mapping cleanup
-- Extension command tests for site mismatch, auth preflight redirect, authenticated execution, legacy alias routing, metadata input validation, preload-host checks, and `command.test` fallback/hook execution
-- Extension command-runtime tests for `executeScriptWithDomHelpers` bootstrap behavior and deterministic command script result handling in mocks
-- Extension listener validation tests for `network.http_intercept` option normalization and deterministic validation errors
-- Extension network interception manager tests for `Network.loadingFinished` body capture and `Fetch.continueRequest` safety guarantees
-- Extension network interception manager tests for hybrid cross-source duplicate suppression (`Network`/`Fetch` equivalent response emissions)
-- Extension network interception manager tests for command-local callback buffering without relay emission
-- Extension Reddit command tests for `getUserInfo`, `sendChatMessage`, and `getChatMessages` payload normalization
-- Extension Reddit stream adapter tests for raw-event dedupe and semantic-domain dedupe across replayed sync payloads
-- Extension Reddit auth regression tests for API-backed `checkLogin` behavior
-- Extension Reddit chat listener tests for interception `data:` payload parsing, error-threshold fallback to polling, and interception-unavailable polling fallback
-- CLI setup command checks for release download/extract/checksum verification path
-- CLI settings TUI checks for validated config edits and save/exit controls
-- CLI logs options tests for `--source`, `--latest`, and debug-level parsing/validation
-- CLI listener command checks for network listener subscribe stream output and unsubscribe by `targetRequestId`
-- CLI client secret store tests for relay-host account namespacing, env-var precedence, and keychain-unavailable fallback errors
+| Area | Source |
+| --- | --- |
+| Relay integration suite | `packages/relay/test/integration.test.mjs` |
+| Extension runtime tests | `extension/test/*.test.ts` |
+| CLI setup/settings and command UX tests | `packages/cli/test/*.test.ts` |
+| Manual E2E harness | `packages/relay/scripts/manual-e2e.mjs` |
 
 ## Required Validation Order
 
-Run in this order after any code change:
+Run these commands in order after any code change:
 
 1. `npm run check`
 2. `npm run lint`
 3. `npm run build`
 4. `npm run -ws --if-present test`
 
+This ordering keeps failures high-signal. Type and lint failures are usually cheaper to fix than downstream integration failures.
+
+## Coverage Matrix
+
+| Layer | What must hold true |
+| --- | --- |
+| Protocol and contracts | Shared types compile and action payloads remain contract-compatible |
+| Relay auth and routing | Pairing, token auth, scope enforcement, nonce replay defense, and deterministic command routing all pass |
+| Relay execution semantics | Terminal outcomes, queueing (`FIFO` per tab), cross-tab parallelism, and lock lifecycle invariants remain deterministic |
+| Relay observability | Log filtering/export/follow behavior, listener subscribe/unsubscribe lifecycle, and node listener update routing are preserved |
+| Extension runtime resilience | Offscreen reconnect, keep-warm/bootstrap reconciliation, replay dedupe, and tab-session recovery remain stable |
+| Extension command runtime | Site validation, auth preflight, metadata validation, preload host gating, execute/test fallback, and command error determinism are preserved |
+| Listener/interception runtime | Option validation, body capture behavior, fetch/hybrid semantics, duplicate suppression, and detach safety remain correct |
+| CLI UX and automation mode | `otto test`, setup/settings behavior, TTY/non-TTY output contracts, and transport interruption surfaces remain predictable |
+
 ## Acceptance Gates
 
-- Terminal command outcomes are always emitted
-- Lock conflicts are deterministic
-- Restart reconciliation for automation group and tabSessionId mappings works
+A change is not complete unless command outcomes still terminalize as `completed`, `failed`, `timed_out`, or `cancelled`; lock and queue behavior remain deterministic under contention; and runtime restart reconciliation still repairs stale tab/group state safely.
+
+## Command Developer Runbook
+
+Use this sequence when adding or modifying a site command:
+
+1. Discover command metadata with `otto commands list [--site <site>]`.
+2. Run `otto test <site> <command>` with the smallest meaningful payload.
+3. If you get `manual_login_required`, authenticate in the opened tab and rerun.
+4. If validation errors occur (`missing_command_input`, `missing_command_input_one_of`, `invalid_command_input_type`, `unexpected_command_input`), align payload with metadata and rerun.
+5. For stream-capable commands, validate follow behavior and teardown (`Ctrl+C` -> deterministic cancel/cleanup).
+
+### Execution behavior reminders
+
+`otto test` sends `command.test` and falls back to `execute` if no command test hook exists. If `targetNodeId` is missing or stale and exactly one node is connected, CLI auto-selects that node; with multiple nodes, pass `--node-id`. If `--tab-session` is omitted, CLI auto-opens `preloadHost` when available, otherwise `https://<site>`, and auto-closes that tab after completion unless `--wait-for-interrupt` is used.
+
+## TTY vs Non-TTY Contracts
+
+| Surface | TTY behavior | Non-TTY behavior |
+| --- | --- | --- |
+| `otto test` success/failure | Human-readable status lines and footer alerts | JSON envelopes and non-zero exit on terminal failure |
+| Streaming commands | Live follow until interrupt | Machine-readable stream frames until caller timeout/stop |
+| Setup output | Human onboarding guidance and Chrome handoff text | Deterministic JSON only |
+
+If the controller websocket closes before a command response arrives, CLI should emit transport interruption guidance and exit non-zero without raw stack-noise output.
 
 ## Manual E2E Harness
 
-- Run `npm run e2e:manual` after Relay and Extension Node are connected.
-- Optional env:
-- `OTTO_RELAY_HTTP_URL` default `http://127.0.0.1:8787`
-- `OTTO_RELAY_WS_URL` default `ws://127.0.0.1:8787/?role=controller`
-- `OTTO_NODE_ID` default `node_manual_e2e`
-- `OTTO_E2E_OPEN_URL` default `https://www.reddit.com/`
-- `OTTO_E2E_EXTRACT_SELECTOR` default `title`
-- `OTTO_E2E_COMMAND_TIMEOUT_MS` default `10000`
-- `OTTO_E2E_RUN_COMMAND=1` includes `command.run`
-- `OTTO_E2E_COMMAND_SITE` default `reddit.com`
-- `OTTO_E2E_COMMAND_ID` default `getFeed`
-- `OTTO_CONTROLLER_ACCESS_TOKEN` skips automatic pairing approval
+Run `npm run e2e:manual` after relay and extension node are connected.
 
-## Command Developer Testing
+| Environment variable | Default | Purpose |
+| --- | --- | --- |
+| `OTTO_RELAY_HTTP_URL` | `http://127.0.0.1:8787` | Relay HTTP endpoint |
+| `OTTO_RELAY_WS_URL` | `ws://127.0.0.1:8787/?role=controller` | Relay controller websocket endpoint |
+| `OTTO_NODE_ID` | `node_manual_e2e` | Target node identity |
+| `OTTO_E2E_OPEN_URL` | `https://www.reddit.com/` | Initial open URL |
+| `OTTO_E2E_EXTRACT_SELECTOR` | `title` | DOM extract selector |
+| `OTTO_E2E_COMMAND_TIMEOUT_MS` | `10000` | Command timeout budget |
+| `OTTO_E2E_RUN_COMMAND` | unset (`0`) | Set to `1` to include `command.run` |
+| `OTTO_E2E_COMMAND_SITE` | `reddit.com` | Site for manual command run |
+| `OTTO_E2E_COMMAND_ID` | `getFeed` | Command id for manual command run |
+| `OTTO_CONTROLLER_ACCESS_TOKEN` | unset | Skip automatic pairing approval when provided |
 
-- Local command execution command: `otto test <site> <command>`
-- Example: `otto test reddit.com getFeed`
-- Example: `otto test reddit.com getUserInfo --payload '{"username":"spez"}'`
-- Example: `otto test reddit.com sendChatMessage --payload '{"username":"example_user","message":"hello"}'`
-- Example: `otto test reddit.com sendChatMessage --payload '{"roomId":"room_123","message":"hello"}'`
-- Example: `otto test reddit.com getChatMessages --payload '{"roomId":"!abc123:reddit.com","limit":50}'`
-- Example: `otto test reddit.com getChatMessages --payload '{"limit":50}'`
-- Discovery command: `otto commands list` (optionally `--site reddit.com`)
-- Target node resolution defaults to the single connected node when `targetNodeId` is missing or stale.
-- If multiple nodes are connected, pass `--node-id <id>` explicitly.
-- Defaults:
-- Auto-opens command `preloadHost` when available from `command.list` metadata, otherwise falls back to `https://<site>` if `--tab-session` is omitted
-- Auto-opened tabs are closed automatically after command completion (pass `--wait-for-interrupt` to keep the terminal session alive until `Ctrl+C` and inspect before teardown)
-- Uses `command.test` action with `authMode=auto`
-- Automatically falls back to command `execute` when a command does not define a `test` hook
-- `otto test` prefers a single controller websocket for open/test/subscribe/follow; if that socket closes before cleanup close, CLI reconnects and still attempts `primitive.tab.close` for auto-opened tabs.
-- For streaming commands, `--timeout` applies to initial `command.test` response only; active listener follow remains open until explicit stop.
-- Commands returning `stream.listeners` from `command.test` keep `otto test` active and stream listener updates until `Ctrl+C` on that same controller connection
-- Non-stream commands that return rich payloads (for example `reddit.com/getFeed`) should emit human-readable summary lines in non-JSON mode (for example `posts=<n>` and per-post lines) in addition to the terminal command status line.
-- For `reddit.com/getChatMessages`, stream updates should use shared domain `kind` values (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) rather than legacy reddit-specific update names
-- Streaming test mode sends `command_cancel` targeting the original `command.test` request on `Ctrl+C`; relay owns stream teardown and terminal outcome emission
-- `Ctrl+C`/`SIGTERM` during open/test/probe/follow triggers a shared teardown path: cancel active `command.test` stream, unsubscribe listener fallback, then close auto-opened tab.
-- Long-running `otto test` streams send periodic controller heartbeat pings; custom controllers should do the same.
-- Non-TTY output is JSON and exits non-zero on terminal command error
-- In TTY mode, `otto test` terminal errors also print a final high-visibility alert footer after the JSON/error hints (including operation errors such as `primitive.tab.open`/`primitive.tab.close`).
-- If the controller websocket closes before a command response envelope arrives, `otto test` now emits a high-visibility transport interruption footer alert and exits non-zero without throwing a raw stack-style error line.
+## Setup and Settings Validation Focus
 
-`otto test` controller identity and cleanup behavior:
+`otto setup` must stay deterministic in both interactive and non-interactive environments, including daemon readiness reporting and extension artifact checksum handling. Re-running setup on an already matching daemon should report reuse rather than spawning duplicates, and daemon port conflicts must fail with explicit remediation instructions.
 
-- If no local controller identity/token is available, `otto test` performs self-registration automatically.
-- Default self-registration metadata is non-interactive: `name=otto-tester`, `description=Auto-registered controller for otto test flows.`
-- Self-registered test controller is retained by default when test run exits so it can be approved once and reused.
-- Pass `--cleanup-test-controller` to remove the auto-registered controller at the end of that test run.
-- When retained, node ACL grants still require explicit popup approval before node-targeted actions can route.
-
-TTY failure-surface behavior:
-
-- `otto test` emits consistent footer alerts for terminal failures across all major stages:
-- auto-open stage (`primitive.tab.open`)
-- command execution stage (`command.test`)
-- auto-close cleanup stage (`primitive.tab.close`)
-- ACL denials (`acl_missing_node_grant`) include both structured JSON payload data and a footer alert in TTY mode.
-
-Command test hook guidance:
-
-- For complex commands, define optional `test(ctx, input, helpers)` to perform deterministic setup/assertion steps and then call `helpers.execute()`.
-- For simple commands, skip test hook and rely on automatic execute fallback.
-- Keep setup bounded and deterministic; avoid unbounded polling loops.
-- Prefer asserting preconditions in test hook and keep business extraction logic in execute.
-- For side-effecting commands (for example chat send), keep automated unit/integration tests fully mocked and side-effect free.
-- Reserve live-send verification for explicit manual runs (for example `otto test reddit.com sendChatMessage --payload '{"roomId":"room_123","message":"hello"}'`).
-- For streaming commands, return `stream.listeners` from `test` with listener name and options.
-
-Shadow DOM helper test guidance:
-
-- Commands that rely on nested Shadow DOM selectors should use `ctx.executeScriptWithDomHelpers(...)` instead of duplicating local deep-query helpers.
-- In extension command-runtime unit tests, mock `chrome.scripting.executeScript` should treat helper bootstrap (`installPageDomQueryHelpers`) as a non-consuming injection step so scripted result queues stay deterministic.
-- For Reddit chat room-id send tests, assert direct navigation uses `https://reddit.com/chat/room/<roomId>`.
-
-Input metadata guidance:
-
-- Use `inputFields` for per-field type/required contracts.
-- Use `inputAtLeastOneOf` for conditional contracts like "username or roomId".
-
-Suggested local sequence:
-
-1. `otto commands list`
-2. `otto test <site> <command>`
-3. If `manual_login_required`, authenticate in the opened browser tab.
-4. If validation fails (`unexpected_command_input`, `missing_command_input`, `missing_command_input_one_of`, or `invalid_command_input_type`), correct payload using `command.list` metadata and rerun.
-5. Rerun `otto test <site> <command>` and verify result payload.
+`otto settings` must preserve keyboard consistency (`up/down`, `Enter`, `s`, `q`, `Esc`) and persist validated controller-global values to `~/.otto/config.json`.
 
 ## CI and Agent Automation Notes
 
-- Prefer non-TTY mode for deterministic JSON output and exit codes.
-- Parse command `requestId` and correlate with relay logs when diagnosing failures.
-- Keep command test payloads small and stable to reduce flaky selector behavior.
-- For logs automation patterns (bounded historical pulls, TTY-sensitive follow behavior, and JSON streaming guidance), use `docs/logging-debugging.md` -> Agent Automation Patterns.
-
-## Setup Command Validation
-
-- `otto setup --non-interactive` should emit deterministic JSON and exit non-zero on download/checksum failures.
-- `otto setup --non-interactive` JSON output should include relay daemon readiness state (`started` or `already_running`).
-- `otto setup --non-interactive` JSON output should include relay daemon state fields (`pid`, `port`, `logPath`, `startedAt`).
-- `otto setup` (TTY) should print human guidance and Chrome handoff steps unless `--non-interactive` is explicitly set.
-- `otto setup` (TTY) should print Chrome install handoff steps unless explicitly run with `--non-interactive`.
-- `otto setup` (TTY) should still provide human guidance even if controller config defaults include `setupNonInteractiveDefault=true` or `outputFormat=json`.
-- Successful setup must print a `chrome://extensions` load-unpacked handoff path containing `manifest.json`.
-- Successful setup must ensure relay daemon readiness on the setup relay URL port.
-- If a daemon is already running on a different port than setup relay URL, setup should fail with explicit remediation instructions.
-- Re-running setup against the same relay URL should report `already_running` daemon readiness instead of starting a second daemon.
-- Re-running setup should reuse cached extension artifact unless `--force` is set.
-- `otto setup --strategy auto` should prefer local build in a full repo checkout and otherwise use release download.
-- `otto config --relay-url` and `otto setup` should normalize relay role to `controller`.
-- `otto extension get --strategy build` should fail clearly when `--repo-path` is missing or invalid.
-- Checksum parser should accept both common `.sha256` formats used by release tooling.
-
-## Settings Command Validation
-
-- `otto settings` supports up/down navigation and exits with `q` or `Esc`.
-- Enter edits/toggles selected value and validates before save.
-- `s` writes updated controller-global settings to `~/.otto/config.json`.
-- While editing, `Esc` cancels the active edit and returns to list navigation.
+For autonomous workflows, prefer non-TTY JSON output, keep payloads bounded, and correlate failures by `requestId` before widening scope. When debugging requires logs, use bounded pulls first and switch to live follow only when you need temporal sequencing.

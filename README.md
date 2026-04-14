@@ -307,7 +307,7 @@ npm run -ws --if-present test
 
 ## Docs Site
 
-Otto docs site uses Docusaurus in `website/` with sectioned content under `website/docs/`.
+Otto docs site uses Docusaurus in `website/` and reads canonical content from `docs/` at repository root.
 
 Run locally:
 

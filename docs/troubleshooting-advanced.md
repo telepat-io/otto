@@ -7,18 +7,17 @@ Use this guide for deep debugging across controller, relay, and extension node w
 
 ## Core Workflow
 
-1. Reproduce with a fresh request.
-2. Follow logs with all sources.
-3. Correlate by `requestId`.
-4. Narrow to auth, routing, execution, listener, or cleanup layer.
+Start by reproducing with a fresh request, then collect logs with broad source coverage. Use one `requestId` as the primary correlation key, and only then narrow diagnosis to auth, routing, execution, listener lifecycle, or cleanup behavior.
 
 ## Useful Commands
 
-- `otto logs follow --source all`
-- `otto logs follow --source node`
-- `otto logs list --source node --latest 300`
-- `otto commands list`
-- `otto test <site> <command> --json`
+| Goal | Command |
+| --- | --- |
+| Follow all sources live | `otto logs follow --source all` |
+| Focus extension-side runtime | `otto logs follow --source node` |
+| Pull bounded node evidence | `otto logs list --source node --latest 300` |
+| Verify command visibility | `otto commands list` |
+| Reproduce with machine-readable output | `otto test <site> <command> --json` |
 
 ## Error-to-Action Table
 
@@ -32,10 +31,7 @@ Use this guide for deep debugging across controller, relay, and extension node w
 
 ## Stream Diagnostics
 
-- Verify `command.test` returned `stream.listeners`.
-- Verify subscribe success and async updates.
-- Verify listener_update events correlate to subscribe request id.
-- Verify teardown by unsubscribe or command cancel.
+For stream failures, first confirm `command.test` returned `stream.listeners`, then verify subscribe command terminal success before chasing async updates. Listener updates should correlate to the subscribe request id (not the original command request id), and teardown should be explicit through unsubscribe or command cancel.
 
 ## Related Docs
 

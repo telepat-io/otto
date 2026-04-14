@@ -1,246 +1,120 @@
 # Protocol
 
-Last Updated: 2026-04-10
+Last Updated: 2026-04-14  
 Owner: Platform
 
-Current shared protocol types live in `packages/shared-protocol/src/index.ts`.
+Use this document when you need wire-level behavior and command-routing guarantees. If you are implementing product workflows, start with the architecture and runtime guides first, then use this page as the strict contract reference.
+
+Current protocol types are defined in `packages/shared-protocol/src/index.ts`.
 
 ## Source-of-Truth Code Paths
 
-- Protocol contracts: `packages/shared-protocol/src/index.ts`
-- Relay protocol handling: `packages/relay/src/index.ts`
-- CLI command envelope emission: `packages/cli/src/index.ts`
+| Concern | Source |
+| --- | --- |
+| Shared envelope and payload contracts | `packages/shared-protocol/src/index.ts` |
+| Relay protocol handling and routing | `packages/relay/src/index.ts` |
+| Controller envelope emission | `packages/cli/src/index.ts` |
 
-## Envelope
+## Envelope Contract
 
-All WebSocket frames use a shared envelope:
+Every websocket frame uses one envelope shape, so cross-component correlation stays stable even when payload families differ.
 
-- `protocolVersion`
-- `messageType`
-- `requestId`
-- `timestamp`
-- `senderRole`
-- `payload`
+| Field | Notes |
+| --- | --- |
+| `protocolVersion` | Currently `1.0` |
+| `messageType` | Frame family (`hello`, `auth`, `command`, `result`, `event`, etc.) |
+| `requestId` | Primary correlation key across controller, relay, and node |
+| `timestamp` | ISO-8601, enforced against replay skew windows |
+| `senderRole` | `controller`, `relay`, or `node` |
+| `payload` | Message-specific object |
 
-Envelope requirements:
+## Message Families
 
-- `protocolVersion` is currently `1.0`.
-- `timestamp` must be valid ISO-8601 and inside replay acceptance window.
-- `requestId` is the cross-component correlation key.
+The protocol is intentionally small: a handshake lane, an auth lane, a command lane, and an operations lane.
 
-## Core Message Families
+| Family | Purpose |
+| --- | --- |
+| `hello` / `hello_ack` | Role and capability negotiation |
+| `auth` / `auth_ack` | Access-token authentication |
+| `refresh` / `refresh_ack` | Access-token renewal |
+| `command` | Controller-issued actions |
+| `result` / `error` | Terminal outcomes |
+| `event` | Progress and listener updates |
+| `ping` / `pong` | Session liveness |
+| `tab_lock` / `tab_unlock` | Lock lifecycle signals |
+| `command_cancel` | Explicit stream/command cancellation |
 
-- `hello` / `hello_ack` for role+capability negotiation.
-- `auth` / `auth_ack` for token authentication.
-- `command` for controller-issued browser actions.
-- `result` / `error` for terminal outcomes.
-- `event` for progress and operational events.
-- `ping` / `pong` for liveness.
-- `refresh` / `refresh_ack` for access token renewal.
-- `tab_lock` / `tab_unlock` for lock lifecycle.
-- `command_cancel` reserved for cancellation pipeline.
+## Listener Lifecycle
 
-## Listener Commands
+Listeners are terminal commands at subscribe/unsubscribe time, followed by asynchronous event updates. In other words, `listener.subscribe` and `listener.unsubscribe` each return normal terminal outcomes, while streaming data is delivered later as `event` frames tied to the original subscribe `requestId`.
 
-Listener lifecycle uses normal command frames with action values:
+| Action | Required Payload | Terminal Behavior |
+| --- | --- | --- |
+| `listener.subscribe` | `listener`, optional `options` | Immediate `result` or `error` |
+| `listener.unsubscribe` | `targetRequestId` | Immediate `result` or `error` |
 
-- `listener.subscribe`
-- `listener.unsubscribe`
+After successful unsubscribe, further updates for that subscribe request are rejected.
 
-Listener semantics:
+### `network.http_intercept` options
 
-- Subscribe is terminal immediately: node responds with normal `result` or `error`.
-- Relay preserves normal command outcomes for subscribe/unsubscribe (`completed`, `failed`, `timed_out`, `cancelled`).
-- Active listener updates are emitted later as `event` frames using the original subscribe `requestId`.
-- Unsubscribe is terminal immediately and targets a prior subscribe via `payload.targetRequestId`.
-- After successful unsubscribe, further updates on the original subscribe `requestId` are rejected.
+| Option | Required | Notes |
+| --- | --- | --- |
+| `tabSessionId` | Yes | Must resolve to an active managed session |
+| `site` | Yes | Normalized to lowercase and validated against tab URL |
+| `urlPatterns` | No | Glob filters |
+| `requestHostAllowlist` | No | Explicit cross-host allowlist |
+| `mode` | No | `network`, `fetch`, or `hybrid` (default `network`) |
+| `includeBody` | No | Default `true` |
+| `includeHeaders` | No | Default `false`, sensitive headers redacted |
+| `maxBodyBytes` | No | Default `256000`, positive numeric only |
+| `mimeTypes` | No | MIME prefix allowlist |
+| `streamAdapter` | No | Command-owned adapter hint |
+| `selfUserId` | No | Command-owned context value |
 
-Listener command payload expectations:
+Runtime normalizes and validates options before listener activation. Arrays are trimmed and deduplicated, booleans remain strict booleans, and unsupported mode values are rejected deterministically.
 
-- `listener.subscribe`: payload includes `listener` (string) and optional `options` object.
-- `listener.unsubscribe`: payload includes `targetRequestId` (string).
+### Listener update shape
 
-Implemented listener source notes:
+Listener updates are emitted as `messageType=event` frames with `payload.type=listener_update` and `requestId` equal to the original subscribe request. `payload.data` can carry either raw transport payloads or command-owned shared domain objects.
 
-- `listener.subscribe` with `listener=network.http_intercept` starts response interception on a managed tab session via `chrome.debugger` CDP domains.
-- Supported `options` keys for this source:
-- `tabSessionId` (required)
-- `site` (required)
-- `urlPatterns` (optional glob list)
-- `requestHostAllowlist` (optional explicit cross-host hostname allowlist)
-- `mode` (`network`, `fetch`, or `hybrid`; default `network`)
-- `includeBody` (default `true`)
-- `includeHeaders` (default `false`, sensitive headers are redacted)
-- `maxBodyBytes` (default `256000`)
-- `mimeTypes` (optional MIME prefix allowlist)
-- `streamAdapter` (optional command-owned adapter hint string)
-- `selfUserId` (optional command-owned adapter context string)
+Common shared object discriminators currently include `chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`, `content.article`, `content.post`, and `content.post_comment`. Producers should align `payload.updateType` with `payload.data.kind` and attach `originalEntity` when source data is available and safe to emit.
 
-Validation and normalization rules for `network.http_intercept` options:
+## Command Contract
 
-- `tabSessionId` and `site` are required, trimmed, and `site` is normalized to lowercase.
-- `mode` is case-insensitive after trim and must resolve to `network|fetch|hybrid`.
-- `maxBodyBytes` must be numeric and positive; accepted values are normalized to integer.
-- `includeBody` and `includeHeaders` must be booleans when provided.
-- `urlPatterns`, `mimeTypes`, and `requestHostAllowlist` must be string arrays when provided; entries are trimmed, normalized (lowercased for `mimeTypes`/`requestHostAllowlist`), deduplicated, and empty entries are dropped.
-- `streamAdapter` must be a non-empty string when provided.
-- `selfUserId` must be a string when provided; blank values are omitted from normalized options.
+Every `command` payload must identify a target node and include replay protection fields. Tab-scoped actions require `tabSessionId`, but top-level actions such as capability discovery can omit it.
 
-Network interception behavior notes:
+| Field | Required | Notes |
+| --- | --- | --- |
+| `targetNodeId` | Yes | Required by protocol invariant |
+| `tabSessionId` | Conditional | Required for tab-scoped actions |
+| `action` | Yes | Action id, including command and listener actions |
+| `payload` | Yes | Action-specific data |
+| `timeoutMs` | No | Relay timeout budget |
+| `waitPolicy` | No | `fail_fast` or `wait_with_timeout` |
+| `idempotencyKey` | No | Replay dedupe key at runtime |
+| `replayNonce` | Yes | Required for acceptance |
 
-- Runtime is scoped to command-managed tabs only; `tabSessionId` must resolve to an active session.
-- Runtime validates the tab URL against `site` before attaching debugger session state.
-- `network` mode retrieves bodies only after `Network.loadingFinished` to reduce empty-body failures.
-- `fetch` and `hybrid` modes use `Fetch.requestPaused` at response stage; paused requests are always continued by runtime.
-- `hybrid` mode now suppresses equivalent duplicate response emissions observed across `Network` and `Fetch` capture surfaces within a short bounded runtime window.
+### Command actions
 
-## Tab Ownership and Orphan Cleanup
+`command.list` advertises site command metadata, including optional `preloadHost`, `inputFields`, and `inputAtLeastOneOf`. `command.run` executes command logic, while `command.test` executes command test hooks and falls back to `execute` when no hook is declared. The legacy alias `command.reddit_feed` remains supported and maps to `command.run` (`site=reddit.com`, `command=getFeed`).
 
-- Relay injects internal ownership metadata for controller-created tabs by setting `payload.__controllerClientId` on forwarded `primitive.tab.open` command payloads.
-- This ownership metadata is relay-owned and must not be trusted when supplied directly by controller clients.
-- Node runtime persists ownership by `tabSessionId` to support deterministic orphan cleanup.
-- Relay may dispatch internal `primitive.tab.close_owned` commands to node runtimes when a controller disconnects or times out on heartbeat.
-- `primitive.tab.close_owned` payload includes `controllerClientId` and closes only tabs owned by that controller identity.
-- Body capture is best-effort and may emit `payload.data.error=response_body_unavailable` for redirects, cache hits, and evicted buffers.
-- `command.list` descriptors may include `requiresDebuggerFocus=true` for commands that explicitly opt into debugger focus emulation.
-- When an opted-in command runs, node runtime may return deterministic command errors if debugger focus emulation activation fails:
-- `debugger_focus_unavailable`
-- `debugger_focus_conflict`
-- `debugger_focus_permission_denied`
-- `debugger_focus_attach_failed`
-- `debugger_focus_command_failed`
+`command.test` may return a `stream` manifest in `result.payload.data`. Controllers should keep follow-up subscribe traffic on the same authenticated websocket, maintain heartbeat (`ping`/`pong`) for long sessions, and use `command_cancel` against the original test `requestId` when shutting down active stream tests.
 
-Listener update event shape:
+## Routing, Queueing, and Reliability
 
-- `messageType: event`
-- `requestId: <original subscribe requestId>`
-- `payload.type: listener_update`
-- `payload.data: <arbitrary JSON>`
-- `payload.updateType` optional short event name
-- `payload.emittedAt` optional ISO timestamp
+Relay routes each command to exactly one node session and tracks `requestId` ownership so results and errors always return to the originating controller.
 
-Shared domain stream payloads:
+Execution policy is deterministic: same-tab work (`targetNodeId:tabSessionId`) is FIFO, cross-tab work is parallel, and queue-depth limits are enforced per tab and per controller. Commands waiting under `wait_with_timeout` can terminate as `queue_wait_timed_out`.
 
-- `payload.data` may carry command-owned shared domain objects, not only raw listener transport payloads.
-- Current shared domain object discriminator values include:
-- `chat.message`
-- `chat.typing`
-- `chat.participant`
-- `chat.message_deleted`
-- `content.article`
-- `content.post`
-- `content.post_comment`
-- Producers should set `payload.updateType` to the same discriminator value as `payload.data.kind` when emitting shared objects.
-- Shared objects may include `originalEntity` to preserve the site-specific source entity used to produce the normalized object.
-- `originalEntity` is a first-class compatibility field and may be used for product logic, reconciliation, or downstream enrichment (not only debugging).
-- Nested shared references may also include `originalEntity` (for example `from.originalEntity`, `participant.originalEntity`, `conversation.originalEntity`).
-- When source data is available, command adapters should attach `originalEntity`; when unavailable, omit it.
-- Commands must still honor redaction and sensitivity controls; never include raw credentials, tokens, or cookie material in `originalEntity`.
-- Listener envelope and request correlation remain unchanged.
-- Producers should apply bounded duplicate suppression where source transports or payload semantics can replay equivalent events.
+Failure semantics are explicit. Timeout windows produce terminal timeout outcomes, node disconnects produce deterministic `node_disconnected`, and lock contention produces `lock_conflict`. Replay nonces and timestamp skew windows are enforced on ingress, and controller disconnect cleanup purges owned queued work and triggers owner-scoped tab cleanup.
 
-Network listener update types:
+## Tab Ownership and Cleanup
 
-- `network.response`
-- `network.error`
-- `network.detached`
+Relay injects internal tab ownership metadata when forwarding controller-created tab-open commands. Node stores ownership by `tabSessionId`, and relay may issue internal close-owned actions on controller disconnect or heartbeat timeout. This owner-scoped cleanup prevents orphaned tabs without affecting tabs owned by other controller identities.
 
-Command test streaming:
+Lock keys are `targetNodeId:tabSessionId`; only one controller can hold a lock at a time.
 
-- `command.test` can return a `stream` object in `result.payload.data`.
-- `stream.listeners` is an array of listener manifests with `listener` and optional `options`.
-- CLI treats this as command-native streaming intent and subscribes until interrupted.
-- Controller implementations should keep `command.test`, follow-up `listener.subscribe`, stream updates, and optional `command_cancel` on the same authenticated websocket session so relay stream ownership and correlation remain valid.
-- `timeoutMs` on `command.test` applies to the initial command response window only.
-- After a successful `command.test` response activates streaming listeners, stream lifetime is unbounded at relay and ends via explicit `command_cancel`, unsubscribe/teardown, or socket disconnect cleanup.
-- Controllers should send periodic heartbeat frames (`ping`) during long-lived sessions and handle relay `pong` responses.
-- Relay may proxy `listener_update` events to the original `command.test` `requestId` for active stream sessions.
-- `command_cancel` targeting the original `command.test` `requestId` terminates active stream sessions and returns a terminal `result.payload.commandOutcome` (for example `cancelled`).
-- Listener `options` may include command-owned adapter hints (for example `streamAdapter`) so node runtime can transform raw listener updates into shared domain objects before forwarding.
-
-## Command Payload
-
-`command` payload fields:
-
-- `targetNodeId` (required)
-- `tabSessionId` (optional but required for tab-scoped actions)
-- `action` (required)
-- `payload` (action-specific JSON object)
-- `timeoutMs` (optional)
-- `waitPolicy` (`fail_fast` or `wait_with_timeout`)
-- `idempotencyKey` (optional)
-- `replayNonce` (required for command acceptance)
-
-## Command Commands
-
-- `command.list` returns available command metadata advertised by the node runtime.
-- Command metadata now optionally includes:
-- `preloadHost`: required host before command execute logic runs.
-- `inputFields`: declarative input field descriptors (`name`, `type`, `description`, `optional`).
-- `inputAtLeastOneOf`: list of field names where at least one key must be present in payload input.
-- `command.run` executes a site-scoped command using payload:
-- `site`: website domain (for example `reddit.com`)
-- `command`: command id (for example `getFeed`)
-- `input`: optional JSON object passed to command execution
-- `authMode`: `auto`, `strict_fail`, or `skip`
-- `command.test` executes command test path with the same payload shape as `command.run`.
-- Shared protocol includes a generic `UserProfile` object (`kind=entity.user`) for cross-platform user lookup responses (for example Reddit, X, Facebook) with normalized identity fields, optional `stats`/`flags`, and `originalEntity` for source-specific payloads.
-- Runtime behavior for `command.test`:
-- If command defines `test` hook, runtime executes it.
-- If no `test` hook is defined, runtime falls back to `execute`.
-- Legacy `command.reddit_feed` remains as a compatibility alias mapped to `command.run` (`site=reddit.com`, `command=getFeed`).
-
-Current Reddit command ids:
-
-- `getFeed`
-- `getUserInfo`
-- `sendChatMessage`
-- `getChatMessages`
-
-Command result/error behavior:
-
-- Successful `command.run` returns normalized metadata fields (`site`, `command`) plus command output.
-- Successful `command.test` returns the same result envelope shape as `command.run`.
-- In non-JSON `otto test` mode, CLI may render human-readable summary lines derived from `result.payload.data` while preserving the raw envelope contract on the wire.
-- If tab URL is not yet committed during immediate post-open execution, runtime returns transient execution error (`tab_url_not_ready`, `retryable=true`).
-- Site mismatch after URL commit returns deterministic execution error (`site_mismatch`, `retryable=false`).
-- If a command declares `preloadHost`, runtime auto-navigates to that host before execute and returns `preload_host_mismatch` only when post-navigation host still does not match.
-- After preload host commit, runtime performs a bounded page-readiness wait (`document.readyState === complete`) before entering execute logic.
-- If a command declares `inputFields`, runtime validates required/typed input and rejects unknown keys before command logic (`missing_command_input`, `invalid_command_input_type`, `unexpected_command_input`).
-- If a command declares `inputAtLeastOneOf`, runtime rejects missing cross-field requirements before command logic (`missing_command_input_one_of`).
-- Unauthenticated website session on `requiresAuth` command returns `manual_login_required` after optional login navigation.
-
-## Routing Rules
-
-- Every command must include `targetNodeId`.
-- Every command must include `replayNonce` in payload.
-- Relay routes each command to exactly one node connection.
-- Relay tracks `requestId -> controllerId` so results/errors return to origin controller.
-
-Queueing rules:
-
-- Same tab (`targetNodeId:tabSessionId`) executes FIFO.
-- Cross-tab commands can route in parallel.
-- Queue depth limits are enforced per-tab and per-controller.
-
-## Reliability Rules
-
-- Relay emits terminal timeout if command exceeds timeout window.
-- Node disconnect during in-flight command yields synthetic `node_disconnected` failure.
-- Lock conflicts produce deterministic `lock_conflict` errors.
-- Relay rejects replayed nonces within a configurable replay window.
-- Relay rejects stale/future command timestamps outside replay skew window.
-- Commands queued with `wait_with_timeout` receive terminal `queue_wait_timed_out` when they exceed queue wait budget.
-- Relay enforces per-tab and per-controller queued-command depth limits and rejects excess queue attempts deterministically.
-- On controller disconnect or heartbeat timeout, relay purges queued commands owned by that controller and triggers owner-scoped tab cleanup on connected nodes.
-
-## Locking
-
-- Lock key is `targetNodeId:tabSessionId`.
-- Only one controller may hold lock at a time.
-- Lease expiration auto-releases lock.
-- Lock events include `lockOwnerControllerId`, `lockLeaseMs`, and `lockExpiresAt` when applicable.
-- Lock contention emits both `tab_locked` error and `lock_conflict` event for observability.
+Lease expiration auto-releases locks. Lock events may include lease metadata (`lockOwnerControllerId`, `lockLeaseMs`, `lockExpiresAt`) for observability, and contention emits both `tab_locked` error semantics and `lock_conflict` event signals.
 
 ## Versioning
 
@@ -248,9 +122,7 @@ Protocol currently uses `1.0`.
 
 Setup boundary note:
 
-- Setup and extension artifact acquisition (`otto setup`, `otto extension get`) are out-of-band from this protocol.
-- `otto setup` additionally ensures local relay daemon readiness for the selected setup relay URL port before setup completion.
-- In non-interactive mode, `otto setup` emits deterministic JSON summaries that include daemon readiness outcome and extension metadata.
+Setup and extension artifact acquisition (`otto setup`, `otto extension get`) are out-of-band from this protocol. `otto setup` additionally ensures local relay daemon readiness for the selected setup relay URL port before completion, and non-interactive mode emits deterministic JSON summaries that include daemon readiness outcome and extension metadata.
 
 Additive changes are preferred; breaking changes require a new major protocol version.
 

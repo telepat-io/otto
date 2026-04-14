@@ -27,7 +27,7 @@ const config = {
       'classic',
       {
         docs: {
-          path: './docs',
+          path: '../docs',
           routeBasePath: '/',
           sidebarPath: require.resolve('./sidebars.js'),
           editUrl: `https://github.com/${githubOwner}/${githubRepo}/tree/main/`
@@ -57,12 +57,12 @@ const config = {
           label: 'Docs'
         },
         {
-          to: '/reference/cli-reference',
+          to: '/cli-reference',
           label: 'CLI Reference',
           position: 'left'
         },
         {
-          to: '/technical/security',
+          to: '/security',
           label: 'Technical',
           position: 'left'
         },
@@ -81,11 +81,11 @@ const config = {
           items: [
             {
               label: 'Getting Started',
-              to: '/getting-started/overview'
+              to: '/overview'
             },
             {
               label: 'CLI Reference',
-              to: '/reference/cli-reference'
+              to: '/cli-reference'
             }
           ]
         },
@@ -103,7 +103,7 @@ const config = {
           items: [
             {
               label: 'Contributing',
-              to: '/contributing/development'
+              to: '/development'
             },
             {
               label: 'GitHub',

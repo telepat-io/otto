@@ -6,53 +6,53 @@ module.exports = {
       type: 'category',
       label: 'Getting Started',
       collapsed: false,
-      items: ['getting-started/overview', 'getting-started/installation', 'getting-started/quickstart']
+      items: ['overview', 'installation', 'quickstart']
     },
     {
       type: 'category',
       label: 'Guides',
       items: [
-        'guides/architecture',
-        'guides/pairing-auth',
-        'guides/command-authoring',
-        'guides/controller-implementation',
-        'guides/agent-automation',
-        'guides/listener-development',
-        'guides/use-cases',
-        'guides/troubleshooting-advanced',
-        'guides/controller-troubleshooting-decision-tree',
-        'guides/command-authoring-templates',
-        'guides/requestid-correlation-runbook'
+        'architecture',
+        'pairing-auth',
+        'command-authoring',
+        'controller-implementation',
+        'agent-automation',
+        'listener-development',
+        'use-cases',
+        'troubleshooting-advanced',
+        'controller-troubleshooting-decision-tree',
+        'command-authoring-templates',
+        'requestid-correlation-runbook'
       ]
     },
     {
       type: 'category',
       label: 'Reference',
       items: [
-        'reference/cli-reference',
-        'reference/error-codes',
-        'reference/configuration',
-        'reference/relay-api',
-        'reference/snippets',
-        'reference/protocol',
-        'reference/commands',
-        'reference/extension-runtime',
-        'reference/relay-operations',
-        'reference/logging-debugging',
-        'reference/tab-lock-model',
-        'reference/tab-management',
-        'reference/faq'
+        'cli-reference',
+        'error-codes',
+        'configuration',
+        'relay-api',
+        'snippets',
+        'protocol',
+        'commands',
+        'extension-runtime',
+        'relay-operations',
+        'logging-debugging',
+        'tab-lock-model',
+        'tab-management',
+        'faq'
       ]
     },
     {
       type: 'category',
       label: 'Technical',
-      items: ['technical/security', 'technical/testing']
+      items: ['security', 'testing']
     },
     {
       type: 'category',
       label: 'Contributing',
-      items: ['contributing/development', 'contributing/releasing-and-docs-deploy']
+      items: ['development', 'releasing-and-docs-deploy']
     }
   ]
 };

@@ -3,7 +3,18 @@
 Last Updated: 2026-04-14
 Owner: Platform
 
-Copy-paste snippets for common controller, command, and stream workflows.
+Copy-paste snippets for common controller, command, and stream workflows. Use the table first to pick the right snippet for your stage, then copy the matching block.
+
+## Snippet Index
+
+| Stage | Snippets |
+| --- | --- |
+| Controller bootstrap | Register client, exchange token |
+| Session discovery | Connected node lookup |
+| Session maintenance | Token refresh |
+| Transport bootstrap | `hello` and `auth` websocket frames |
+| Command execution | `command.run`, `command.test` |
+| Stream lifecycle | `listener.subscribe`, `command_cancel` |
 
 ## Controller registration and token
 
@@ -34,6 +45,8 @@ curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/auth/refresh" \
 
 ## Core controller websocket frames
 
+Use these frames in order, and wait for `auth_ack` before sending command envelopes.
+
 ```json
 {
   "protocolVersion": "1.0",
@@ -57,6 +70,8 @@ curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/auth/refresh" \
 ```
 
 ## command.run and command.test frames
+
+These frames demonstrate the minimum replay-safe command shape for runtime routing.
 
 ```json
 {
@@ -93,6 +108,8 @@ curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/auth/refresh" \
 ```
 
 ## Stream listener subscribe and cancel
+
+Use subscribe request ids for listener-update correlation. Use `command_cancel` on the original streaming command request to terminate command-owned stream sessions.
 
 ```json
 {
