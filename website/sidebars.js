@@ -18,7 +18,10 @@ module.exports = {
         'guides/controller-implementation',
         'guides/listener-development',
         'guides/use-cases',
-        'guides/troubleshooting-advanced'
+        'guides/troubleshooting-advanced',
+        'guides/controller-troubleshooting-decision-tree',
+        'guides/command-authoring-templates',
+        'guides/requestid-correlation-runbook'
       ]
     },
     {
