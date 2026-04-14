@@ -249,11 +249,10 @@ Release artifact contract used by setup:
 CI/CD and release channels:
 
 - Pull requests and `main` commits run package-scoped quality gates in parallel for CLI, relay, shared protocol, and extension (`check`, `lint`, `build`, `test` where present).
+- Docs site deploys to GitHub Pages on `main` when docs/site paths change.
 - Release Please manages only the CLI package release stream from `packages/cli` and creates semver tags (`v<version>`).
-- CLI npm publishing is automatic when Release Please creates a CLI release and can be run manually through workflow dispatch fallback.
-- Extension artifacts are published in two channels:
-	- every commit on `main` gets an immutable prerelease tag (`ext-main-<shortsha>`) with extension zip + checksum assets;
-	- every semver CLI release (`v<version>`) also receives `otto-extension-<version>-chrome-mv3.zip` and checksum assets so `otto setup` download mode remains compatible.
+- CLI npm publishing runs only from published semver releases (`v<version>`) and verifies tag/package version alignment before publish.
+- Extension artifacts are published only on semver CLI releases (`v<version>`) as `otto-extension-<version>-chrome-mv3.zip` plus checksum, so `otto setup` download mode remains compatible.
 
 Required repository secrets:
 

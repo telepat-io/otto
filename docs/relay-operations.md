@@ -201,10 +201,10 @@ Setup-related operational notes:
 GitHub Actions workflows:
 
 - `.github/workflows/ci.yml`: package-scoped quality gates on pull requests and `main` (`check`, `lint`, `build`, `test` where present).
-- `.github/workflows/release-please.yml`: Release Please automation for `packages/cli` and conditional npm publish of `@telepat/otto`.
-- `.github/workflows/npm-publish-cli.yml`: manual fallback publish (`workflow_dispatch`) with semver/tag/ancestry validation.
-- `.github/workflows/extension-main-release.yml`: immutable extension prerelease on every `main` commit (`ext-main-<shortsha>`).
+- `.github/workflows/release-please.yml`: Release Please automation for `packages/cli` release PR/tag orchestration.
+- `.github/workflows/cli-release-publish.yml`: publishes `@telepat/otto` to npm from published semver release tags only.
 - `.github/workflows/extension-release-assets.yml`: attaches semver extension assets to `v<version>` releases for setup compatibility.
+- `.github/workflows/docs-pages.yml`: deploys the docs site to GitHub Pages when docs paths change on `main`.
 
 Required repository secrets:
 
@@ -212,5 +212,4 @@ Required repository secrets:
 
 Extension release channels:
 
-1. Per-main prerelease assets for rapid internal install/debug cycles.
-2. Semver-tagged release assets (`otto-extension-<version>-chrome-mv3.zip` + `.sha256`) consumed by `otto setup` download strategy.
+1. Semver-tagged release assets (`otto-extension-<version>-chrome-mv3.zip` + `.sha256`) consumed by `otto setup` download strategy.
