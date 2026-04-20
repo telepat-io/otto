@@ -879,6 +879,195 @@ test('command.run commentOnPost returns missing_result_payload diagnostics when 
   );
 });
 
+test('command.run commentOnPost surfaces serialized in-page composer error', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        __ottoSerializedCommandError: true,
+        code: 'reddit_post_comment_composer_missing',
+        message: 'reddit_post_comment_composer_missing:{"path":"/r/test/comments/abc123/example/","hasComposer":false}',
+      },
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'commentOnPost',
+      input: {
+        postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+        commentBody: 'Hello from Otto',
+      },
+      authMode: 'strict_fail',
+    })),
+    (error: unknown) => {
+      assert.ok(error instanceof CommandExecutionError);
+      assert.equal(error.code, 'reddit_post_comment_composer_missing');
+      assert.match(error.message, /reddit_post_comment_composer_missing/);
+      return true;
+    },
+  );
+});
+
+test('command.run commentOnPost ignores malformed serialized marker payloads', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        __ottoSerializedCommandError: true,
+        // Invalid marker payload: code must be a string.
+        code: 42,
+        message: 'reddit_post_comment_composer_missing:{"path":"/r/test/comments/abc123/example/"}',
+      },
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'commentOnPost',
+      input: {
+        postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+        commentBody: 'Hello from Otto',
+      },
+      authMode: 'strict_fail',
+    })),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /reddit_post_comment_send_unconfirmed:missing_result_payload/);
+      return true;
+    },
+  );
+});
+
+test('command.run commentOnPost surfaces serialized in-page error retryable flag', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        __ottoSerializedCommandError: true,
+        code: 'reddit_post_comment_composer_missing',
+        message: 'reddit_post_comment_composer_missing:{"path":"/r/test/comments/abc123/example/","hasComposer":false}',
+        retryable: true,
+      },
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'commentOnPost',
+      input: {
+        postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+        commentBody: 'Hello from Otto',
+      },
+      authMode: 'strict_fail',
+    })),
+    (error: unknown) => {
+      assert.ok(error instanceof CommandExecutionError);
+      assert.equal(error.code, 'reddit_post_comment_composer_missing');
+      assert.equal(error.retryable, true);
+      return true;
+    },
+  );
+});
+
+test('command.test commentOnPost also rethrows serialized in-page errors', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        __ottoSerializedCommandError: true,
+        code: 'reddit_post_comment_composer_missing',
+        message: 'reddit_post_comment_composer_missing:{"path":"/r/test/comments/abc123/example/","hasComposer":false}',
+      },
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.test', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'commentOnPost',
+      input: {
+        postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+        commentBody: 'Hello from Otto',
+      },
+      authMode: 'strict_fail',
+    })),
+    (error: unknown) => {
+      assert.ok(error instanceof CommandExecutionError);
+      assert.equal(error.code, 'reddit_post_comment_composer_missing');
+      assert.equal(error.stage, 'command.test');
+      return true;
+    },
+  );
+});
+
+test('command.run commentOnPost installs DOM helpers before script execution', async () => {
+  const { chromeApi, getExecuteScriptFunctionCalls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      { sent: true, postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/' },
+    ],
+  });
+
+  await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'commentOnPost',
+    input: {
+      postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+      commentBody: 'Hello from Otto',
+    },
+    authMode: 'strict_fail',
+  }));
+
+  const functionCalls = getExecuteScriptFunctionCalls();
+  const installHelperIndex = functionCalls.lastIndexOf('installPageDomQueryHelpers');
+  assert.ok(installHelperIndex >= 0);
+  assert.ok(installHelperIndex < functionCalls.length - 1);
+});
+
 test('command.run getChatMessages normalizes matrix events', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {

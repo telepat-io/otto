@@ -1,5 +1,8 @@
 import type { SiteCommand } from '../types.js';
-import type { PageDeepQuerySelector } from '../../runtime/page-dom-query.js';
+import type {
+  PageDeepQuerySelector,
+  PageSerializeScriptError,
+} from '../../runtime/page-dom-query.js';
 
 type CommentOnPostInput = {
   postUrl?: string;
@@ -82,113 +85,128 @@ export const commentOnPostCommand: SiteCommand = {
 
     const submitResult = await ctx.executeScriptWithDomHelpers(
       async (commentValue: string) => {
-        const wait = (ms: number) => new Promise((resolve) => {
-          setTimeout(resolve, ms);
-        });
-
         const pageWindow = window as Window & {
           __ottoDeepQuerySelector?: PageDeepQuerySelector;
+          __ottoSerializeScriptError?: PageSerializeScriptError;
         };
-        const deepQuerySelector = pageWindow.__ottoDeepQuerySelector;
-        if (typeof deepQuerySelector !== 'function') {
-          throw new Error('otto_dom_query_helper_missing');
+        const serializeScriptError = pageWindow.__ottoSerializeScriptError;
+
+        if (typeof serializeScriptError !== 'function') {
+          throw new Error('otto_serialize_script_error_helper_missing');
         }
 
-        const queryDeep = (root: ParentNode, selector: string): Element | null => {
-          return deepQuerySelector(root, selector);
-        };
+        try {
+          const wait = (ms: number) => new Promise((resolve) => {
+            setTimeout(resolve, ms);
+          });
 
-        const findComposerHost = (): HTMLElement | null => {
-          const host = queryDeep(document, 'shreddit-composer');
-          return host instanceof HTMLElement ? host : null;
-        };
-
-        const findTextbox = (): HTMLElement | null => {
-          const host = findComposerHost();
-          if (!(host instanceof HTMLElement) || !host.shadowRoot) {
-            return null;
+          const deepQuerySelector = pageWindow.__ottoDeepQuerySelector;
+          if (typeof deepQuerySelector !== 'function') {
+            throw new Error('otto_dom_query_helper_missing');
           }
 
-          const textbox = queryDeep(host.shadowRoot, 'div[role="textbox"], [role="textbox"]');
-          return textbox instanceof HTMLElement ? textbox : null;
-        };
-
-        const findSubmitButton = (): HTMLButtonElement | null => {
-          const host = findComposerHost();
-          if (!(host instanceof HTMLElement) || !host.shadowRoot) {
-            return null;
-          }
-
-          const submit = queryDeep(host.shadowRoot, 'button[slot="submit-button"]');
-          return submit instanceof HTMLButtonElement ? submit : null;
-        };
-
-        const diagnostics = (): Record<string, unknown> => {
-          const host = findComposerHost();
-          const textbox = findTextbox();
-          const submit = findSubmitButton();
-          return {
-            path: window.location.pathname,
-            hasComposer: host instanceof HTMLElement,
-            hasTextbox: textbox instanceof HTMLElement,
-            hasSubmitButton: submit instanceof HTMLButtonElement,
+          const queryDeep = (root: ParentNode, selector: string): Element | null => {
+            return deepQuerySelector(root, selector);
           };
-        };
 
-        const waitFor = async (predicate: () => boolean, timeoutMs: number, intervalMs: number): Promise<boolean> => {
-          const deadline = Date.now() + timeoutMs;
-          while (Date.now() < deadline) {
-            if (predicate()) {
-              return true;
+          const findComposerHost = (): HTMLElement | null => {
+            const host = queryDeep(document, 'shreddit-composer');
+            return host instanceof HTMLElement ? host : null;
+          };
+
+          const findTextbox = (): HTMLElement | null => {
+            const host = findComposerHost();
+            if (!(host instanceof HTMLElement) || !host.shadowRoot) {
+              return null;
             }
-            await wait(intervalMs);
+
+            const textbox = queryDeep(host.shadowRoot, 'div[role="textbox"], [role="textbox"]');
+            return textbox instanceof HTMLElement ? textbox : null;
+          };
+
+          const findSubmitButton = (): HTMLButtonElement | null => {
+            const host = findComposerHost();
+            if (!(host instanceof HTMLElement) || !host.shadowRoot) {
+              return null;
+            }
+
+            const submit = queryDeep(host.shadowRoot, 'button[slot="submit-button"]');
+            return submit instanceof HTMLButtonElement ? submit : null;
+          };
+
+          const diagnostics = (): Record<string, unknown> => {
+            const host = findComposerHost();
+            const textbox = findTextbox();
+            const submit = findSubmitButton();
+            return {
+              path: window.location.pathname,
+              hasComposer: host instanceof HTMLElement,
+              hasTextbox: textbox instanceof HTMLElement,
+              hasSubmitButton: submit instanceof HTMLButtonElement,
+            };
+          };
+
+          const waitFor = async (predicate: () => boolean, timeoutMs: number, intervalMs: number): Promise<boolean> => {
+            const deadline = Date.now() + timeoutMs;
+            while (Date.now() < deadline) {
+              if (predicate()) {
+                return true;
+              }
+              await wait(intervalMs);
+            }
+            return false;
+          };
+
+          console.log('Waiting for comment composer to be ready...', diagnostics());
+          const composerReady = await waitFor(() => Boolean(findTextbox()) && Boolean(findSubmitButton()), 10000, 150);
+          if (!composerReady) {
+            throw new Error(`reddit_post_comment_composer_missing:${JSON.stringify(diagnostics())}`);
           }
-          return false;
-        };
 
-        console.log('Waiting for comment composer to be ready...', diagnostics());
-        const composerReady = await waitFor(() => Boolean(findTextbox()) && Boolean(findSubmitButton()), 10000, 150);
-        if (!composerReady) {
-          throw new Error(`reddit_post_comment_composer_missing:${JSON.stringify(diagnostics())}`);
+          const textbox = findTextbox();
+          if (!(textbox instanceof HTMLElement)) {
+            throw new Error(`reddit_post_comment_textbox_missing:${JSON.stringify(diagnostics())}`);
+          }
+
+          const submitButton = findSubmitButton();
+          if (!(submitButton instanceof HTMLButtonElement)) {
+            throw new Error(`reddit_post_comment_submit_missing:${JSON.stringify(diagnostics())}`);
+          }
+
+          textbox.click();
+          textbox.focus();
+          textbox.textContent = commentValue;
+          textbox.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }));
+          textbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+          await wait(150);
+          submitButton.click();
+
+          const cleared = await waitFor(() => {
+            const currentTextbox = findTextbox();
+            return currentTextbox instanceof HTMLElement
+              ? (currentTextbox.textContent ?? '').trim().length === 0
+              : false;
+          }, 8000, 200);
+
+          if (!cleared) {
+            throw new Error(`reddit_post_comment_send_unconfirmed:${JSON.stringify(diagnostics())}`);
+          }
+
+          return {
+            sent: true,
+            postUrl: window.location.href,
+          };
+        } catch (error) {
+          return serializeScriptError(error, 'reddit_post_comment_script_failed');
         }
-
-        const textbox = findTextbox();
-        if (!(textbox instanceof HTMLElement)) {
-          throw new Error(`reddit_post_comment_textbox_missing:${JSON.stringify(diagnostics())}`);
-        }
-
-        const submitButton = findSubmitButton();
-        if (!(submitButton instanceof HTMLButtonElement)) {
-          throw new Error(`reddit_post_comment_submit_missing:${JSON.stringify(diagnostics())}`);
-        }
-
-        textbox.click();
-        textbox.focus();
-        textbox.textContent = commentValue;
-        textbox.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }));
-        textbox.dispatchEvent(new Event('change', { bubbles: true }));
-
-        await wait(150);
-        submitButton.click();
-
-        const cleared = await waitFor(() => {
-          const currentTextbox = findTextbox();
-          return currentTextbox instanceof HTMLElement
-            ? (currentTextbox.textContent ?? '').trim().length === 0
-            : false;
-        }, 8000, 200);
-
-        if (!cleared) {
-          throw new Error(`reddit_post_comment_send_unconfirmed:${JSON.stringify(diagnostics())}`);
-        }
-
-        return {
-          sent: true,
-          postUrl: window.location.href,
-        };
       },
       [commentBody],
     );
+
+    if (ctx.isSerializedScriptError(submitResult)) {
+      return submitResult;
+    }
 
     if (submitResult && typeof submitResult === 'object' && (submitResult as { sent?: unknown }).sent === true) {
       const resultPostUrl = typeof (submitResult as { postUrl?: unknown }).postUrl === 'string'

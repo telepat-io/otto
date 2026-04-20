@@ -36,6 +36,38 @@ After implementation, register the command in the site bundle index and add test
 
 Runtime validation is strict when metadata declares input contracts. Unknown keys produce `unexpected_command_input`, missing required fields produce `missing_command_input`, type mismatches produce `invalid_command_input_type`, and unmet cross-field constraints produce `missing_command_input_one_of`.
 
+## Inside-Page Error Surfacing
+
+When a command uses `ctx.executeScript` or `ctx.executeScriptWithDomHelpers`, do not rely on browser injection APIs to propagate thrown page errors. In Chromium, in-page throws can be lost and appear as `null`/`undefined` results. Use an explicit error payload contract:
+
+1. Wrap the injected script body in `try/catch`.
+2. Return a serialized marker object from the `catch` path.
+3. In command code, detect that marker and return it as-is.
+4. Runtime will rethrow that payload as a command error so controller and CLI see the inside-page error.
+
+Minimal pattern:
+
+```typescript
+const result = await ctx.executeScriptWithDomHelpers(async () => {
+	try {
+		// Page logic
+		return { ok: true };
+	} catch (error) {
+		return {
+			__ottoSerializedCommandError: true,
+			code: 'site_specific_error_code',
+			message: error instanceof Error ? error.message : 'site_specific_error_code',
+		};
+	}
+}, []);
+
+if (ctx.isSerializedScriptError(result)) {
+	return result;
+}
+```
+
+This keeps command failures deterministic and preserves specific inside-page diagnostics (for example `reddit_post_comment_composer_missing`) in `otto test` output.
+
 ## Safety Rules
 
 Never automate credential submission, keep site URL validation strict, and return deterministic precondition errors instead of silent retries. Command output should avoid sensitive values and remain stable enough for CLI and agent parsing.

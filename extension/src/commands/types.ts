@@ -7,6 +7,8 @@ import type {
 
 type ChromeLike = typeof chrome;
 
+export const SERIALIZED_COMMAND_ERROR_MARKER = '__ottoSerializedCommandError';
+
 export type CommandNetworkInterceptionOptions = Omit<NetworkInterceptListenerOptions, 'tabSessionId' | 'site'>;
 
 export type CommandNetworkInterceptionEvent = {
@@ -26,11 +28,20 @@ export type CommandDebugContext = {
   log: (event: string, data?: Record<string, unknown>) => Promise<void>;
 };
 
+export type SerializedCommandError = {
+  [SERIALIZED_COMMAND_ERROR_MARKER]: true;
+  code: string;
+  message: string;
+  diagnostics?: Record<string, unknown>;
+  retryable?: boolean;
+};
+
 export type CommandExecutionContext = {
   chromeApi: ChromeLike;
   tabId: number;
   tabSessionId: string;
   debug: CommandDebugContext;
+  isSerializedScriptError: (value: unknown) => value is SerializedCommandError;
   getTabUrl: () => Promise<string | null>;
   navigateTab: (url: string) => Promise<void>;
   executeScript: <TArgs extends unknown[], TResult>(

@@ -9,7 +9,13 @@ import type {
   CommandRunPayload,
 } from '@telepat/otto-protocol';
 import { findSiteBundle, findSiteCommand, isSiteMatch, listCommandDescriptors } from '../commands/index.js';
-import type { CommandExecutionContext } from '../commands/types.js';
+import {
+  SERIALIZED_COMMAND_ERROR_MARKER,
+} from '../commands/types.js';
+import type {
+  CommandExecutionContext,
+  SerializedCommandError,
+} from '../commands/types.js';
 import { CommandExecutionError } from './execution-error.js';
 import { DebuggerFocusEmulationError } from './debugger-focus-emulation.js';
 import { getDebuggerFocusEmulationManager, getNetworkInterceptListenerManager } from './listener-managers.js';
@@ -64,6 +70,18 @@ function sanitizeDebugData(data: Record<string, unknown> | undefined): Record<st
       serializationError: 'debug_data_not_serializable',
     };
   }
+}
+
+function isSerializedCommandError(value: unknown): value is SerializedCommandError {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const marker = (value as { [SERIALIZED_COMMAND_ERROR_MARKER]?: unknown })[SERIALIZED_COMMAND_ERROR_MARKER];
+  const code = (value as { code?: unknown }).code;
+  const message = (value as { message?: unknown }).message;
+
+  return marker === true && typeof code === 'string' && typeof message === 'string';
 }
 
 async function emitCommandDebugLog(
@@ -338,6 +356,9 @@ function buildContext(
         console.debug('[otto:command-debug]', payload);
         await emitCommandDebugLog(chromeApi, payload);
       },
+    },
+    isSerializedScriptError(value): value is SerializedCommandError {
+      return isSerializedCommandError(value);
     },
     async getTabUrl() {
       const tab = await chromeApi.tabs.get(tabId);
@@ -696,6 +717,15 @@ async function executeCommandAction(
         execute: executeCommand,
       })
       : await executeCommand();
+
+    if (isSerializedCommandError(commandResult)) {
+      throw new CommandExecutionError(
+        commandResult.message,
+        commandResult.code,
+        actionName,
+        commandResult.retryable === true,
+      );
+    }
 
     return {
       site: bundle.site,
