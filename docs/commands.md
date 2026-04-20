@@ -79,12 +79,12 @@ Command logic should still fail explicitly if helper install is unexpectedly una
 
 Current bundled sites:
 
-- `reddit.com` (`getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`)
+- `reddit.com` (`getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost`)
 - `news.ycombinator.com` (`getFrontPage`)
 
 ## Reddit Bundle Notes
 
-Reddit commands are the most feature-rich bundle and therefore the best reference for advanced patterns. `checkLogin` uses an API-first session probe (`/api/me.json`) with bounded selector fallback. `sendChatMessage` supports either direct room sends (`roomId`) or room creation flow (`username`), and both flows rely on deep Shadow DOM helper execution. `getChatMessages` supports room-scoped history and multi-room snapshots, and its test path can return stream manifests for command-native follow mode.
+Reddit commands are the most feature-rich bundle and therefore the best reference for advanced patterns. `checkLogin` uses an API-first session probe (`/api/me.json`) with bounded selector fallback. `sendChatMessage` supports either direct room sends (`roomId`) or room creation flow (`username`), and both flows rely on deep Shadow DOM helper execution. `commentOnPost` navigates to a Reddit post URL and submits a top-level comment through `shreddit-composer` in the page Shadow DOM. `getChatMessages` supports room-scoped history and multi-room snapshots, and its test path can return stream manifests for command-native follow mode.
 
 `getFeed` and `getChatMessages` both opt into `requiresDebuggerFocus` because these flows are sensitive to background-tab throttling. Listener adapters map Matrix traffic into shared-domain objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) and apply semantic dedupe on top of interception-layer dedupe. Where source payloads are available, adapters should include `originalEntity` (including nested references) so controllers can reconcile normalized data with source-specific context.
 
@@ -93,6 +93,7 @@ Reddit commands are the most feature-rich bundle and therefore the best referenc
 | `getFeed` | Hydrates post permalinks via `.json`, supports optional `minReturnedPosts`, returns shared `content.post` trees |
 | `getUserInfo` | Looks up by username/id or defaults to current session, returns shared `entity.user` profile |
 | `sendChatMessage` | Supports `roomId` direct send or username-based room create + send; test hook covers end-to-end flow |
+| `commentOnPost` | Navigates to a Reddit comments URL, fills `shreddit-composer`, and submits a top-level comment |
 | `getChatMessages` | Reads Matrix history/sync and can emit stream manifest with `network.http_intercept` + adapter hint |
 
 ## Command Test and Stream Lifecycle

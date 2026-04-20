@@ -19,6 +19,8 @@ type ChromeLike = typeof chrome;
 
 const TAB_URL_READY_TIMEOUT_MS = 1200;
 const TAB_URL_POLL_INTERVAL_MS = 75;
+const NAVIGATE_TAB_READY_TIMEOUT_MS = 15000;
+const NAVIGATE_TAB_POLL_INTERVAL_MS = 150;
 const PRELOAD_DOCUMENT_READY_TIMEOUT_MS = 10000;
 const PRELOAD_DOCUMENT_READY_POLL_INTERVAL_MS = 200;
 const PRELOAD_DOCUMENT_READY_DELAY_MS = 1000;
@@ -343,6 +345,14 @@ function buildContext(
     },
     async navigateTab(url: string) {
       await chromeApi.tabs.update(tabId, { url });
+
+      const urlProbe = await waitForNavigatedTabUrl(chromeApi, tabId, url);
+      if (!urlProbe.url || !isNavigateTabTargetMatch(urlProbe.url, url)) {
+        const pendingDetails = urlProbe.pendingUrl ? ` (pending: ${urlProbe.pendingUrl})` : '';
+        throw new Error(`navigate_tab_url_not_ready:${url}${pendingDetails}`);
+      }
+
+      await waitForPreloadDocumentReady(chromeApi, tabId);
     },
     async executeScript(func, args) {
       return await executeScriptWithRetry(
@@ -435,6 +445,36 @@ function normalizeTabUrl(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizePathForComparison(pathname: string): string {
+  if (!pathname || pathname === '/') {
+    return '/';
+  }
+
+  const trimmed = pathname.replace(/\/+$/, '');
+  return trimmed.length > 0 ? trimmed : '/';
+}
+
+function isNavigateTabTargetMatch(currentUrl: string, targetUrl: string): boolean {
+  try {
+    const current = new URL(currentUrl);
+    const target = new URL(targetUrl);
+
+    if (!isSiteMatch(current.href, target.hostname)) {
+      return false;
+    }
+
+    const targetPath = normalizePathForComparison(target.pathname);
+    if (targetPath === '/') {
+      return true;
+    }
+
+    const currentPath = normalizePathForComparison(current.pathname);
+    return currentPath === targetPath;
+  } catch {
+    return false;
+  }
+}
+
 async function readTabUrlProbe(chromeApi: ChromeLike, tabId: number): Promise<TabUrlProbe> {
   const tab = await chromeApi.tabs.get(tabId);
   return {
@@ -504,6 +544,25 @@ async function waitForCommittedTabUrl(chromeApi: ChromeLike, tabId: number): Pro
       return lastProbe;
     }
     await wait(TAB_URL_POLL_INTERVAL_MS);
+  }
+
+  return lastProbe;
+}
+
+async function waitForNavigatedTabUrl(
+  chromeApi: ChromeLike,
+  tabId: number,
+  targetUrl: string,
+): Promise<TabUrlProbe> {
+  const deadline = Date.now() + NAVIGATE_TAB_READY_TIMEOUT_MS;
+  let lastProbe: TabUrlProbe = { url: null, pendingUrl: null };
+
+  while (Date.now() <= deadline) {
+    lastProbe = await readTabUrlProbe(chromeApi, tabId);
+    if (lastProbe.url && isNavigateTabTargetMatch(lastProbe.url, targetUrl)) {
+      return lastProbe;
+    }
+    await wait(NAVIGATE_TAB_POLL_INTERVAL_MS);
   }
 
   return lastProbe;

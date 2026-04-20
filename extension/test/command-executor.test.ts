@@ -766,6 +766,119 @@ test('command.run sendChatMessage returns missing_result_payload diagnostics whe
   );
 });
 
+test('command.run commentOnPost returns deterministic payload', async () => {
+  const { chromeApi, tabUrls, getDebuggerCommands } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    tabUrlSequenceById: {
+      11: [
+        'https://www.reddit.com/',
+        'https://www.reddit.com/',
+        'https://www.reddit.com/r/test/comments/abc123/example/',
+      ],
+    },
+    scriptResults: [
+      { authenticated: true },
+      { sent: true, postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/' },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'commentOnPost',
+    input: {
+      postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+      commentBody: 'Hello from Otto',
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'commentOnPost',
+    sent: true,
+    postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+  });
+
+  assert.equal(tabUrls[11], 'https://www.reddit.com/r/test/comments/abc123/example/');
+
+  const debuggerCommands = getDebuggerCommands();
+  assert.equal(
+    debuggerCommands.some((entry) => entry.method === 'Emulation.setFocusEmulationEnabled'),
+    true,
+  );
+});
+
+test('command.run commentOnPost rejects missing required input fields before execute', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'commentOnPost',
+      input: { postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/' },
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'missing_command_input');
+      return true;
+    },
+  );
+});
+
+test('command.run commentOnPost returns missing_result_payload diagnostics when send payload is empty', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      null,
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'commentOnPost',
+      input: {
+        postUrl: 'https://www.reddit.com/r/test/comments/abc123/example/',
+        commentBody: 'Hello from Otto',
+      },
+      authMode: 'strict_fail',
+    })),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /reddit_post_comment_send_unconfirmed:missing_result_payload/);
+      assert.match(error.message, /currentUrl/);
+      return true;
+    },
+  );
+});
+
 test('command.run getChatMessages normalizes matrix events', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
