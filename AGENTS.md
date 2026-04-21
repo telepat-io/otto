@@ -38,9 +38,8 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 
 ## CI and Release Workflows
 - CI package quality gates live in `.github/workflows/ci.yml` and should keep per-package checks independent.
-- Release Please for CLI, relay, and protocol packages lives in `.github/workflows/release-please.yml` and `release-please-config.json`.
-- npm publish for protocol, relay, and CLI packages on release tags lives in `.github/workflows/cli-release-publish.yml`.
-- Keep semver-tagged extension assets attached to `v<version>` releases via `.github/workflows/extension-release-assets.yml` so `otto setup` download contract remains valid.
+- Release Please plus publish/asset automation lives in `.github/workflows/release-please.yml` and `release-please-config.json`.
+- Keep semver-tagged extension assets attached to `v<version>` releases from the consolidated release workflow so `otto setup` download contract remains valid.
 - Docs site deploy to GitHub Pages on docs path changes lives in `.github/workflows/docs-pages.yml`.
 
 ## Required Validation After Any Update

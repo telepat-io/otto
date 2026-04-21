@@ -201,14 +201,12 @@ Setup-related operational notes:
 GitHub Actions workflows:
 
 - `.github/workflows/ci.yml`: package-scoped quality gates on pull requests and `main` (`check`, `lint`, `build`, `test` where present).
-- `.github/workflows/release-please.yml`: Release Please automation for `packages/cli` release PR/tag orchestration.
-- `.github/workflows/cli-release-publish.yml`: publishes `@telepat/otto` to npm from published semver release tags only.
-- `.github/workflows/extension-release-assets.yml`: attaches semver extension assets to `v<version>` releases for setup compatibility.
+- `.github/workflows/release-please.yml`: Release Please automation for release PRs/tags, npm publish for protocol+relay+CLI, and extension asset upload for `v<version>` releases in a single workflow run.
 - `.github/workflows/docs-pages.yml`: deploys the docs site to GitHub Pages when docs paths change on `main`.
 
 Required repository secrets:
 
-- `NPM_TOKEN`: npm registry token for CLI publish workflows.
+- `NPM_TOKEN`: npm registry token for protocol/relay/CLI publish in the consolidated release workflow.
 
 Extension release channels:
 

@@ -40,3 +40,18 @@ Release management is handled by `.github/workflows/release-please.yml` using
 
 When a release PR is opened, expect version bumps and internal `@telepat/*`
 dependency updates to be included together.
+
+## Release execution flow
+
+Release execution is consolidated in `.github/workflows/release-please.yml`.
+When a Release PR is merged and release-please creates the semver CLI release
+tag (`v<version>`), the same workflow run also:
+
+- publishes `@telepat/otto-protocol`, `@telepat/otto-relay`, and `@telepat/otto`
+	to npm after package quality gates pass.
+- builds, tests, zips, and uploads extension artifacts (`.zip` and `.sha256`) to
+	the same `v<version>` GitHub release.
+
+This design avoids release-event workflow chaining (`on: release`) so release
+automation works with the default `GITHUB_TOKEN` and does not require a PAT for
+cross-workflow triggering.

@@ -1,0 +1,1493 @@
+
+> @telepat/otto@0.3.0 test
+> tsx --test test/**/*.test.ts
+
+TAP version 13
+# Subtest: refreshControllerAccessToken returns null when refresh token missing
+ok 1 - refreshControllerAccessToken returns null when refresh token missing
+  ---
+  duration_ms: 0.586042
+  type: 'test'
+  ...
+# Subtest: refreshControllerAccessToken returns new access token on success
+ok 2 - refreshControllerAccessToken returns new access token on success
+  ---
+  duration_ms: 0.905709
+  type: 'test'
+  ...
+# Subtest: refreshControllerAccessToken includes rotated refresh token when present
+ok 3 - refreshControllerAccessToken includes rotated refresh token when present
+  ---
+  duration_ms: 0.110042
+  type: 'test'
+  ...
+# Subtest: refreshControllerAccessToken returns null on refresh rejection
+ok 4 - refreshControllerAccessToken returns null on refresh rejection
+  ---
+  duration_ms: 0.07475
+  type: 'test'
+  ...
+# Subtest: refreshControllerAccessToken throws when response shape is invalid
+ok 5 - refreshControllerAccessToken throws when response shape is invalid
+  ---
+  duration_ms: 0.366209
+  type: 'test'
+  ...
+# Subtest: refresh retry is enabled for invalid_access_token auth payload
+ok 6 - refresh retry is enabled for invalid_access_token auth payload
+  ---
+  duration_ms: 0.5885
+  type: 'test'
+  ...
+# Subtest: refresh retry is enabled for token_expired auth payload
+ok 7 - refresh retry is enabled for token_expired auth payload
+  ---
+  duration_ms: 0.069208
+  type: 'test'
+  ...
+# Subtest: refresh retry is disabled for non-retryable auth payload code
+ok 8 - refresh retry is disabled for non-retryable auth payload code
+  ---
+  duration_ms: 0.057208
+  type: 'test'
+  ...
+# Subtest: refresh retry uses error message fallback when payload is unavailable
+ok 9 - refresh retry uses error message fallback when payload is unavailable
+  ---
+  duration_ms: 0.063917
+  type: 'test'
+  ...
+# Subtest: refresh retry is disabled when neither payload nor message indicates token issue
+ok 10 - refresh retry is disabled when neither payload nor message indicates token issue
+  ---
+  duration_ms: 0.109708
+  type: 'test'
+  ...
+# Subtest: getClientSecretAccount namespaces by relay host and client id
+ok 11 - getClientSecretAccount namespaces by relay host and client id
+  ---
+  duration_ms: 0.628666
+  type: 'test'
+  ...
+# Subtest: resolveClientSecret prefers env var when present
+ok 12 - resolveClientSecret prefers env var when present
+  ---
+  duration_ms: 0.119875
+  type: 'test'
+  ...
+# Subtest: resolveClientSecret throws when env missing and keychain unavailable
+ok 13 - resolveClientSecret throws when env missing and keychain unavailable
+  ---
+  duration_ms: 35.742333
+  type: 'test'
+  ...
+# Subtest: resolveCommandAutoOpenUrl falls back to site URL when descriptor is missing
+ok 14 - resolveCommandAutoOpenUrl falls back to site URL when descriptor is missing
+  ---
+  duration_ms: 0.635292
+  type: 'test'
+  ...
+# Subtest: resolveCommandAutoOpenUrl uses preloadHost when descriptor matches site and command
+ok 15 - resolveCommandAutoOpenUrl uses preloadHost when descriptor matches site and command
+  ---
+  duration_ms: 0.134042
+  type: 'test'
+  ...
+# Subtest: resolveCommandAutoOpenUrl handles preloadHost already provided as full URL
+ok 16 - resolveCommandAutoOpenUrl handles preloadHost already provided as full URL
+  ---
+  duration_ms: 0.069458
+  type: 'test'
+  ...
+# Subtest: resolveCommandAutoOpenUrl normalizes site host matching from URL arguments
+ok 17 - resolveCommandAutoOpenUrl normalizes site host matching from URL arguments
+  ---
+  duration_ms: 0.071458
+  type: 'test'
+  ...
+# Subtest: parseLogLevelOption accepts debug and rejects unknown values
+ok 18 - parseLogLevelOption accepts debug and rejects unknown values
+  ---
+  duration_ms: 0.723584
+  type: 'test'
+  ...
+# Subtest: parseLogSourceOption validates allowed log source filters
+ok 19 - parseLogSourceOption validates allowed log source filters
+  ---
+  duration_ms: 0.092291
+  type: 'test'
+  ...
+# Subtest: parseLatestOption accepts positive integers and rejects non-positive values
+ok 20 - parseLatestOption accepts positive integers and rejects non-positive values
+  ---
+  duration_ms: 0.10425
+  type: 'test'
+  ...
+# Subtest: formatLogEntryHuman renders source timestamp and readable message fields
+ok 21 - formatLogEntryHuman renders source timestamp and readable message fields
+  ---
+  duration_ms: 1.98275
+  type: 'test'
+  ...
+# Subtest: formatLogEntryJson preserves full structured entry
+ok 22 - formatLogEntryJson preserves full structured entry
+  ---
+  duration_ms: 0.430708
+  type: 'test'
+  ...
+# Subtest: resolveTargetNodeId prefers explicit node id override
+ok 23 - resolveTargetNodeId prefers explicit node id override
+  ---
+  duration_ms: 0.56975
+  type: 'test'
+  ...
+# Subtest: resolveTargetNodeId auto-picks single connected node when config is stale
+ok 24 - resolveTargetNodeId auto-picks single connected node when config is stale
+  ---
+  duration_ms: 0.181834
+  type: 'test'
+  ...
+# Subtest: resolveTargetNodeId errors when multiple nodes connected and config is stale
+ok 25 - resolveTargetNodeId errors when multiple nodes connected and config is stale
+  ---
+  duration_ms: 0.354292
+  type: 'test'
+  ...
+# Subtest: resolveTargetNodeId errors when missing node id and multiple nodes connected
+ok 26 - resolveTargetNodeId errors when missing node id and multiple nodes connected
+  ---
+  duration_ms: 0.143292
+  type: 'test'
+  ...
+# Subtest: resolveRelayEntrypoint prefers explicit environment override
+ok 27 - resolveRelayEntrypoint prefers explicit environment override
+  ---
+  duration_ms: 0.653708
+  type: 'test'
+  ...
+# Subtest: resolveRelayEntrypoint resolves relay package dist entrypoint
+ok 28 - resolveRelayEntrypoint resolves relay package dist entrypoint
+  ---
+  duration_ms: 0.082125
+  type: 'test'
+  ...
+# Subtest: resolveRelayEntrypoint throws actionable error when package entrypoint cannot be resolved
+ok 29 - resolveRelayEntrypoint throws actionable error when package entrypoint cannot be resolved
+  ---
+  duration_ms: 0.259833
+  type: 'test'
+  ...
+# Subtest: createRelayLaunchSpec starts relay with node executable and OTTO_RELAY_PORT
+ok 30 - createRelayLaunchSpec starts relay with node executable and OTTO_RELAY_PORT
+  ---
+  duration_ms: 0.866708
+  type: 'test'
+  ...
+# [otto:test] command.test failed code=expected_test_error { "code": "expected_test_error" }
+# [otto:test] command.test failed code=expected_test_error { "code": "expected_test_error" }
+# [otto] cleaned up auto-registered test controller clt_tester_1
+# [otto:test] primitive.tab.open completed
+# [otto:test:data] tabSessionId=tab_wait_1
+# [otto:test] command.test failed code=manual_login_required Manual login required for reddit.com; complete login and rerun getFeed
+# [otto:test] waiting for interrupt (Ctrl+C)
+# Subtest: runTestCommand keeps auto-registered controller by default
+ok 31 - runTestCommand keeps auto-registered controller by default
+  ---
+  duration_ms: 2.87925
+  type: 'test'
+  ...
+# Subtest: runTestCommand removes auto-registered controller when cleanup flag is enabled
+ok 32 - runTestCommand removes auto-registered controller when cleanup flag is enabled
+  ---
+  duration_ms: 0.430375
+  type: 'test'
+  ...
+# Subtest: runTestCommand shows friendly alert when socket closes before response
+ok 33 - runTestCommand shows friendly alert when socket closes before response
+  ---
+  duration_ms: 0.459583
+  type: 'test'
+  ...
+# [otto:test] primitive.tab.close completed
+# [otto:test:data] closed=true tabSessionId=tab_wait_1
+# Subtest: runTestCommand waits for interrupt on command.test error when wait-for-interrupt is enabled
+ok 34 - runTestCommand waits for interrupt on command.test error when wait-for-interrupt is enabled
+  ---
+  duration_ms: 27.826667
+  type: 'test'
+  ...
+# [otto:test] command.test completed
+# [otto:test:data] 
+# [otto:test] command.test completed
+# [otto:test:data] 
+# Subtest: runTestCommand defaults reddit getFeed minReturnedPosts to 20 when missing
+ok 35 - runTestCommand defaults reddit getFeed minReturnedPosts to 20 when missing
+  ---
+  duration_ms: 3.692209
+  type: 'test'
+  ...
+# Subtest: runTestCommand keeps explicit reddit getFeed minReturnedPosts value
+ok 36 - runTestCommand keeps explicit reddit getFeed minReturnedPosts value
+  ---
+  duration_ms: 0.392042
+  type: 'test'
+  ...
+# Subtest: shouldReuseCachedInstall honors version, force, and path existence
+ok 37 - shouldReuseCachedInstall honors version, force, and path existence
+  ---
+  duration_ms: 0.674959
+  type: 'test'
+  ...
+# Subtest: parseChecksum supports common sha256 file formats
+ok 38 - parseChecksum supports common sha256 file formats
+  ---
+  duration_ms: 0.352959
+  type: 'test'
+  ...
+# Subtest: settings Esc behavior and save semantics are deterministic
+ok 39 - settings Esc behavior and save semantics are deterministic
+  ---
+  duration_ms: 0.645375
+  type: 'test'
+  ...
+# Subtest: relay status report suggests start command when daemon is not running
+ok 40 - relay status report suggests start command when daemon is not running
+  ---
+  duration_ms: 0.140458
+  type: 'test'
+  ...
+# Subtest: relay status report includes runtime details when daemon is running
+ok 41 - relay status report includes runtime details when daemon is running
+  ---
+  duration_ms: 0.085917
+  type: 'test'
+  ...
+# Subtest: setup non-interactive mode depends on explicit flag and tty availability
+ok 42 - setup non-interactive mode depends on explicit flag and tty availability
+  ---
+  duration_ms: 0.053542
+  type: 'test'
+  ...
+# Subtest: setup starts relay daemon when not already running
+ok 43 - setup starts relay daemon when not already running
+  ---
+  duration_ms: 0.186792
+  type: 'test'
+  ...
+# Subtest: setup reuses running relay daemon when ports match
+ok 44 - setup reuses running relay daemon when ports match
+  ---
+  duration_ms: 0.062042
+  type: 'test'
+  ...
+# Subtest: setup fails when running relay daemon port conflicts with setup relay url
+ok 45 - setup fails when running relay daemon port conflicts with setup relay url
+  ---
+  duration_ms: 0.284958
+  type: 'test'
+  ...
+# Subtest: createSocketClosedWhileWaitingError returns friendly coded error
+ok 46 - createSocketClosedWhileWaitingError returns friendly coded error
+  ---
+  duration_ms: 0.626875
+  type: 'test'
+  ...
+# Subtest: toSocketCloseAlertPayload supports legacy socket-close errors
+ok 47 - toSocketCloseAlertPayload supports legacy socket-close errors
+  ---
+  duration_ms: 0.108167
+  type: 'test'
+  ...
+# Subtest: isSocketClosedWhileWaitingError distinguishes unrelated errors
+ok 48 - isSocketClosedWhileWaitingError distinguishes unrelated errors
+  ---
+  duration_ms: 0.066834
+  type: 'test'
+  ...
+# Subtest: buildSocketCloseReasonSummary handles missing action
+ok 49 - buildSocketCloseReasonSummary handles missing action
+  ---
+  duration_ms: 0.072875
+  type: 'test'
+  ...
+# Subtest: matches listener_update events for subscribe request id
+ok 50 - matches listener_update events for subscribe request id
+  ---
+  duration_ms: 1.75975
+  type: 'test'
+  ...
+# Subtest: does not match listener_update events tied to command.test request id
+ok 51 - does not match listener_update events tied to command.test request id
+  ---
+  duration_ms: 0.097375
+  type: 'test'
+  ...
+# Subtest: does not match non-event or non-listener_update envelopes
+ok 52 - does not match non-event or non-listener_update envelopes
+  ---
+  duration_ms: 0.072917
+  type: 'test'
+  ...
+# Subtest: resolveCleanupSocketStrategy reuses open socket when available
+ok 53 - resolveCleanupSocketStrategy reuses open socket when available
+  ---
+  duration_ms: 0.571333
+  type: 'test'
+  ...
+# Subtest: resolveCleanupSocketStrategy reconnects when socket is closed without prior error
+ok 54 - resolveCleanupSocketStrategy reconnects when socket is closed without prior error
+  ---
+  duration_ms: 0.062
+  type: 'test'
+  ...
+# Subtest: resolveCleanupSocketStrategy reconnects when socket is closed and there is an original error
+ok 55 - resolveCleanupSocketStrategy reconnects when socket is closed and there is an original error
+  ---
+  duration_ms: 0.050958
+  type: 'test'
+  ...
+# Subtest: generic listener updates render readable summary lines
+ok 56 - generic listener updates render readable summary lines
+  ---
+  duration_ms: 2.137208
+  type: 'test'
+  ...
+# Subtest: shared domain chat.message renders with from/to labels
+ok 57 - shared domain chat.message renders with from/to labels
+  ---
+  duration_ms: 0.137125
+  type: 'test'
+  ...
+# Subtest: shared domain chat.typing renders with from/to labels
+ok 58 - shared domain chat.typing renders with from/to labels
+  ---
+  duration_ms: 0.094292
+  type: 'test'
+  ...
+# Subtest: shared domain chat.message_deleted renders actor and message id
+ok 59 - shared domain chat.message_deleted renders actor and message id
+  ---
+  duration_ms: 0.146375
+  type: 'test'
+  ...
+# Subtest: command result renders payload post lines in non-json mode
+ok 60 - command result renders payload post lines in non-json mode
+  ---
+  duration_ms: 0.493666
+  type: 'test'
+  ...
+# Subtest: command result renders generic object summary when posts are absent
+ok 61 - command result renders generic object summary when posts are absent
+  ---
+  duration_ms: 0.144125
+  type: 'test'
+  ...
+# Subtest: command result renders normalized user profile details
+ok 62 - command result renders normalized user profile details
+  ---
+  duration_ms: 0.166625
+  type: 'test'
+  ...
+# Subtest: command result colorizes post lines when color output is enabled
+ok 63 - command result colorizes post lines when color output is enabled
+  ---
+  duration_ms: 0.098208
+  type: 'test'
+  ...
+# Subtest: json output mode preserves full frame object output
+ok 64 - json output mode preserves full frame object output
+  ---
+  duration_ms: 0.303375
+  type: 'test'
+  ...
+1..64
+# tests 64
+# suites 0
+# pass 64
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 605.999292
+
+> @telepat/otto-relay@0.3.0 test
+> node --test test/integration.test.mjs
+
+TAP version 13
+# Subtest: hello_ack and auth_ack include relayVersion metadata
+ok 1 - hello_ack and auth_ack include relayVersion metadata
+  ---
+  duration_ms: 237.837167
+  type: 'test'
+  ...
+# Subtest: relay pairing and logs endpoints
+ok 2 - relay pairing and logs endpoints
+  ---
+  duration_ms: 223.183584
+  type: 'test'
+  ...
+# Subtest: connected nodes endpoint is controller-authenticated and reports live node sessions
+ok 3 - connected nodes endpoint is controller-authenticated and reports live node sessions
+  ---
+  duration_ms: 228.888417
+  type: 'test'
+  ...
+# Subtest: pairing approval is first-wins and later approvals conflict deterministically
+ok 4 - pairing approval is first-wins and later approvals conflict deterministically
+  ---
+  duration_ms: 218.877834
+  type: 'test'
+  ...
+# Subtest: controller auth rejects malformed access token
+ok 5 - controller auth rejects malformed access token
+  ---
+  duration_ms: 214.852958
+  type: 'test'
+  ...
+# Subtest: controller auth rejects expired access token
+ok 6 - controller auth rejects expired access token
+  ---
+  duration_ms: 217.664375
+  type: 'test'
+  ...
+# Subtest: controller heartbeat timeout disconnects stale controller sessions
+ok 7 - controller heartbeat timeout disconnects stale controller sessions
+  ---
+  duration_ms: 2163.504167
+  type: 'test'
+  ...
+# Subtest: heartbeat timeout dispatches owner-scoped tab cleanup for stale controller only
+ok 8 - heartbeat timeout dispatches owner-scoped tab cleanup for stale controller only
+  ---
+  duration_ms: 3376.587208
+  type: 'test'
+  ...
+# Subtest: logs list and export support source and latest filters
+ok 9 - logs list and export support source and latest filters
+  ---
+  duration_ms: 382.802583
+  type: 'test'
+  ...
+# Subtest: logs spill over into multiple window files when max file bytes is exceeded
+ok 10 - logs spill over into multiple window files when max file bytes is exceeded
+  ---
+  duration_ms: 489.04975
+  type: 'test'
+  ...
+# Subtest: logs API rejects invalid source and latest query values
+ok 11 - logs API rejects invalid source and latest query values
+  ---
+  duration_ms: 216.742459
+  type: 'test'
+  ...
+# Subtest: logs subscribe source filter streams only matching entries
+ok 12 - logs subscribe source filter streams only matching entries
+  ---
+  duration_ms: 226.238291
+  type: 'test'
+  ...
+# Subtest: listener subscribe routes updates and unsubscribe stops further updates
+ok 13 - listener subscribe routes updates and unsubscribe stops further updates
+  ---
+  duration_ms: 226.350542
+  type: 'test'
+  ...
+# Subtest: command.test streams stay active past timeout window and cancel unsubscribes listeners
+ok 14 - command.test streams stay active past timeout window and cancel unsubscribes listeners
+  ---
+  duration_ms: 1533.00175
+  type: 'test'
+  ...
+# Subtest: non-responsive controller stream session is heartbeat-disconnected and listener updates are rejected
+ok 15 - non-responsive controller stream session is heartbeat-disconnected and listener updates are rejected
+  ---
+  duration_ms: 2186.426125
+  type: 'test'
+  ...
+# Subtest: new controller cannot cancel stale stream request owned by disconnected controller
+ok 16 - new controller cannot cancel stale stream request owned by disconnected controller
+  ---
+  duration_ms: 2189.692917
+  type: 'test'
+  ...
+# Subtest: issued controller tokens include configured claims and are revocable
+ok 17 - issued controller tokens include configured claims and are revocable
+  ---
+  duration_ms: 224.220458
+  type: 'test'
+  ...
+# Subtest: refresh sessions persist across relay restart with shared runtime store
+ok 18 - refresh sessions persist across relay restart with shared runtime store
+  ---
+  duration_ms: 732.725417
+  type: 'test'
+  ...
+# Subtest: controller command with disallowed scope returns forbidden_action
+ok 19 - controller command with disallowed scope returns forbidden_action
+  ---
+  duration_ms: 222.269416
+  type: 'test'
+  ...
+# Subtest: command.run scope is allowed while command.test and other command actions are denied
+ok 20 - command.run scope is allowed while command.test and other command actions are denied
+  ---
+  duration_ms: 222.270708
+  type: 'test'
+  ...
+# Subtest: controller malformed command without targetNodeId is rejected
+ok 21 - controller malformed command without targetNodeId is rejected
+  ---
+  duration_ms: 220.839
+  type: 'test'
+  ...
+# Subtest: controller session is rate-limited after configured per-minute threshold
+ok 22 - controller session is rate-limited after configured per-minute threshold
+  ---
+  duration_ms: 223.084292
+  type: 'test'
+  ...
+# Subtest: node listener_update frames bypass session rate limit while other node events still enforce it
+ok 23 - node listener_update frames bypass session rate limit while other node events still enforce it
+  ---
+  duration_ms: 217.476625
+  type: 'test'
+  ...
+# Subtest: controller auth accepts token signed by previous secret during rotation window
+ok 24 - controller auth accepts token signed by previous secret during rotation window
+  ---
+  duration_ms: 218.318292
+  type: 'test'
+  ...
+# Subtest: replayed command nonce is rejected inside session window
+ok 25 - replayed command nonce is rejected inside session window
+  ---
+  duration_ms: 222.009709
+  type: 'test'
+  ...
+# Subtest: stale command timestamp is rejected by replay window
+ok 26 - stale command timestamp is rejected by replay window
+  ---
+  duration_ms: 221.839458
+  type: 'test'
+  ...
+# Subtest: node websocket upgrade accepts configured allowed origin
+ok 27 - node websocket upgrade accepts configured allowed origin
+  ---
+  duration_ms: 316.376125
+  type: 'test'
+  ...
+# Subtest: node websocket upgrade rejects disallowed origin
+ok 28 - node websocket upgrade rejects disallowed origin
+  ---
+  duration_ms: 213.708917
+  type: 'test'
+  ...
+# Subtest: tab lock lifecycle emits acquire conflict renew and release events
+ok 29 - tab lock lifecycle emits acquire conflict renew and release events
+  ---
+  duration_ms: 227.546791
+  type: 'test'
+  ...
+# Subtest: lock lease expiry is emitted to logs
+ok 30 - lock lease expiry is emitted to logs
+  ---
+  duration_ms: 389.498542
+  type: 'test'
+  ...
+# Subtest: accepted command can complete successfully
+ok 31 - accepted command can complete successfully
+  ---
+  duration_ms: 225.911292
+  type: 'test'
+  ...
+# Subtest: accepted command can fail from node execution error
+ok 32 - accepted command can fail from node execution error
+  ---
+  duration_ms: 225.349666
+  type: 'test'
+  ...
+# Subtest: accepted command times out without node terminal response
+ok 33 - accepted command times out without node terminal response
+  ---
+  duration_ms: 1226.656208
+  type: 'test'
+  ...
+# Subtest: accepted command fails terminally when node disconnects
+ok 34 - accepted command fails terminally when node disconnects
+  ---
+  duration_ms: 229.1845
+  type: 'test'
+  ...
+# Subtest: registered controller requires node ACL grant before routing commands
+ok 35 - registered controller requires node ACL grant before routing commands
+  ---
+  duration_ms: 311.014916
+  type: 'test'
+  ...
+# Subtest: node-authenticated ACL API lists grants and supports revoke
+ok 36 - node-authenticated ACL API lists grants and supports revoke
+  ---
+  duration_ms: 314.204625
+  type: 'test'
+  ...
+# Subtest: controller registration rejects normalized name collisions
+ok 37 - controller registration rejects normalized name collisions
+  ---
+  duration_ms: 258.63175
+  type: 'test'
+  ...
+# Subtest: controller removal immediately cuts ACL access and disconnects active sessions
+ok 38 - controller removal immediately cuts ACL access and disconnects active sessions
+  ---
+  duration_ms: 313.105208
+  type: 'test'
+  ...
+# Subtest: controller remove-all revokes every client and active session
+ok 39 - controller remove-all revokes every client and active session
+  ---
+  duration_ms: 408.035167
+  type: 'test'
+  ...
+# Subtest: queued accepted command can be cancelled with terminal cancelled response
+ok 40 - queued accepted command can be cancelled with terminal cancelled response
+  ---
+  duration_ms: 223.241208
+  type: 'test'
+  ...
+# Subtest: wait_with_timeout command times out while queued under contention
+ok 41 - wait_with_timeout command times out while queued under contention
+  ---
+  duration_ms: 1230.861292
+  type: 'test'
+  ...
+# Subtest: per-tab FIFO stays ordered while cross-tab commands route in parallel
+ok 42 - per-tab FIFO stays ordered while cross-tab commands route in parallel
+  ---
+  duration_ms: 229.951958
+  type: 'test'
+  ...
+# Subtest: multi-controller mixed load preserves per-tab FIFO fairness
+ok 43 - multi-controller mixed load preserves per-tab FIFO fairness
+  ---
+  duration_ms: 227.513458
+  type: 'test'
+  ...
+# Subtest: tab queue depth limit rejects additional queued commands deterministically
+ok 44 - tab queue depth limit rejects additional queued commands deterministically
+  ---
+  duration_ms: 226.455167
+  type: 'test'
+  ...
+# Subtest: controller queue depth limit rejects additional queued commands across tabs
+ok 45 - controller queue depth limit rejects additional queued commands across tabs
+  ---
+  duration_ms: 226.297875
+  type: 'test'
+  ...
+# Subtest: same-tab burst drains in FIFO order across controllers without starvation
+ok 46 - same-tab burst drains in FIFO order across controllers without starvation
+  ---
+  duration_ms: 229.413458
+  type: 'test'
+  ...
+# Subtest: command.run commands keep per-tab queue invariants
+ok 47 - command.run commands keep per-tab queue invariants
+  ---
+  duration_ms: 223.627375
+  type: 'test'
+  ...
+1..47
+# tests 47
+# suites 0
+# pass 47
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 24726.0965
+
+> @telepat/otto-extension@0.3.0 test
+> tsx --test test/**/*.test.ts src/**/*.test.ts
+
+TAP version 13
+# Subtest: reddit chat stream returns generic network listener options
+ok 1 - reddit chat stream returns generic network listener options
+  ---
+  duration_ms: 1.498666
+  type: 'test'
+  ...
+# Subtest: reddit chat stream parses data-prefixed payload lines
+ok 2 - reddit chat stream parses data-prefixed payload lines
+  ---
+  duration_ms: 0.486
+  type: 'test'
+  ...
+# Subtest: reddit chat stream parses CRLF chunked payloads
+ok 3 - reddit chat stream parses CRLF chunked payloads
+  ---
+  duration_ms: 0.149083
+  type: 'test'
+  ...
+# Subtest: reddit chat stream extracts matrix events from sync payload
+ok 4 - reddit chat stream extracts matrix events from sync payload
+  ---
+  duration_ms: 0.27375
+  type: 'test'
+  ...
+# Subtest: reddit chat stream exposes command-owned polling fallback plan
+ok 5 - reddit chat stream exposes command-owned polling fallback plan
+  ---
+  duration_ms: 0.119791
+  type: 'test'
+  ...
+# Subtest: reddit chat stream maps matrix events into shared domain chat objects
+ok 6 - reddit chat stream maps matrix events into shared domain chat objects
+  ---
+  duration_ms: 1.323084
+  type: 'test'
+  ...
+# Subtest: reddit chat stream mapper preserves room participant context across network updates
+ok 7 - reddit chat stream mapper preserves room participant context across network updates
+  ---
+  duration_ms: 0.917625
+  type: 'test'
+  ...
+# Subtest: reddit chat stream mapper suppresses duplicate events across repeated sync payloads
+ok 8 - reddit chat stream mapper suppresses duplicate events across repeated sync payloads
+  ---
+  duration_ms: 0.347375
+  type: 'test'
+  ...
+# Subtest: reddit chat stream mapper suppresses semantic duplicate messages with different event ids
+ok 9 - reddit chat stream mapper suppresses semantic duplicate messages with different event ids
+  ---
+  duration_ms: 0.561583
+  type: 'test'
+  ...
+# Subtest: relayHttpFromWs converts websocket URLs to http(s)
+ok 10 - relayHttpFromWs converts websocket URLs to http(s)
+  ---
+  duration_ms: 0.755167
+  type: 'test'
+  ...
+# Subtest: ensurePairingState stores pairing challenge when node is unpaired
+ok 11 - ensurePairingState stores pairing challenge when node is unpaired
+  ---
+  duration_ms: 0.508042
+  type: 'test'
+  ...
+# Subtest: bootstrap keeps runtime alive via pairing check, offscreen doc, and keepwarm alarm
+ok 12 - bootstrap keeps runtime alive via pairing check, offscreen doc, and keepwarm alarm
+  ---
+  duration_ms: 0.42525
+  type: 'test'
+  ...
+# Subtest: ensureOffscreenDocument coalesces concurrent callers into one creation attempt
+ok 13 - ensureOffscreenDocument coalesces concurrent callers into one creation attempt
+  ---
+  duration_ms: 0.093375
+  type: 'test'
+  ...
+# Subtest: ensureOffscreenDocument retries successfully after transient createDocument failure
+ok 14 - ensureOffscreenDocument retries successfully after transient createDocument failure
+  ---
+  duration_ms: 0.645542
+  type: 'test'
+  ...
+# Subtest: ensureOffscreenDocument ignores duplicate-create race errors
+ok 15 - ensureOffscreenDocument ignores duplicate-create race errors
+  ---
+  duration_ms: 0.210333
+  type: 'test'
+  ...
+# Subtest: ensurePairingState re-enters pairing flow immediately after expiry
+ok 16 - ensurePairingState re-enters pairing flow immediately after expiry
+  ---
+  duration_ms: 0.532584
+  type: 'test'
+  ...
+# Subtest: ensurePairingState resets orphaned challenge state when pairing code is missing
+ok 17 - ensurePairingState resets orphaned challenge state when pairing code is missing
+  ---
+  duration_ms: 0.2105
+  type: 'test'
+  ...
+# Subtest: ensurePairingState requests a fresh challenge when relay no longer has challenge id
+ok 18 - ensurePairingState requests a fresh challenge when relay no longer has challenge id
+  ---
+  duration_ms: 0.40375
+  type: 'test'
+  ...
+# Subtest: ensurePairingState retries non-OK status and recovers by reissuing challenge
+ok 19 - ensurePairingState retries non-OK status and recovers by reissuing challenge
+  ---
+  duration_ms: 456.576333
+  type: 'test'
+  ...
+# Subtest: ensurePairingState clears invalid stored node tokens and re-enters pairing
+ok 20 - ensurePairingState clears invalid stored node tokens and re-enters pairing
+  ---
+  duration_ms: 0.799625
+  type: 'test'
+  ...
+# Subtest: ensurePairingState refreshes stored node access token and skips pairing when refresh succeeds
+ok 21 - ensurePairingState refreshes stored node access token and skips pairing when refresh succeeds
+  ---
+  duration_ms: 0.71025
+  type: 'test'
+  ...
+# Subtest: ensurePairingState persists rotated node refresh token when refresh endpoint rotates token
+ok 22 - ensurePairingState persists rotated node refresh token when refresh endpoint rotates token
+  ---
+  duration_ms: 0.291792
+  type: 'test'
+  ...
+# Subtest: reconcileAutomationState prunes stale tab sessions after restart
+ok 23 - reconcileAutomationState prunes stale tab sessions after restart
+  ---
+  duration_ms: 1.615291
+  type: 'test'
+  ...
+# Subtest: reconcileAutomationState rebuilds missing automation group and reattaches tracked tabs
+ok 24 - reconcileAutomationState rebuilds missing automation group and reattaches tracked tabs
+  ---
+  duration_ms: 0.3495
+  type: 'test'
+  ...
+# Subtest: primitive.tab.query returns current tab session map
+ok 25 - primitive.tab.query returns current tab session map
+  ---
+  duration_ms: 2.145709
+  type: 'test'
+  ...
+# Subtest: navigate returns deterministic unknown_tab_session for missing mapping
+ok 26 - navigate returns deterministic unknown_tab_session for missing mapping
+  ---
+  duration_ms: 0.45275
+  type: 'test'
+  ...
+# Subtest: navigate prunes stale mapping and returns tab_session_closed when tab is gone
+ok 27 - navigate prunes stale mapping and returns tab_session_closed when tab is gone
+  ---
+  duration_ms: 0.238792
+  type: 'test'
+  ...
+# Subtest: command.run rejects site mismatch for current tab URL
+ok 28 - command.run rejects site mismatch for current tab URL
+  ---
+  duration_ms: 0.448291
+  type: 'test'
+  ...
+# Subtest: command.run waits for committed tab URL before site validation
+ok 29 - command.run waits for committed tab URL before site validation
+  ---
+  duration_ms: 1081.495459
+  type: 'test'
+  ...
+# Subtest: command.run returns transient tab_url_not_ready when committed URL never appears
+ok 30 - command.run returns transient tab_url_not_ready when committed URL never appears
+  ---
+  duration_ms: 1236.663208
+  type: 'test'
+  ...
+# Subtest: command.run redirects to login when auth check fails in auto mode
+ok 31 - command.run redirects to login when auth check fails in auto mode
+  ---
+  duration_ms: 1003.598958
+  type: 'test'
+  ...
+# Subtest: command.run executes when authenticated and returns posts
+ok 32 - command.run executes when authenticated and returns posts
+  ---
+  duration_ms: 1003.84625
+  type: 'test'
+  ...
+# Subtest: command.run enables debugger focus emulation for opted-in commands
+ok 33 - command.run enables debugger focus emulation for opted-in commands
+  ---
+  duration_ms: 1002.4795
+  type: 'test'
+  ...
+# Subtest: command.run enables debugger focus emulation for getChatMessages
+ok 34 - command.run enables debugger focus emulation for getChatMessages
+  ---
+  duration_ms: 1003.00375
+  type: 'test'
+  ...
+# Subtest: command.run fails deterministically when debugger API is unavailable for opted-in commands
+ok 35 - command.run fails deterministically when debugger API is unavailable for opted-in commands
+  ---
+  duration_ms: 0.939875
+  type: 'test'
+  ...
+# Subtest: command.run fails deterministically when debugger attach conflicts for opted-in commands
+ok 36 - command.run fails deterministically when debugger attach conflicts for opted-in commands
+  ---
+  duration_ms: 0.607125
+  type: 'test'
+  ...
+# Subtest: command.run getFeed accepts optional minReturnedPosts input
+ok 37 - command.run getFeed accepts optional minReturnedPosts input
+  ---
+  duration_ms: 1001.807125
+  type: 'test'
+  ...
+# Subtest: legacy command.reddit_feed action is routed via command runtime
+ok 38 - legacy command.reddit_feed action is routed via command runtime
+  ---
+  duration_ms: 1001.972167
+  type: 'test'
+  ...
+# [otto:command-debug] {
+#   site: 'reddit.com',
+#   tabSessionId: 'tab_alpha',
+#   tabId: 11,
+#   event: 'reddit.send_chat.create_room_result',
+#   serialized: '{"targetUsername":"alice","tabUrl":"https://chat.reddit.com/room/room_1","roomSeed":{"roomId":"room_1","finalPath":"/room/room_1","openedExistingRoom":false},"resultType":"object","resolvedRoomIdLength":6,"finalPath":"/room/room_1"}'
+# }
+# Subtest: command.run sendChatMessage returns deterministic payload
+ok 39 - command.run sendChatMessage returns deterministic payload
+  ---
+  duration_ms: 1006.9655
+  type: 'test'
+  ...
+# [otto:command-debug] {
+#   site: 'reddit.com',
+#   tabSessionId: 'tab_alpha',
+#   tabId: 11,
+#   event: 'reddit.send_chat.create_room_result',
+#   serialized: '{"targetUsername":"alice","tabUrl":"https://chat.reddit.com/room/room_1","roomSeed":{"roomId":"room_1","finalPath":"/room/room_1","openedExistingRoom":false},"resultType":"object","resolvedRoomIdLength":6,"finalPath":"/room/room_1"}'
+# }
+# Subtest: command.run sendChatMessage emits command script debug logs by default
+ok 40 - command.run sendChatMessage emits command script debug logs by default
+  ---
+  duration_ms: 1002.873417
+  type: 'test'
+  ...
+# [otto:command-debug] {
+#   site: 'reddit.com',
+#   tabSessionId: 'tab_alpha',
+#   tabId: 11,
+#   event: 'reddit.send_chat.create_room_result',
+#   serialized: '{"targetUsername":"alice","tabUrl":"https://www.reddit.com/","roomSeed":null,"resultType":"object","resolvedRoomIdLength":0}'
+# }
+# Subtest: command.run sendChatMessage returns missing_result_payload diagnostics when create room payload is empty
+ok 41 - command.run sendChatMessage returns missing_result_payload diagnostics when create room payload is empty
+  ---
+  duration_ms: 1003.739166
+  type: 'test'
+  ...
+# Subtest: command.run commentOnPost returns deterministic payload
+ok 42 - command.run commentOnPost returns deterministic payload
+  ---
+  duration_ms: 1003.469791
+  type: 'test'
+  ...
+# Subtest: command.run commentOnPost rejects missing required input fields before execute
+ok 43 - command.run commentOnPost rejects missing required input fields before execute
+  ---
+  duration_ms: 0.934625
+  type: 'test'
+  ...
+# Subtest: command.run commentOnPost returns missing_result_payload diagnostics when send payload is empty
+ok 44 - command.run commentOnPost returns missing_result_payload diagnostics when send payload is empty
+  ---
+  duration_ms: 1002.100334
+  type: 'test'
+  ...
+# Subtest: command.run commentOnPost surfaces serialized in-page composer error
+ok 45 - command.run commentOnPost surfaces serialized in-page composer error
+  ---
+  duration_ms: 1003.894709
+  type: 'test'
+  ...
+# Subtest: command.run commentOnPost ignores malformed serialized marker payloads
+ok 46 - command.run commentOnPost ignores malformed serialized marker payloads
+  ---
+  duration_ms: 1002.418583
+  type: 'test'
+  ...
+# Subtest: command.run commentOnPost surfaces serialized in-page error retryable flag
+ok 47 - command.run commentOnPost surfaces serialized in-page error retryable flag
+  ---
+  duration_ms: 1001.343334
+  type: 'test'
+  ...
+# Subtest: command.test commentOnPost also rethrows serialized in-page errors
+ok 48 - command.test commentOnPost also rethrows serialized in-page errors
+  ---
+  duration_ms: 1000.88725
+  type: 'test'
+  ...
+# Subtest: command.run commentOnPost installs DOM helpers before script execution
+ok 49 - command.run commentOnPost installs DOM helpers before script execution
+  ---
+  duration_ms: 1001.4205
+  type: 'test'
+  ...
+# Subtest: command.run getChatMessages normalizes matrix events
+ok 50 - command.run getChatMessages normalizes matrix events
+  ---
+  duration_ms: 1005.123417
+  type: 'test'
+  ...
+# Subtest: command.run getChatMessages fetches across rooms when roomId is omitted
+ok 51 - command.run getChatMessages fetches across rooms when roomId is omitted
+  ---
+  duration_ms: 1002.328958
+  type: 'test'
+  ...
+# Subtest: command.run getChatMessages falls back to formatted_body when body is missing
+ok 52 - command.run getChatMessages falls back to formatted_body when body is missing
+  ---
+  duration_ms: 1001.914292
+  type: 'test'
+  ...
+# Subtest: command.test getChatMessages returns stream listener metadata
+ok 53 - command.test getChatMessages returns stream listener metadata
+  ---
+  duration_ms: 1989.264125
+  type: 'test'
+  ...
+# Subtest: command.test getChatMessages returns buffered polling fallback when interception is unavailable
+ok 54 - command.test getChatMessages returns buffered polling fallback when interception is unavailable
+  ---
+  duration_ms: 2006.173709
+  type: 'test'
+  ...
+# Subtest: command.run rejects unexpected input fields before execute
+ok 55 - command.run rejects unexpected input fields before execute
+  ---
+  duration_ms: 0.603708
+  type: 'test'
+  ...
+# Subtest: command.run rejects missing required input fields before execute
+ok 56 - command.run rejects missing required input fields before execute
+  ---
+  duration_ms: 0.241
+  type: 'test'
+  ...
+# Subtest: command.run rejects invalid input field types before execute
+ok 57 - command.run rejects invalid input field types before execute
+  ---
+  duration_ms: 0.240125
+  type: 'test'
+  ...
+# Subtest: command.run rejects non-number getFeed minReturnedPosts before execute
+ok 58 - command.run rejects non-number getFeed minReturnedPosts before execute
+  ---
+  duration_ms: 0.224583
+  type: 'test'
+  ...
+# Subtest: command.run enforces inputAtLeastOneOf metadata before execute
+ok 59 - command.run enforces inputAtLeastOneOf metadata before execute
+  ---
+  duration_ms: 0.204666
+  type: 'test'
+  ...
+# Subtest: command.run getUserInfo defaults to logged-in user when input is empty
+ok 60 - command.run getUserInfo defaults to logged-in user when input is empty
+  ---
+  duration_ms: 0.638583
+  type: 'test'
+  ...
+# Subtest: command.run auto-navigates to preloadHost before execute
+ok 61 - command.run auto-navigates to preloadHost before execute
+  ---
+  duration_ms: 1000.63125
+  type: 'test'
+  ...
+# Subtest: command.run waits for preload document readiness before execute
+ok 62 - command.run waits for preload document readiness before execute
+  ---
+  duration_ms: 1203.170791
+  type: 'test'
+  ...
+# Subtest: command.test falls back to execute when command test hook is absent
+ok 63 - command.test falls back to execute when command test hook is absent
+  ---
+  duration_ms: 1002.599959
+  type: 'test'
+  ...
+# Subtest: command.test falls back to execute and honors preloadHost compatibility
+ok 64 - command.test falls back to execute and honors preloadHost compatibility
+  ---
+  duration_ms: 1001.074416
+  type: 'test'
+  ...
+# Subtest: command.test waits for preload document readiness before execute fallback
+ok 65 - command.test waits for preload document readiness before execute fallback
+  ---
+  duration_ms: 1202.152083
+  type: 'test'
+  ...
+# [otto:command-debug] {
+#   site: 'reddit.com',
+#   tabSessionId: 'tab_alpha',
+#   tabId: 11,
+#   event: 'reddit.send_chat.create_room_result',
+#   serialized: '{"targetUsername":"alice","tabUrl":"https://chat.reddit.com/room/room_1","roomSeed":{"roomId":"room_1","finalPath":"/room/room_1","openedExistingRoom":false},"resultType":"object","resolvedRoomIdLength":6,"finalPath":"/room/room_1"}'
+# }
+# Subtest: command.test uses sendChatMessage test hook to execute mocked send flow
+ok 66 - command.test uses sendChatMessage test hook to execute mocked send flow
+  ---
+  duration_ms: 1002.549333
+  type: 'test'
+  ...
+# Subtest: command.test sendChatMessage with roomId opens direct room URL using mocked send flow
+ok 67 - command.test sendChatMessage with roomId opens direct room URL using mocked send flow
+  ---
+  duration_ms: 2003.324625
+  type: 'test'
+  ...
+# Subtest: primitive.tab.open initializes automation group without grouping active user tab
+ok 68 - primitive.tab.open initializes automation group without grouping active user tab
+  ---
+  duration_ms: 1.149458
+  type: 'test'
+  ...
+# Subtest: concurrent primitive.tab.open calls initialize automation group once
+ok 69 - concurrent primitive.tab.open calls initialize automation group once
+  ---
+  duration_ms: 0.349417
+  type: 'test'
+  ...
+# Subtest: primitive.tab.open recovers when stored automation group id is stale
+ok 70 - primitive.tab.open recovers when stored automation group id is stale
+  ---
+  duration_ms: 0.628666
+  type: 'test'
+  ...
+# Subtest: primitive.tab.open recovers when stale group error is non-Error value
+ok 71 - primitive.tab.open recovers when stale group error is non-Error value
+  ---
+  duration_ms: 0.277334
+  type: 'test'
+  ...
+# Subtest: primitive.tab.open recovers when tab group update throws nested lastError object
+ok 72 - primitive.tab.open recovers when tab group update throws nested lastError object
+  ---
+  duration_ms: 0.190708
+  type: 'test'
+  ...
+# Subtest: primitive.tab.open succeeds when tab grouping is unavailable in non-normal windows
+ok 73 - primitive.tab.open succeeds when tab grouping is unavailable in non-normal windows
+  ---
+  duration_ms: 0.150083
+  type: 'test'
+  ...
+# Subtest: primitive.tab.open stores owner metadata from relay-injected controller client id
+ok 74 - primitive.tab.open stores owner metadata from relay-injected controller client id
+  ---
+  duration_ms: 1.252042
+  type: 'test'
+  ...
+# Subtest: primitive.tab.close_owned closes only tabs owned by target controller
+ok 75 - primitive.tab.close_owned closes only tabs owned by target controller
+  ---
+  duration_ms: 0.399667
+  type: 'test'
+  ...
+# Subtest: listener.subscribe returns deterministic subscribed payload
+ok 76 - listener.subscribe returns deterministic subscribed payload
+  ---
+  duration_ms: 0.111375
+  type: 'test'
+  ...
+# Subtest: listener.subscribe normalizes network interception options
+ok 77 - listener.subscribe normalizes network interception options
+  ---
+  duration_ms: 0.165542
+  type: 'test'
+  ...
+# Subtest: listener.subscribe rejects network interception invalid request host allowlist
+ok 78 - listener.subscribe rejects network interception invalid request host allowlist
+  ---
+  duration_ms: 0.1955
+  type: 'test'
+  ...
+# Subtest: listener.subscribe rejects network interception missing site
+ok 79 - listener.subscribe rejects network interception missing site
+  ---
+  duration_ms: 0.12525
+  type: 'test'
+  ...
+# Subtest: listener.subscribe rejects network interception invalid mode
+ok 80 - listener.subscribe rejects network interception invalid mode
+  ---
+  duration_ms: 0.115708
+  type: 'test'
+  ...
+# Subtest: listener.subscribe rejects network interception invalid mimeTypes
+ok 81 - listener.subscribe rejects network interception invalid mimeTypes
+  ---
+  duration_ms: 0.145833
+  type: 'test'
+  ...
+# Subtest: listener.subscribe normalizes network interception mode and list options
+ok 82 - listener.subscribe normalizes network interception mode and list options
+  ---
+  duration_ms: 0.161166
+  type: 'test'
+  ...
+# Subtest: listener.subscribe rejects network interception invalid streamAdapter type
+ok 83 - listener.subscribe rejects network interception invalid streamAdapter type
+  ---
+  duration_ms: 0.131792
+  type: 'test'
+  ...
+# Subtest: listener.subscribe rejects network interception invalid selfUserId type
+ok 84 - listener.subscribe rejects network interception invalid selfUserId type
+  ---
+  duration_ms: 0.126541
+  type: 'test'
+  ...
+# Subtest: listener.subscribe rejects network interception invalid includeBody type
+ok 85 - listener.subscribe rejects network interception invalid includeBody type
+  ---
+  duration_ms: 0.114625
+  type: 'test'
+  ...
+# Subtest: command.run getUserInfo maps reddit profile payload
+ok 86 - command.run getUserInfo maps reddit profile payload
+  ---
+  duration_ms: 0.28875
+  type: 'test'
+  ...
+# Subtest: listener.unsubscribe requires targetRequestId
+ok 87 - listener.unsubscribe requires targetRequestId
+  ---
+  duration_ms: 0.122333
+  type: 'test'
+  ...
+# Subtest: remember and replay response by idempotency key
+ok 88 - remember and replay response by idempotency key
+  ---
+  duration_ms: 4.62825
+  type: 'test'
+  ...
+# Subtest: fallback dedupe uses requestId when idempotency key missing
+ok 89 - fallback dedupe uses requestId when idempotency key missing
+  ---
+  duration_ms: 0.142125
+  type: 'test'
+  ...
+# Subtest: stale replay entries are pruned by TTL
+ok 90 - stale replay entries are pruned by TTL
+  ---
+  duration_ms: 0.11675
+  type: 'test'
+  ...
+# Subtest: rememberReplayResponse compacts oversized responses to avoid quota failures
+ok 91 - rememberReplayResponse compacts oversized responses to avoid quota failures
+  ---
+  duration_ms: 0.509042
+  type: 'test'
+  ...
+# Subtest: ensureForTab fails deterministically when debugger api is unavailable
+ok 92 - ensureForTab fails deterministically when debugger api is unavailable
+  ---
+  duration_ms: 1.124333
+  type: 'test'
+  ...
+# Subtest: ensureForTab attaches and enables once per tab when owned
+ok 93 - ensureForTab attaches and enables once per tab when owned
+  ---
+  duration_ms: 1.0265
+  type: 'test'
+  ...
+# Subtest: ensureForTab reuses existing attachment on attach conflict when command routing works
+ok 94 - ensureForTab reuses existing attachment on attach conflict when command routing works
+  ---
+  duration_ms: 0.252667
+  type: 'test'
+  ...
+# Subtest: ensureForTab returns conflict error when attach conflict cannot be reused
+ok 95 - ensureForTab returns conflict error when attach conflict cannot be reused
+  ---
+  duration_ms: 0.227542
+  type: 'test'
+  ...
+# Subtest: ensureForTab classifies attach permission errors as non-retryable
+ok 96 - ensureForTab classifies attach permission errors as non-retryable
+  ---
+  duration_ms: 0.11975
+  type: 'test'
+  ...
+# Subtest: ensureForTab classifies generic attach failures as retryable
+ok 97 - ensureForTab classifies generic attach failures as retryable
+  ---
+  duration_ms: 0.109916
+  type: 'test'
+  ...
+# Subtest: ensureForTab detaches owned attachment when focus command fails
+ok 98 - ensureForTab detaches owned attachment when focus command fails
+  ---
+  duration_ms: 0.201
+  type: 'test'
+  ...
+# Subtest: stopForTab detaches owned attachment and clears tab state
+ok 99 - stopForTab detaches owned attachment and clears tab state
+  ---
+  duration_ms: 0.194334
+  type: 'test'
+  ...
+# Subtest: stopForTab still detaches owned attachment when disable command fails
+ok 100 - stopForTab still detaches owned attachment when disable command fails
+  ---
+  duration_ms: 0.463875
+  type: 'test'
+  ...
+# Subtest: onDetach listener clears state and prevents extra detach on stopForTab
+ok 101 - onDetach listener clears state and prevents extra detach on stopForTab
+  ---
+  duration_ms: 0.453959
+  type: 'test'
+  ...
+# Subtest: createExtensionLogQueue enforces max size by dropping oldest entries
+ok 102 - createExtensionLogQueue enforces max size by dropping oldest entries
+  ---
+  duration_ms: 1.585958
+  type: 'test'
+  ...
+# Subtest: createExtensionLogQueue injects timestamp when absent
+ok 103 - createExtensionLogQueue injects timestamp when absent
+  ---
+  duration_ms: 0.095
+  type: 'test'
+  ...
+# Subtest: network interception manager captures Network loadingFinished bodies
+ok 104 - network interception manager captures Network loadingFinished bodies
+  ---
+  duration_ms: 6.228458
+  type: 'test'
+  ...
+# Subtest: fetch mode always continues paused request when body lookup fails
+ok 105 - fetch mode always continues paused request when body lookup fails
+  ---
+  duration_ms: 0.711791
+  type: 'test'
+  ...
+# Subtest: hybrid mode suppresses duplicate network response when equivalent fetch response already emitted
+ok 106 - hybrid mode suppresses duplicate network response when equivalent fetch response already emitted
+  ---
+  duration_ms: 0.949875
+  type: 'test'
+  ...
+# Subtest: command-local interception can receive callback updates without relay emission
+ok 107 - command-local interception can receive callback updates without relay emission
+  ---
+  duration_ms: 1.904167
+  type: 'test'
+  ...
+# Subtest: network interception manager accepts cross-host response via requestHostAllowlist
+ok 108 - network interception manager accepts cross-host response via requestHostAllowlist
+  ---
+  duration_ms: 2.087042
+  type: 'test'
+  ...
+# Subtest: network interception manager emits detached and clears subscription on tab removal
+ok 109 - network interception manager emits detached and clears subscription on tab removal
+  ---
+  duration_ms: 1.842708
+  type: 'test'
+  ...
+# Subtest: network interception manager emits websocket frame updates
+ok 110 - network interception manager emits websocket frame updates
+  ---
+  duration_ms: 2.007583
+  type: 'test'
+  ...
+# Subtest: network interception manager reuses shared debugger attachment and skips detach on unsubscribe
+ok 111 - network interception manager reuses shared debugger attachment and skips detach on unsubscribe
+  ---
+  duration_ms: 0.352583
+  type: 'test'
+  ...
+# Subtest: network interception manager fails subscribe when shared attach cannot be reused
+ok 112 - network interception manager fails subscribe when shared attach cannot be reused
+  ---
+  duration_ms: 0.870292
+  type: 'test'
+  ...
+# Subtest: reconnect backoff increases and is capped
+ok 113 - reconnect backoff increases and is capped
+  ---
+  duration_ms: 0.598333
+  type: 'test'
+  ...
+# Subtest: outbound queue keeps newest messages within bound
+ok 114 - outbound queue keeps newest messages within bound
+  ---
+  duration_ms: 2.232291
+  type: 'test'
+  ...
+# Subtest: default max queue constant remains stable
+ok 115 - default max queue constant remains stable
+  ---
+  duration_ms: 0.074458
+  type: 'test'
+  ...
+# Subtest: deriveOnboardingState returns needs_relay_url when relay URL is missing
+ok 116 - deriveOnboardingState returns needs_relay_url when relay URL is missing
+  ---
+  duration_ms: 0.731458
+  type: 'test'
+  ...
+# Subtest: deriveOnboardingState returns waiting_for_pair_approval when pairing code exists
+ok 117 - deriveOnboardingState returns waiting_for_pair_approval when pairing code exists
+  ---
+  duration_ms: 0.081333
+  type: 'test'
+  ...
+# Subtest: deriveOnboardingState returns authenticated_connecting when token exists without connected socket
+ok 118 - deriveOnboardingState returns authenticated_connecting when token exists without connected socket
+  ---
+  duration_ms: 0.061208
+  type: 'test'
+  ...
+# Subtest: deriveOnboardingState returns authenticated_connected when auth socket status is connected
+ok 119 - deriveOnboardingState returns authenticated_connected when auth socket status is connected
+  ---
+  duration_ms: 0.049167
+  type: 'test'
+  ...
+# Subtest: deriveOnboardingState returns version_mismatch when relay and extension versions differ
+ok 120 - deriveOnboardingState returns version_mismatch when relay and extension versions differ
+  ---
+  duration_ms: 0.199458
+  type: 'test'
+  ...
+# Subtest: deriveOnboardingState prioritizes error state when relay error exists
+ok 121 - deriveOnboardingState prioritizes error state when relay error exists
+  ---
+  duration_ms: 0.069917
+  type: 'test'
+  ...
+# Subtest: single-flight coalesces concurrent calls for the same key
+ok 122 - single-flight coalesces concurrent calls for the same key
+  ---
+  duration_ms: 12.238417
+  type: 'test'
+  ...
+# Subtest: single-flight runs distinct keys independently
+ok 123 - single-flight runs distinct keys independently
+  ---
+  duration_ms: 1.115875
+  type: 'test'
+  ...
+# Subtest: single-flight resets key after failure to allow retry
+ok 124 - single-flight resets key after failure to allow retry
+  ---
+  duration_ms: 0.298542
+  type: 'test'
+  ...
+1..124
+# tests 124
+# suites 0
+# pass 124
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 34156.816792
