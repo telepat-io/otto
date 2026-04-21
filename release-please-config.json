@@ -9,7 +9,8 @@
       "components": [
         "cli",
         "relay",
-        "protocol"
+        "protocol",
+        "extension"
       ]
     }
   ],
@@ -32,6 +33,13 @@
       "release-type": "node",
       "package-name": "@telepat/otto-protocol",
       "component": "protocol",
+      "include-component-in-tag": true,
+      "include-v-in-tag": true
+    },
+    "extension": {
+      "release-type": "node",
+      "package-name": "@telepat/otto-extension",
+      "component": "extension",
       "include-component-in-tag": true,
       "include-v-in-tag": true
     }
