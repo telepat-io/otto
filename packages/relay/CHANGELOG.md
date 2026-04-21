@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/telepat-io/otto/compare/relay-v0.2.0...relay-v0.3.0) (2026-04-21)
+
+
+### Features
+
+* update setup and extension management to support version checks ([e9d67b1](https://github.com/telepat-io/otto/commit/e9d67b1a3d0b83a499492c182f2bf1cf6a6558dc))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.2.0 to 0.3.0
+
 ## [0.2.0](https://github.com/telepat-io/otto/compare/relay-v0.1.0...relay-v0.2.0) (2026-04-21)
 
 
