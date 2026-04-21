@@ -46,6 +46,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build protocol dependency
+        if: matrix.workspace != '@telepat/otto-protocol'
+        run: npm run --workspace @telepat/otto-protocol build
+
       - name: Check types
         run: npm run --workspace "${{ matrix.workspace }}" check
 
