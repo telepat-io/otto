@@ -1,0 +1,22 @@
+# Changelog
+
+## [0.2.0](https://github.com/telepat-io/otto/compare/relay-v0.1.0...relay-v0.2.0) (2026-04-21)
+
+
+### Features
+
+* **cli:** implement client secret management and authentication retry logic ([54b1838](https://github.com/telepat-io/otto/commit/54b1838e47def4eb7450c6fa46dfa79335bf4376))
+* enhance offscreen client logging with queuing and flushing mechanism ([699e6ee](https://github.com/telepat-io/otto/commit/699e6ee1d3d10821535ec1c1bb9bb368854e50a8))
+* implement controller heartbeat management; enhance websocket connection stability and timeout handling ([a4c04f5](https://github.com/telepat-io/otto/commit/a4c04f51cd6525d3a675a96d0ddf9abee2d6d553))
+* implement day-windowed JSONL log storage with size-based spillover ([9a8b5db](https://github.com/telepat-io/otto/commit/9a8b5dbd00bfe22593557d981db172e5798f67bc))
+* implement Reddit chat listener with network interception and polling fallback ([11acfb8](https://github.com/telepat-io/otto/commit/11acfb8c254160e39421aa5093edc5019f42fc74))
+* implement WebSocket relay handling with lifecycle and non-command routes ([5944f95](https://github.com/telepat-io/otto/commit/5944f95af7d69708d0a0ad8d97bc542fbe6d2cca))
+* initial commit ([faec294](https://github.com/telepat-io/otto/commit/faec29461e788a46c091128c3f0c206985b6b9bb))
+* remove onboarding UI and related files; implement listener subscription and unsubscription commands ([1e2b630](https://github.com/telepat-io/otto/commit/1e2b6302c2210765f883903aff8b96a2bcc97baf))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.1.0 to 0.2.0
