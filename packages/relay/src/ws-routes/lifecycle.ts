@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import packageJson from '../../package.json' with { type: 'json' };
+
+const RELAY_VERSION = packageJson.version;
+
 export function handleRelayWsPreCommandMessage(params: {
   msg: any;
   ws: any;
@@ -60,6 +64,7 @@ export function handleRelayWsPreCommandMessage(params: {
     send(ws, buildEnvelope('hello_ack', 'relay', msg.requestId, {
       accepted: true,
       heartbeatIntervalMs: CONTROLLER_HEARTBEAT_INTERVAL_MS,
+      relayVersion: RELAY_VERSION,
     }));
     return { handled: true, client: nextClient };
   }
@@ -158,6 +163,7 @@ export function handleRelayWsPreCommandMessage(params: {
           nodeId: token.nodeId,
           controllerId: token.controllerId,
           scopes: token.scopes,
+          relayVersion: RELAY_VERSION,
         }));
       })
       .catch(() => {

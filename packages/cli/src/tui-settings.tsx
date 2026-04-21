@@ -124,28 +124,6 @@ const SETTINGS: SettingItem[] = [
     ],
   },
   {
-    id: 'setupStrategyDefault',
-    label: 'Default setup strategy',
-    get: (config) => config.setupStrategyDefault ?? 'auto',
-    choices: () => [
-      {
-        label: 'auto',
-        description: 'Recommended default for setup',
-        apply: (next) => ({ ...next, setupStrategyDefault: 'auto' }),
-      },
-      {
-        label: 'download',
-        description: 'Always download release artifact',
-        apply: (next) => ({ ...next, setupStrategyDefault: 'download' }),
-      },
-      {
-        label: 'build',
-        description: 'Prefer local extension build',
-        apply: (next) => ({ ...next, setupStrategyDefault: 'build' }),
-      },
-    ],
-  },
-  {
     id: 'setupNonInteractiveDefault',
     label: 'Setup non-interactive default',
     get: (config) => String(Boolean(config.setupNonInteractiveDefault)),
@@ -181,23 +159,6 @@ const SETTINGS: SettingItem[] = [
         label: '60000',
         description: '60 seconds',
         apply: (next) => ({ ...next, downloadTimeoutMs: 60000 }),
-      },
-    ],
-  },
-  {
-    id: 'strictVersionCheck',
-    label: 'Strict extension version check',
-    get: (config) => String(Boolean(config.strictVersionCheck)),
-    choices: () => [
-      {
-        label: 'true',
-        description: 'Require exact CLI/extension version match',
-        apply: (next) => ({ ...next, strictVersionCheck: true }),
-      },
-      {
-        label: 'false',
-        description: 'Allow non-strict version behavior',
-        apply: (next) => ({ ...next, strictVersionCheck: false }),
       },
     ],
   },

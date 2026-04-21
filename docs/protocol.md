@@ -122,7 +122,7 @@ Protocol currently uses `1.0`.
 
 Setup boundary note:
 
-Setup and extension artifact acquisition (`otto setup`, `otto extension get`) are out-of-band from this protocol. `otto setup` additionally ensures local relay daemon readiness for the selected setup relay URL port before completion, and non-interactive mode emits deterministic JSON summaries that include daemon readiness outcome and extension metadata.
+Setup and extension artifact acquisition (`otto setup`, `otto extension update`) are out-of-band from this protocol. `otto setup` additionally ensures local relay daemon readiness for the selected setup relay URL port before completion, and non-interactive mode emits deterministic JSON summaries that include daemon readiness outcome and extension metadata.
 
 Additive changes are preferred; breaking changes require a new major protocol version.
 

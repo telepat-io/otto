@@ -53,6 +53,8 @@ otto listener unsubscribe --target-request-id <subscribeRequestId>
 
 ```bash
 otto settings
+otto extension update
+otto extension info
 ```
 
 Use up/down for selection, Enter to edit, s to save, q or Esc to exit.

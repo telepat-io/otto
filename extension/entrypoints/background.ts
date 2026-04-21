@@ -71,6 +71,8 @@ async function syncActionBadge(chromeApi: typeof chrome): Promise<void> {
     'nodeAccessToken',
     'relayConnectionStatus',
     'relayConnectionError',
+    'relayVersion',
+    'extensionVersion',
   ]);
   const state = deriveOnboardingState(snapshot);
 
@@ -103,6 +105,12 @@ export default defineBackground(() => {
   const activeListenerRequestIds = new Set<string>();
   const listenerNameByRequestId = new Map<string, string>();
   const networkInterceptListenerManager = getNetworkInterceptListenerManager(chrome);
+
+  const syncExtensionVersion = () => {
+    withRuntimeErrorLogging(chrome.storage.local.set({ extensionVersion: chrome.runtime.getManifest().version }));
+  };
+
+  syncExtensionVersion();
 
   const runMaintenance = (mode: 'bootstrap' | 'keepwarm') => {
     if (maintenanceInFlight) {
@@ -177,8 +185,14 @@ export default defineBackground(() => {
 
   runMaintenance('bootstrap');
 
-  chrome.runtime.onInstalled.addListener(() => runMaintenance('bootstrap'));
-  chrome.runtime.onStartup.addListener(() => runMaintenance('bootstrap'));
+  chrome.runtime.onInstalled.addListener(() => {
+    syncExtensionVersion();
+    runMaintenance('bootstrap');
+  });
+  chrome.runtime.onStartup.addListener(() => {
+    syncExtensionVersion();
+    runMaintenance('bootstrap');
+  });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') {
@@ -189,7 +203,9 @@ export default defineBackground(() => {
       changes.pairingCode ||
       changes.relayConnectionStatus ||
       changes.relayConnectionError ||
-      changes.relayUrl
+      changes.relayUrl ||
+      changes.relayVersion ||
+      changes.extensionVersion
     ) {
       withRuntimeErrorLogging(syncActionBadge(chrome));
     }
@@ -257,11 +273,14 @@ export default defineBackground(() => {
           const payload = ((message as { payload?: unknown }).payload ?? {}) as {
             status?: RelayConnectionStatus;
             error?: string;
+            relayVersion?: string;
           };
           const status = payload.status ?? 'idle';
+          const relayVersion = typeof payload.relayVersion === 'string' ? payload.relayVersion.trim() : '';
           await chrome.storage.local.set({
             relayConnectionStatus: status,
             relayConnectionUpdatedAt: Date.now(),
+            ...(relayVersion ? { relayVersion } : {}),
           });
             await forwardExtensionLog(chrome, {
               level: status === 'error' ? 'warn' : 'debug',
@@ -269,6 +288,7 @@ export default defineBackground(() => {
               status,
               data: {
                 hasError: Boolean(payload.error),
+                relayVersion: relayVersion || undefined,
               },
             });
           const error = typeof payload.error === 'string' ? payload.error.trim() : '';

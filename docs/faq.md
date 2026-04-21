@@ -77,8 +77,14 @@ No. Global `@telepat/otto` installation already includes relay runtime dependenc
 ## Why does `otto setup` fail with download or checksum errors?
 `otto setup` retrieves extension artifacts from release assets and verifies SHA-256 checksums. Failures usually mean missing/misnamed release files, network issues, or a mismatched checksum file.
 
-## How does `otto setup --strategy auto` decide between build and download?
-`auto` prefers local build when setup runs in a full Otto repo checkout (or when `--repo-path` points to one). Outside a repo checkout, it uses release download.
+## How do I update the extension after setup?
+Run:
+
+```bash
+otto extension update
+```
+
+Then reload the extension in `chrome://extensions` (or restart your browser) so the updated extension runtime reconnects.
 
 ## Why does `otto setup` fail with a relay daemon port conflict?
 Setup now ensures relay daemon readiness. If a daemon is already running on a different port than the selected setup relay URL, setup fails to avoid hidden port drift. Stop the existing daemon with `otto stop` and rerun setup with the intended relay URL.
@@ -89,8 +95,8 @@ Setup non-interactive mode is now explicit for TTY usage. In an interactive term
 ## Where are controller and extension settings stored?
 Controller settings are stored in `~/.otto/config.json`. Extension node settings are stored in `chrome.storage.*` and configured from extension options. They are intentionally separate.
 
-## Why does `otto extension get --strategy build` fail?
-Build mode is dev-only and requires `--repo-path` that points to a full Otto checkout containing `extension/package.json`.
+## Why does popup show an extension update warning while connected?
+The extension version differs from the relay version it authenticated against. Run `otto extension update`, then reload extension in `chrome://extensions` (or restart browser).
 
 ## How do I edit controller-global settings safely?
 Use `otto settings`. Navigate with up/down, edit with Enter, save with `s`, and exit with `q` or `Esc`. While editing a field, `Esc` cancels the edit.

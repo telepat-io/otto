@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import { jwtVerify, SignJWT } from 'jose';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { z } from 'zod';
+import packageJson from '../package.json' with { type: 'json' };
 import {
   PROTOCOL_VERSION,
   type Envelope,
@@ -16,6 +17,7 @@ import {
 } from '@telepat/otto-protocol';
 
 const PORT = Number(process.env.OTTO_RELAY_PORT ?? 8787);
+const RELAY_VERSION = packageJson.version;
 const TOKEN_SECRET = process.env.OTTO_TOKEN_SECRET ?? 'dev-only-change-me';
 const TOKEN_PREVIOUS_SECRET = process.env.OTTO_TOKEN_PREVIOUS_SECRET;
 const TOKEN_ISSUER = process.env.OTTO_TOKEN_ISSUER ?? 'otto-relay';
@@ -2254,6 +2256,7 @@ wss.on('connection', (ws) => {
       send(ws, buildEnvelope('hello_ack', 'relay', msg.requestId, {
         accepted: true,
         heartbeatIntervalMs: CONTROLLER_HEARTBEAT_INTERVAL_MS,
+        relayVersion: RELAY_VERSION,
       }));
       return;
     }
@@ -2352,6 +2355,7 @@ wss.on('connection', (ws) => {
             nodeId: token.nodeId,
             controllerId: token.controllerId,
             scopes: token.scopes,
+            relayVersion: RELAY_VERSION,
           }));
         })
         .catch(() => {

@@ -63,8 +63,7 @@ export function shouldReuseCachedInstall(
     return false;
   }
 
-  // Force one-time migration away from legacy hidden local build artifacts.
-  if (config.extension?.source === 'build' && /[\\/]extension[\\/]\.output[\\/]chrome-mv3$/.test(unpackedPath)) {
+  if (config.extension?.source === 'build') {
     return false;
   }
 

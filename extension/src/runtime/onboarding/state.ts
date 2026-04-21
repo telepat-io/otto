@@ -14,6 +14,7 @@ export type OnboardingState =
   | 'waiting_for_pair_approval'
   | 'authenticated_connecting'
   | 'authenticated_connected'
+  | 'version_mismatch'
   | 'error';
 
 export type OnboardingStorageSnapshot = {
@@ -24,6 +25,8 @@ export type OnboardingStorageSnapshot = {
   nodeAccessToken?: string;
   relayConnectionStatus?: RelayConnectionStatus;
   relayConnectionError?: string;
+  relayVersion?: string;
+  extensionVersion?: string;
 };
 
 export type OnboardingViewModel = {
@@ -46,6 +49,8 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
   const nodeId = snapshot.nodeId?.trim() || 'not-generated-yet';
   const relayConnectionStatus = snapshot.relayConnectionStatus ?? 'idle';
   const relayConnectionError = snapshot.relayConnectionError?.trim();
+  const relayVersion = snapshot.relayVersion?.trim();
+  const extensionVersion = snapshot.extensionVersion?.trim();
 
   if (!relayUrl) {
     return {
@@ -74,6 +79,18 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
 
   if (snapshot.nodeAccessToken) {
     if (relayConnectionStatus === 'authenticated_connected') {
+      if (relayVersion && extensionVersion && relayVersion !== extensionVersion) {
+        return {
+          state: 'version_mismatch',
+          stateLabel: 'Extension update required',
+          detail: `Version mismatch: extension v${extensionVersion} and relay v${relayVersion}. Action required: run \"otto extension update\" in terminal, then reload Otto in chrome://extensions or restart your browser.`,
+          nodeId,
+          relayUrl,
+          badgeText: 'UPDT',
+          badgeColor: '#b45309',
+        };
+      }
+
       return {
         state: 'authenticated_connected',
         stateLabel: 'Connected',

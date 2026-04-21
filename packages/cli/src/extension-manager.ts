@@ -1,21 +1,18 @@
 import { createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, cpSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import AdmZip from 'adm-zip';
 import { homedir } from 'node:os';
 
 export type ExtensionInstallOptions = {
-  strategy: 'auto' | 'download' | 'build';
   version: string;
   outputDir?: string;
   releaseBaseUrl?: string;
   timeoutMs?: number;
-  repoPath?: string;
 };
 
 export type ExtensionInstallResult = {
-  source: 'download' | 'build';
+  source: 'download';
   version: string;
   zipPath?: string;
   unpackedPath: string;
@@ -24,25 +21,6 @@ export type ExtensionInstallResult = {
 };
 
 const DEFAULT_RELEASE_BASE_URL = 'https://github.com/telepat-io/otto/releases/download';
-
-function resolveRepoRootForBuild(repoPath?: string): string | null {
-  if (repoPath) {
-    const explicitRoot = resolve(repoPath);
-    const extensionPackageJson = join(explicitRoot, 'extension', 'package.json');
-    if (!existsSync(extensionPackageJson)) {
-      throw new Error('Build strategy requires a full repo checkout path containing extension/package.json');
-    }
-    return explicitRoot;
-  }
-
-  const cwdRoot = resolve(process.cwd());
-  const extensionPackageJson = join(cwdRoot, 'extension', 'package.json');
-  if (existsSync(extensionPackageJson)) {
-    return cwdRoot;
-  }
-
-  return null;
-}
 
 function ensureDir(path: string): void {
   mkdirSync(path, { recursive: true });
@@ -156,79 +134,7 @@ async function installFromDownload(opts: Required<Pick<ExtensionInstallOptions, 
   };
 }
 
-function runSpawn(command: string, args: string[], cwd: string): Promise<void> {
-  return new Promise<void>((resolvePromise, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      stdio: 'inherit',
-      env: process.env,
-    });
-
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolvePromise();
-        return;
-      }
-      reject(new Error(`Command failed (${code ?? 'unknown'}): ${command} ${args.join(' ')}`));
-    });
-
-    child.on('error', reject);
-  });
-}
-
-async function installFromBuild(opts: Required<Pick<ExtensionInstallOptions, 'version' | 'repoPath'>>): Promise<ExtensionInstallResult> {
-  const repoRoot = resolve(opts.repoPath);
-  const extensionPackageJson = join(repoRoot, 'extension', 'package.json');
-  if (!existsSync(extensionPackageJson)) {
-    throw new Error('Build strategy requires a full repo checkout path containing extension/package.json');
-  }
-
-  await runSpawn('npm', ['--workspace', '@telepat/otto-extension', 'run', 'build'], repoRoot);
-  const outputPath = join(repoRoot, 'extension', 'output', 'chrome-mv3');
-  if (!existsSync(outputPath) || !statSync(outputPath).isDirectory()) {
-    throw new Error('Expected build output at extension/output/chrome-mv3 was not found');
-  }
-  if (!existsSync(join(outputPath, 'manifest.json'))) {
-    throw new Error('Extension build output is missing manifest.json');
-  }
-
-  return {
-    source: 'build',
-    version: opts.version,
-    unpackedPath: outputPath,
-  };
-}
-
 export async function installExtensionArtifact(opts: ExtensionInstallOptions): Promise<ExtensionInstallResult> {
-  if (opts.strategy === 'auto') {
-    const repoRoot = resolveRepoRootForBuild(opts.repoPath);
-    if (repoRoot) {
-      return installFromBuild({
-        version: opts.version,
-        repoPath: repoRoot,
-      });
-    }
-
-    return installFromDownload({
-      version: opts.version,
-      outputDir: opts.outputDir,
-      releaseBaseUrl: opts.releaseBaseUrl,
-      timeoutMs: opts.timeoutMs,
-    });
-  }
-
-  const strategy = opts.strategy;
-
-  if (strategy === 'build') {
-    if (!opts.repoPath) {
-      throw new Error('Build strategy requires --repo-path');
-    }
-    return installFromBuild({
-      version: opts.version,
-      repoPath: opts.repoPath,
-    });
-  }
-
   return installFromDownload({
     version: opts.version,
     outputDir: opts.outputDir,

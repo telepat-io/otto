@@ -47,6 +47,21 @@ test('deriveOnboardingState returns authenticated_connected when auth socket sta
   assert.equal(view.badgeText, 'OK');
 });
 
+test('deriveOnboardingState returns version_mismatch when relay and extension versions differ', () => {
+  const view = deriveOnboardingState({
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    nodeId: 'node_abc',
+    nodeAccessToken: 'token',
+    relayConnectionStatus: 'authenticated_connected',
+    relayVersion: '0.3.0',
+    extensionVersion: '0.2.0',
+  });
+
+  assert.equal(view.state, 'version_mismatch');
+  assert.equal(view.badgeText, 'UPDT');
+  assert.match(view.detail, /otto extension update/i);
+});
+
 test('deriveOnboardingState prioritizes error state when relay error exists', () => {
   const view = deriveOnboardingState({
     relayUrl: 'ws://127.0.0.1:8787?role=node',

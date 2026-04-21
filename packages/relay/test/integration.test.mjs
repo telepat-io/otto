@@ -278,6 +278,52 @@ function sendExtensionLogEvent(ws, requestId, entry) {
   }));
 }
 
+test('hello_ack and auth_ack include relayVersion metadata', async (t) => {
+  const port = 8860;
+  const base = `http://127.0.0.1:${port}`;
+  const proc = startRelay(port);
+  const nodeId = 'node_relay_version_suite';
+
+  t.after(() => {
+    proc.kill();
+  });
+
+  await waitForRelay(base);
+  const nodeAccessToken = await issueNodeAccessToken(nodeId);
+
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/?role=node`);
+  t.after(() => {
+    ws.close();
+  });
+  await waitForWsOpen(ws);
+
+  ws.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'hello',
+    requestId: 'hello_version_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: { role: 'node', nodeId, capabilities: [] },
+  }));
+
+  const helloAck = await nextWsEnvelope(ws, (msg) => msg.messageType === 'hello_ack' && msg.requestId === 'hello_version_1');
+  assert.equal(typeof helloAck.payload?.relayVersion, 'string');
+  assert.ok(helloAck.payload.relayVersion.length > 0);
+
+  ws.send(JSON.stringify({
+    protocolVersion: '1.0.0',
+    messageType: 'auth',
+    requestId: 'auth_version_1',
+    timestamp: new Date().toISOString(),
+    senderRole: 'node',
+    payload: { accessToken: nodeAccessToken },
+  }));
+
+  const authAck = await nextWsEnvelope(ws, (msg) => msg.messageType === 'auth_ack' && msg.requestId === 'auth_version_1');
+  assert.equal(typeof authAck.payload?.relayVersion, 'string');
+  assert.ok(authAck.payload.relayVersion.length > 0);
+});
+
 test('relay pairing and logs endpoints', async (t) => {
   const port = 8799;
   const base = `http://127.0.0.1:${port}`;

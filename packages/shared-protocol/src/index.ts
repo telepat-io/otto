@@ -39,6 +39,21 @@ export interface AuthPayload {
   accessToken: string;
 }
 
+export interface HelloAckPayload {
+  accepted: boolean;
+  heartbeatIntervalMs: number;
+  relayVersion?: string;
+}
+
+export interface AuthAckPayload {
+  accepted: boolean;
+  role: OttoRole;
+  nodeId?: string;
+  controllerId?: string;
+  scopes?: string[];
+  relayVersion?: string;
+}
+
 export interface CommandPayload {
   targetNodeId: string;
   // Canonical reference for tab-scoped execution. Runtime also accepts payload.tabSessionId for compatibility.

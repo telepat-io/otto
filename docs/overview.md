@@ -93,10 +93,9 @@ Command invariants:
 - `otto setup` is controller-oriented onboarding.
 - It stores controller preferences and tokens in `~/.otto/config.json`.
 - It retrieves extension artifacts from release assets, validates checksum, and extracts to local cache.
-- Local build strategy writes unpacked extension artifacts to `extension/output/chrome-mv3`.
-- `auto` setup strategy prefers local build when running in a full repo checkout (or when `--repo-path` is provided); otherwise it downloads release artifacts.
+- User-facing setup/update paths are release-driven (`otto setup`, `otto extension update`).
 - It ensures relay daemon readiness for the selected setup relay URL port before completing setup.
-- Interactive setup is quick-start oriented: strategy defaults to `auto` (configurable via `otto settings`). Build mode asks for repo path only when needed.
+- Interactive setup is quick-start oriented and confirms release-based extension acquisition.
 - Interactive setup UI is rendered with Ink + `@inkjs/ui` primitives (selection, text input, confirmation), while non-interactive setup remains JSON-only.
 - Setup output mode is deterministic by environment:
 	- Interactive TTY mode prints human setup guidance and Chrome load-unpacked handoff steps.

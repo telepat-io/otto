@@ -9,14 +9,11 @@ export type RegisterCoreCommandsDeps = {
   saveConfig: (config: OttoConfig) => void;
   normalizeControllerRelayUrl: (urlValue: string) => string;
   deriveHttpUrl: (relayUrl: string) => string;
-  parseSetupStrategy: (value: unknown) => 'auto' | 'download' | 'build';
   parseMaybeNumber: (value: unknown, defaultValue: number) => number;
   shouldRunSetupNonInteractive: (interactiveAllowed: boolean, explicitNonInteractive: boolean) => boolean;
   runSetupPromptTui: (defaults: {
     relayUrl: string;
-    strategy: 'auto' | 'download' | 'build';
-    repoPath?: string;
-  }) => Promise<{ relayUrl: string; strategy: 'auto' | 'download' | 'build'; repoPath?: string } | null>;
+  }) => Promise<{ relayUrl: string } | null>;
   ensureRelayDaemonReadyForSetup: (
     relayUrl: string,
     readRelayDaemonState: () => RelayDaemonState | null,
@@ -31,14 +28,12 @@ export type RegisterCoreCommandsDeps = {
   isJsonOutput: (config: OttoConfig) => boolean;
   logJsonAware: (config: OttoConfig, value: unknown) => void;
   installExtensionArtifact: (opts: {
-    strategy: 'auto' | 'download' | 'build';
     version: string;
     outputDir?: string;
     releaseBaseUrl?: string;
     timeoutMs: number;
-    repoPath?: string;
   }) => Promise<{
-    source: 'download' | 'build';
+    source: 'download';
     version: string;
     zipPath?: string;
     unpackedPath: string;
@@ -156,25 +151,21 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
     .command('setup')
     .description('Guided controller setup including relay daemon readiness, extension acquisition, and Chrome handoff instructions')
     .option('--relay-url <url>', 'Controller relay websocket URL')
-    .option('--strategy <strategy>', 'auto|download|build')
     .option('--yes', 'Accept defaults without interactive confirmation', false)
     .option('--force', 'Reinstall extension artifact even if local cached version is present', false)
     .option('--output-dir <path>', 'Directory for downloaded extension artifacts')
     .option('--release-base-url <url>', 'Release base URL for extension downloads')
-    .option('--repo-path <path>', 'Local repo path used for --strategy build')
     .option('--download-timeout-ms <ms>', 'Download timeout in milliseconds')
     .option('--non-interactive', 'Skip interactive prompts and emit deterministic output', false)
     .action(async (opts) => {
       const config = deps.loadConfig();
-      const cliVersion = program.version() ?? '0.1.0';
+      const cliVersion = program.version() ?? '0.2.0';
       const interactiveAllowed = process.stdout.isTTY && process.stdin.isTTY;
       const explicitNonInteractive = Boolean(opts.nonInteractive);
       const nonInteractive = deps.shouldRunSetupNonInteractive(interactiveAllowed, explicitNonInteractive);
 
       const defaults = {
         relayUrl: deps.normalizeControllerRelayUrl(opts.relayUrl ?? config.relayUrl ?? deps.DEFAULT_CONTROLLER_RELAY_URL),
-        strategy: deps.parseSetupStrategy(opts.strategy ?? config.setupStrategyDefault ?? 'auto'),
-        repoPath: opts.repoPath as string | undefined,
       };
 
       const resolved = (!nonInteractive && !opts.yes)
@@ -189,7 +180,6 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
       const relayUrl = deps.normalizeControllerRelayUrl(resolved.relayUrl);
       const relayHttpUrl = deps.deriveHttpUrl(relayUrl);
       const timeoutMs = deps.parseMaybeNumber(opts.downloadTimeoutMs, config.downloadTimeoutMs ?? 25_000);
-      const strategy = resolved.strategy;
       const relayDaemon = deps.ensureRelayDaemonReadyForSetup(relayUrl, deps.readRelayDaemonState, deps.startRelayDaemon);
 
       const cachedUnpackedPath = config.extension?.unpackedPath;
@@ -205,12 +195,10 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
             releaseBaseUrl: config.extension?.releaseBaseUrl,
           }
         : await deps.installExtensionArtifact({
-            strategy,
             version: cliVersion,
             outputDir: opts.outputDir,
             releaseBaseUrl: opts.releaseBaseUrl,
             timeoutMs,
-            repoPath: resolved.repoPath,
           });
 
       const nextConfig: OttoConfig = {
@@ -266,7 +254,7 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
         console.log('[otto] reused existing local extension artifact cache');
       }
       console.log(`[otto] relay URL: ${relayUrl}`);
-      console.log(`[otto] extension source: ${install.source}`);
+      console.log('[otto] extension source: release download');
       if (install.zipPath) {
         console.log(`[otto] extension zip: ${install.zipPath}`);
       }
@@ -286,25 +274,20 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
   const extension = program.command('extension').description('Manage extension artifact installation for setup');
 
   extension
-    .command('get')
-    .description('Download or build an extension artifact and cache it locally')
-    .option('--strategy <strategy>', 'auto|download|build', 'auto')
+    .command('update')
+    .description('Download the latest release extension artifact for the current CLI version')
     .option('--output-dir <path>', 'Directory for downloaded extension artifacts')
     .option('--release-base-url <url>', 'Release base URL for extension downloads')
-    .option('--repo-path <path>', 'Local repo path used for --strategy build')
     .option('--download-timeout-ms <ms>', 'Download timeout in milliseconds')
     .action(async (opts) => {
       const config = deps.loadConfig();
-      const cliVersion = program.version() ?? '0.1.0';
-      const strategy = deps.parseSetupStrategy(opts.strategy);
+      const cliVersion = program.version() ?? '0.2.0';
 
       const install = await deps.installExtensionArtifact({
-        strategy,
         version: cliVersion,
         outputDir: opts.outputDir,
         releaseBaseUrl: opts.releaseBaseUrl,
         timeoutMs: deps.parseMaybeNumber(opts.downloadTimeoutMs, config.downloadTimeoutMs ?? 25_000),
-        repoPath: opts.repoPath,
       });
 
       const nextConfig: OttoConfig = {
@@ -321,10 +304,29 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
       };
       deps.saveConfig(nextConfig);
 
-      deps.logJsonAware(nextConfig, {
+      const payload = {
         ok: true,
         extension: nextConfig.extension,
-      });
+        actionRequired: 'Run otto extension update, then reload Otto in chrome://extensions or restart your browser.',
+        nextSteps: [
+          'Open chrome://extensions',
+          'Find Otto and click Reload',
+          'If needed, restart browser to reconnect extension runtime',
+        ],
+      };
+
+      if (deps.isJsonOutput(nextConfig)) {
+        deps.logJsonAware(nextConfig, payload);
+        return;
+      }
+
+      console.log('[otto] extension update complete');
+      console.log(`[otto] extension version: ${install.version}`);
+      console.log(`[otto] extension folder (load unpacked): ${install.unpackedPath}`);
+      console.log('[otto] ACTION REQUIRED: reload extension to apply update');
+      console.log('  1) Open chrome://extensions');
+      console.log('  2) Find Otto and click Reload');
+      console.log('  3) If needed, restart browser');
     });
 
   extension

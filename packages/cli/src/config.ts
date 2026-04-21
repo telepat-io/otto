@@ -25,9 +25,7 @@ export type OttoConfig = {
   controllerAccessToken?: string;
   controllerRefreshToken?: string;
   outputFormat?: 'pretty' | 'json';
-  setupStrategyDefault?: 'auto' | 'download' | 'build';
   setupNonInteractiveDefault?: boolean;
-  strictVersionCheck?: boolean;
   downloadTimeoutMs?: number;
   extension?: OttoExtensionInstall;
 };

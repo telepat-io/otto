@@ -17,6 +17,8 @@ const STORAGE_KEYS = [
   'nodeRefreshToken',
   'relayConnectionStatus',
   'relayConnectionError',
+  'relayVersion',
+  'extensionVersion',
 ] as const;
 
 type DomRefs = {
@@ -325,8 +327,9 @@ function render(snapshot: OnboardingStorageSnapshot, refs: DomRefs): OnboardingS
   refs.statusChip.textContent = view.badgeText;
   refs.statusChip.style.backgroundColor = view.badgeColor;
   refs.stateTitle.textContent = view.stateLabel;
-  refs.stateTitle.style.color = '#111827';
+  refs.stateTitle.style.color = view.state === 'version_mismatch' ? '#92400e' : '#111827';
   refs.stateDetail.textContent = view.detail;
+  refs.stateDetail.style.color = view.state === 'version_mismatch' ? '#92400e' : '#334155';
   refs.nodeId.textContent = `Node ID: ${view.nodeId}`;
   refs.pairingCode.style.display = showPairingStatus ? 'block' : 'none';
   refs.pairingCode.textContent = view.pairingCode

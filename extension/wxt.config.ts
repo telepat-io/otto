@@ -1,4 +1,5 @@
 import { defineConfig } from 'wxt';
+import packageJson from './package.json' with { type: 'json' };
 
 export default defineConfig({
   outDir: 'output',
@@ -6,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: 'Otto',
     description: 'Ottomate Everything - remote browser automation node',
-    version: '0.1.0',
+    version: packageJson.version,
     permissions: ['storage', 'tabs', 'tabGroups', 'scripting', 'offscreen', 'alarms', 'debugger'],
     host_permissions: ['<all_urls>'],
     action: {

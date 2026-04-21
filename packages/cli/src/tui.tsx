@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, render, useApp, useInput } from 'ink';
-import { Alert, ConfirmInput, Select, Spinner, StatusMessage, TextInput, UnorderedList } from '@inkjs/ui';
+import { Alert, ConfirmInput, Spinner, StatusMessage, UnorderedList } from '@inkjs/ui';
 import { nanoid } from 'nanoid';
 import WebSocket from 'ws';
 import { createEnvelope, type CommandPayload, type Envelope } from '@telepat/otto-protocol';
@@ -354,14 +354,10 @@ type SelectTuiOptions = {
 
 export type SetupPromptDefaults = {
   relayUrl: string;
-  strategy: 'auto' | 'download' | 'build';
-  repoPath?: string;
 };
 
 export type SetupPromptResult = {
   relayUrl: string;
-  strategy: 'auto' | 'download' | 'build';
-  repoPath?: string;
 };
 
 function SelectScreen({
@@ -452,10 +448,6 @@ function SetupPromptScreen({
   onDone: (result: SetupPromptResult | null) => void;
 }): React.JSX.Element {
   const { exit } = useApp();
-  const [step, setStep] = useState<'strategy' | 'repo' | 'confirm'>('strategy');
-  const [strategy, setStrategy] = useState<'auto' | 'download' | 'build'>(defaults.strategy);
-  const [repoPath, setRepoPath] = useState(defaults.repoPath ?? '');
-  const [error, setError] = useState<string | null>(null);
 
   useInput((input, key) => {
     if (key.escape || input === 'q' || (key.ctrl && input === 'c')) {
@@ -464,112 +456,37 @@ function SetupPromptScreen({
     }
   });
 
-  const resolvedRepoPath = repoPath.trim() || defaults.repoPath?.trim() || '';
-
   return (
     <Box flexDirection="column" paddingX={1}>
       <Text color="cyan" bold>Otto Setup</Text>
       <StatusMessage variant="info">Guided controller setup</StatusMessage>
       <Text>Relay URL: {defaults.relayUrl}</Text>
 
-      {step === 'strategy' ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Select extension artifact strategy</Text>
-          <Select
-            options={[
-              {
-                label: 'auto - local build in repo, otherwise download release artifact',
-                value: 'auto',
-              },
-              {
-                label: 'download - always fetch release artifact',
-                value: 'download',
-              },
-              {
-                label: 'build - always use local repo build output',
-                value: 'build',
-              },
-            ]}
-            onChange={(value) => {
-              const next = value as 'auto' | 'download' | 'build';
-              setStrategy(next);
-              setError(null);
-              setStep(next === 'build' ? 'repo' : 'confirm');
-            }}
-          />
-        </Box>
-      ) : null}
+      <Box marginTop={1} flexDirection="column">
+        <Text bold>Confirm setup inputs</Text>
+        <UnorderedList>
+          <UnorderedList.Item>
+            <Text>relayUrl: {defaults.relayUrl}</Text>
+          </UnorderedList.Item>
+          <UnorderedList.Item>
+            <Text>extension install: release artifact download</Text>
+          </UnorderedList.Item>
+        </UnorderedList>
+        <Text dimColor>Confirm to continue setup, or cancel to go back.</Text>
+        <ConfirmInput
+          onConfirm={() => {
+            onDone({
+              relayUrl: defaults.relayUrl,
+            });
+            exit();
+          }}
+          onCancel={() => {
+            onDone(null);
+            exit();
+          }}
+        />
+      </Box>
 
-      {step === 'repo' ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Local repo path for build strategy</Text>
-          <Text dimColor>Press Enter to continue. Esc/q to cancel setup.</Text>
-          <TextInput
-            placeholder="/path/to/otto/repo"
-            defaultValue={repoPath}
-            onChange={(value) => {
-              setRepoPath(value);
-              setError(null);
-            }}
-            onSubmit={(value) => {
-              const nextValue = value.trim() || defaults.repoPath?.trim() || '';
-              if (!nextValue) {
-                setError('Build strategy requires a repo path');
-                return;
-              }
-              setRepoPath(nextValue);
-              setStep('confirm');
-            }}
-          />
-        </Box>
-      ) : null}
-
-      {step === 'confirm' ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Confirm setup inputs</Text>
-          <UnorderedList>
-            <UnorderedList.Item>
-              <Text>relayUrl: {defaults.relayUrl}</Text>
-            </UnorderedList.Item>
-            <UnorderedList.Item>
-              <Text>strategy: {strategy}</Text>
-            </UnorderedList.Item>
-            {strategy === 'build' ? (
-              <UnorderedList.Item>
-                <Text>repoPath: {resolvedRepoPath}</Text>
-              </UnorderedList.Item>
-            ) : null}
-          </UnorderedList>
-          <Text dimColor>Confirm to continue setup, or cancel to go back.</Text>
-          <ConfirmInput
-            onConfirm={() => {
-              if (strategy === 'build' && !resolvedRepoPath) {
-                setError('Build strategy requires a repo path');
-                setStep('repo');
-                return;
-              }
-
-              onDone({
-                relayUrl: defaults.relayUrl,
-                strategy,
-                repoPath: strategy === 'build' ? resolvedRepoPath : undefined,
-              });
-              exit();
-            }}
-            onCancel={() => {
-              setStep(strategy === 'build' ? 'repo' : 'strategy');
-            }}
-          />
-        </Box>
-      ) : null}
-
-      {step !== 'confirm' ? (
-        <Box marginTop={1}>
-          <Spinner label="Waiting for input" />
-        </Box>
-      ) : null}
-
-      {error ? <Alert variant="error">{error}</Alert> : null}
       <Text dimColor>Press q, Esc, or Ctrl+C to cancel.</Text>
     </Box>
   );
@@ -713,28 +630,6 @@ const SETTINGS: SettingItem[] = [
     ],
   },
   {
-    id: 'setupStrategyDefault',
-    label: 'Default setup strategy',
-    get: (config) => config.setupStrategyDefault ?? 'auto',
-    choices: () => [
-      {
-        label: 'auto',
-        description: 'Recommended default for setup',
-        apply: (next) => ({ ...next, setupStrategyDefault: 'auto' }),
-      },
-      {
-        label: 'download',
-        description: 'Always download release artifact',
-        apply: (next) => ({ ...next, setupStrategyDefault: 'download' }),
-      },
-      {
-        label: 'build',
-        description: 'Prefer local extension build',
-        apply: (next) => ({ ...next, setupStrategyDefault: 'build' }),
-      },
-    ],
-  },
-  {
     id: 'setupNonInteractiveDefault',
     label: 'Setup non-interactive default',
     get: (config) => String(Boolean(config.setupNonInteractiveDefault)),
@@ -770,23 +665,6 @@ const SETTINGS: SettingItem[] = [
         label: '60000',
         description: '60 seconds',
         apply: (next) => ({ ...next, downloadTimeoutMs: 60000 }),
-      },
-    ],
-  },
-  {
-    id: 'strictVersionCheck',
-    label: 'Strict extension version check',
-    get: (config) => String(Boolean(config.strictVersionCheck)),
-    choices: () => [
-      {
-        label: 'true',
-        description: 'Require exact CLI/extension version match',
-        apply: (next) => ({ ...next, strictVersionCheck: true }),
-      },
-      {
-        label: 'false',
-        description: 'Allow non-strict version behavior',
-        apply: (next) => ({ ...next, strictVersionCheck: false }),
       },
     ],
   },

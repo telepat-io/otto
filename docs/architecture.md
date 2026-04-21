@@ -50,7 +50,7 @@ Auth-required commands also preserve manual login boundaries. Runtime may naviga
 
 `otto setup` configures controller-side experience, not node runtime persistence. Controller preferences and tokens are stored in `~/.otto/config.json`, while extension relay URL, pairing code state, and node credentials are stored in `chrome.storage.*`. These stores can point at the same relay host, but they intentionally remain role-scoped.
 
-Setup strategy is deterministic and environment-aware. In full repository checkouts, `auto` mode prefers local extension build artifacts; otherwise setup falls back to release artifacts. Non-interactive mode emits machine-readable JSON summaries, while interactive TTY mode provides human-oriented onboarding output.
+Setup is deterministic and release-driven for end users: extension artifacts come from release assets with checksum verification. Non-interactive mode emits machine-readable JSON summaries, while interactive TTY mode provides human-oriented onboarding output.
 
 ## Source of Truth
 

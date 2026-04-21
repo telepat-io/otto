@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import { createEnvelope, type Envelope } from '@telepat/otto-protocol';
+import type { AuthAckPayload } from '@telepat/otto-protocol';
 import type { ExtensionLogEntry, ExtensionLogEventPayload } from '@telepat/otto-protocol';
 import type { ListenerUpdateEventPayload } from '@telepat/otto-protocol';
 import { computeReconnectDelayMs, enqueueOutbound } from './offscreen-transport.js';
@@ -168,13 +169,14 @@ async function loadConfig(): Promise<{
   };
 }
 
-async function publishConnectionStatus(status: RelayConnectionStatus, error?: string): Promise<void> {
+async function publishConnectionStatus(status: RelayConnectionStatus, error?: string, relayVersion?: string): Promise<void> {
   try {
     await chrome.runtime.sendMessage({
       type: 'otto.connectionStatus',
       payload: {
         status,
         error,
+        relayVersion,
       },
     });
   } catch {
@@ -298,13 +300,18 @@ async function connect(): Promise<void> {
     }
 
     if (envelope.messageType === 'auth_ack') {
+      const payload = envelope.payload as AuthAckPayload;
       authenticated = true;
       console.log('[otto:offscreen] relay authentication acknowledged');
-      void publishConnectionStatus('authenticated_connected');
+      const relayVersion = typeof payload.relayVersion === 'string' ? payload.relayVersion.trim() : '';
+      void publishConnectionStatus('authenticated_connected', undefined, relayVersion || undefined);
       sendOrQueueExtensionLog({
         level: 'info',
         type: 'offscreen.authenticated_connected',
         status: 'authenticated_connected',
+        data: {
+          relayVersion: relayVersion || undefined,
+        },
       });
       flushOutboundQueue();
       flushExtensionLogQueue();

@@ -64,14 +64,6 @@ export function collectString(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-export function parseSetupStrategy(value: unknown): 'auto' | 'download' | 'build' {
-  const strategy = String(value ?? 'auto') as 'auto' | 'download' | 'build';
-  if (!['auto', 'download', 'build'].includes(strategy)) {
-    throw new Error('--strategy must be one of auto|download|build');
-  }
-  return strategy;
-}
-
 export function normalizeControllerName(value: string): string {
   return value.trim().replace(/\s+/g, ' ').slice(0, 120);
 }

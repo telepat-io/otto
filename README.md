@@ -40,20 +40,12 @@ otto setup
 
 Setup now focuses on quick-start essentials:
 
-- Strategy selection (`auto`, `download`, `build`) is controlled by `otto settings` defaults or `otto setup --strategy ...`.
+- Extension artifacts are always downloaded from Otto release assets with checksum verification.
 - Relay URL defaults are reused instead of prompting through full controller settings.
-- `build` strategy asks for one additional value (`repo path`) when missing.
 - Relay daemon readiness is now part of setup: setup starts the relay daemon when needed and reuses it when already running on the same port.
-- Interactive setup prompt flow uses Ink with `@inkjs/ui` components for strategy selection, repo-path entry, and confirmation.
+- Interactive setup prompt flow uses Ink with `@inkjs/ui` components for setup confirmation.
 
-Setup downloads an extension zip from Otto releases (or builds locally), verifies checksum when downloading, extracts it locally, and prints the exact path for Chrome `Load unpacked`.
-
-`auto` strategy behavior:
-
-- If setup is run inside a full Otto repo checkout (or `--repo-path` points to one), it builds locally.
-- Otherwise it downloads the release artifact.
-
-When using local build strategy, the unpacked folder is `extension/output/chrome-mv3`.
+Setup downloads an extension zip from Otto releases, verifies checksum, extracts it locally, and prints the exact path for Chrome `Load unpacked`.
 
 If a relay daemon is already running on a different port than your selected setup relay URL, setup fails with explicit instructions to stop and restart on the intended port.
 
@@ -164,6 +156,14 @@ node packages/cli/dist/index.js config --relay-url 'ws://127.0.0.1:8787?role=con
 npm run dev:ext
 ```
 
+Contributor local-load path (development only):
+
+```bash
+npm run --workspace @telepat/otto-extension build
+```
+
+Then open `chrome://extensions`, click `Load unpacked`, and select `extension/output/chrome-mv3`.
+
 6. Pair node and controller:
 
 ```bash
@@ -212,15 +212,12 @@ node packages/cli/dist/index.js logs follow
 - Add `--non-interactive` for deterministic JSON output.
 - Add `--yes` to accept defaults without prompts.
 - Add `--force` to reinstall extension artifact even when cached.
-- Setup uses `auto` strategy by default for first-run onboarding.
-- Default setup strategy can be changed in `otto settings`.
-- Add `--strategy auto|download|build` to override strategy for one run.
 - Normalizes relay URL to controller role (`?role=controller`).
 - Reuses cached extension artifact for current CLI version unless `--force` is set.
 
-- `otto extension get`
-- Retrieves extension artifact directly (download or dev-only build strategy).
-- Build strategy requires `--repo-path` and a full repo checkout.
+- `otto extension update`
+- Downloads the release extension artifact for the current CLI version and updates cached unpacked files.
+- Prints reload instructions so browser node can reconnect using the updated extension build.
 
 - `otto extension info`
 - Shows installed extension artifact metadata from `~/.otto/config.json`.

@@ -325,14 +325,6 @@ function collectString(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-function parseSetupStrategy(value: unknown): 'auto' | 'download' | 'build' {
-  const strategy = String(value ?? 'auto') as 'auto' | 'download' | 'build';
-  if (!['auto', 'download', 'build'].includes(strategy)) {
-    throw new Error('--strategy must be one of auto|download|build');
-  }
-  return strategy;
-}
-
 function normalizeControllerName(value: string): string {
   return value.trim().replace(/\s+/g, ' ').slice(0, 120);
 }
@@ -1102,7 +1094,7 @@ async function subscribeNetworkListenerAndFollow(
 }
 
 const program = new Command();
-program.name('otto').description('Otto CLI').version('0.1.0');
+program.name('otto').description('Otto CLI').version('0.2.0');
 
 program
   .command('start')
@@ -1204,25 +1196,21 @@ program
   .command('setup')
   .description('Guided controller setup including relay daemon readiness, extension acquisition, and Chrome handoff instructions')
   .option('--relay-url <url>', 'Controller relay websocket URL')
-  .option('--strategy <strategy>', 'auto|download|build')
   .option('--yes', 'Accept defaults without interactive confirmation', false)
   .option('--force', 'Reinstall extension artifact even if local cached version is present', false)
   .option('--output-dir <path>', 'Directory for downloaded extension artifacts')
   .option('--release-base-url <url>', 'Release base URL for extension downloads')
-  .option('--repo-path <path>', 'Local repo path used for --strategy build')
   .option('--download-timeout-ms <ms>', 'Download timeout in milliseconds')
   .option('--non-interactive', 'Skip interactive prompts and emit deterministic output', false)
   .action(async (opts) => {
     const config = loadConfig();
-    const cliVersion = program.version() ?? '0.1.0';
+    const cliVersion = program.version() ?? '0.2.0';
     const interactiveAllowed = process.stdout.isTTY && process.stdin.isTTY;
     const explicitNonInteractive = Boolean(opts.nonInteractive);
     const nonInteractive = shouldRunSetupNonInteractive(interactiveAllowed, explicitNonInteractive);
 
     const defaults = {
       relayUrl: normalizeControllerRelayUrl(opts.relayUrl ?? config.relayUrl ?? DEFAULT_CONTROLLER_RELAY_URL),
-      strategy: parseSetupStrategy(opts.strategy ?? config.setupStrategyDefault ?? 'auto'),
-      repoPath: opts.repoPath as string | undefined,
     };
 
     const resolved = (!nonInteractive && !opts.yes)
@@ -1237,7 +1225,6 @@ program
     const relayUrl = normalizeControllerRelayUrl(resolved.relayUrl);
     const relayHttpUrl = deriveHttpUrl(relayUrl);
     const timeoutMs = parseMaybeNumber(opts.downloadTimeoutMs, config.downloadTimeoutMs ?? 25_000);
-    const strategy = resolved.strategy;
     const relayDaemon = ensureRelayDaemonReadyForSetup(relayUrl, readRelayDaemonState, startRelayDaemon);
 
     const cachedUnpackedPath = config.extension?.unpackedPath;
@@ -1253,12 +1240,10 @@ program
           releaseBaseUrl: config.extension?.releaseBaseUrl,
         }
       : await installExtensionArtifact({
-          strategy,
           version: cliVersion,
           outputDir: opts.outputDir,
           releaseBaseUrl: opts.releaseBaseUrl,
           timeoutMs,
-          repoPath: resolved.repoPath,
         });
 
     const nextConfig: OttoConfig = {
@@ -1314,7 +1299,7 @@ program
       console.log('[otto] reused existing local extension artifact cache');
     }
     console.log(`[otto] relay URL: ${relayUrl}`);
-    console.log(`[otto] extension source: ${install.source}`);
+    console.log('[otto] extension source: release download');
     if (install.zipPath) {
       console.log(`[otto] extension zip: ${install.zipPath}`);
     }
@@ -1334,25 +1319,20 @@ program
 const extension = program.command('extension').description('Manage extension artifact installation for setup');
 
 extension
-  .command('get')
-  .description('Download or build an extension artifact and cache it locally')
-  .option('--strategy <strategy>', 'auto|download|build', 'auto')
+  .command('update')
+  .description('Download the latest release extension artifact for the current CLI version')
   .option('--output-dir <path>', 'Directory for downloaded extension artifacts')
   .option('--release-base-url <url>', 'Release base URL for extension downloads')
-  .option('--repo-path <path>', 'Local repo path used for --strategy build')
   .option('--download-timeout-ms <ms>', 'Download timeout in milliseconds')
   .action(async (opts) => {
     const config = loadConfig();
-    const cliVersion = program.version() ?? '0.1.0';
-    const strategy = parseSetupStrategy(opts.strategy);
+    const cliVersion = program.version() ?? '0.2.0';
 
     const install = await installExtensionArtifact({
-      strategy,
       version: cliVersion,
       outputDir: opts.outputDir,
       releaseBaseUrl: opts.releaseBaseUrl,
       timeoutMs: parseMaybeNumber(opts.downloadTimeoutMs, config.downloadTimeoutMs ?? 25_000),
-      repoPath: opts.repoPath,
     });
 
     const nextConfig: OttoConfig = {
@@ -1369,10 +1349,29 @@ extension
     };
     saveConfig(nextConfig);
 
-    logJsonAware(nextConfig, {
+    const payload = {
       ok: true,
       extension: nextConfig.extension,
-    });
+      actionRequired: 'Run otto extension update, then reload Otto in chrome://extensions or restart your browser.',
+      nextSteps: [
+        'Open chrome://extensions',
+        'Find Otto and click Reload',
+        'If needed, restart browser to reconnect extension runtime',
+      ],
+    };
+
+    if (isJsonOutput(nextConfig)) {
+      logJsonAware(nextConfig, payload);
+      return;
+    }
+
+    console.log('[otto] extension update complete');
+    console.log(`[otto] extension version: ${install.version}`);
+    console.log(`[otto] extension folder (load unpacked): ${install.unpackedPath}`);
+    console.log('[otto] ACTION REQUIRED: reload extension to apply update');
+    console.log('  1) Open chrome://extensions');
+    console.log('  2) Find Otto and click Reload');
+    console.log('  3) If needed, restart browser');
   });
 
 extension
