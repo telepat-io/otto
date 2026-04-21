@@ -109,40 +109,158 @@ export const commentOnPostCommand: SiteCommand = {
             return deepQuerySelector(root, selector);
           };
 
+          const buildLexicalNodes = (value: string): DocumentFragment => {
+            const fragment = document.createDocumentFragment();
+            const paragraphs = value.split(/\r?\n/);
+            for (const paragraph of paragraphs) {
+              const p = document.createElement('p');
+              p.className = 'first:mt-0 last:mb-0';
+
+              const span = document.createElement('span');
+              span.setAttribute('data-lexical-text', 'true');
+              span.textContent = paragraph.length > 0 ? paragraph : '\u200B';
+
+              p.appendChild(span);
+              fragment.appendChild(p);
+            }
+
+            return fragment;
+          };
+
+          const injectTextboxValue = (textbox: HTMLElement, value: string): void => {
+            type LexicalEditorLike = {
+              parseEditorState?: (state: string) => unknown;
+              setEditorState?: (state: unknown, options?: Record<string, unknown>) => void;
+            };
+
+            const insertViaNativeEditing = (): boolean => {
+              textbox.click();
+              textbox.focus();
+
+              const selection = window.getSelection();
+              if (!selection) {
+                return false;
+              }
+
+              const range = document.createRange();
+              range.selectNodeContents(textbox);
+              selection.removeAllRanges();
+              selection.addRange(range);
+
+              document.execCommand('delete');
+
+              const lines = value.split(/\r?\n/);
+              let insertedAny = false;
+              for (let index = 0; index < lines.length; index += 1) {
+                if (index > 0) {
+                  document.execCommand('insertParagraph');
+                }
+
+                const line = lines[index] ?? '';
+                if (line.length > 0) {
+                  const lineInserted = document.execCommand('insertText', false, line);
+                  insertedAny = insertedAny || lineInserted;
+                }
+              }
+
+              return insertedAny || lines.every((line) => line.length === 0);
+            };
+
+            if (insertViaNativeEditing()) {
+              return;
+            }
+
+            const lexicalHost = textbox as HTMLElement & { __lexicalEditor?: LexicalEditorLike };
+            const lexicalEditor = lexicalHost.__lexicalEditor;
+
+            if (
+              lexicalEditor
+              && typeof lexicalEditor.parseEditorState === 'function'
+              && typeof lexicalEditor.setEditorState === 'function'
+            ) {
+              const lines = value.split(/\r?\n/);
+              const editorState = {
+                root: {
+                  type: 'root',
+                  version: 1,
+                  format: '',
+                  indent: 0,
+                  direction: null,
+                  children: lines.map((line) => ({
+                    type: 'paragraph',
+                    version: 1,
+                    format: '',
+                    indent: 0,
+                    direction: null,
+                    textFormat: 0,
+                    textStyle: '',
+                    children: [
+                      {
+                        type: 'text',
+                        version: 1,
+                        detail: 0,
+                        format: 0,
+                        mode: 'normal',
+                        style: '',
+                        text: line.length > 0 ? line : '\u200B',
+                      },
+                    ],
+                  })),
+                },
+              };
+
+              const parsedState = lexicalEditor.parseEditorState(JSON.stringify(editorState));
+              lexicalEditor.setEditorState(parsedState, { tag: 'history-merge' });
+              return;
+            }
+
+            textbox.replaceChildren(buildLexicalNodes(value));
+          };
+
           const findComposerHost = (): HTMLElement | null => {
             const host = queryDeep(document, 'shreddit-composer');
             return host instanceof HTMLElement ? host : null;
           };
 
+          const findCommentButton = (): HTMLElement | null => {
+            const button = queryDeep(document, 'button[name="comments-action-button"]');
+            return button instanceof HTMLElement ? button : null;
+          };
+
           const findTextbox = (): HTMLElement | null => {
             const host = findComposerHost();
-            if (!(host instanceof HTMLElement) || !host.shadowRoot) {
+            if (!(host instanceof HTMLElement)) {
               return null;
             }
 
-            const textbox = queryDeep(host.shadowRoot, 'div[role="textbox"], [role="textbox"]');
+            const textbox = queryDeep(host, 'div[role="textbox"], [role="textbox"]');
             return textbox instanceof HTMLElement ? textbox : null;
           };
 
           const findSubmitButton = (): HTMLButtonElement | null => {
             const host = findComposerHost();
-            if (!(host instanceof HTMLElement) || !host.shadowRoot) {
+            if (!(host instanceof HTMLElement)) {
               return null;
             }
 
-            const submit = queryDeep(host.shadowRoot, 'button[slot="submit-button"]');
+            const submit = queryDeep(host, 'button[slot="submit-button"]');
             return submit instanceof HTMLButtonElement ? submit : null;
           };
 
           const diagnostics = (): Record<string, unknown> => {
             const host = findComposerHost();
+            const commentButton = findCommentButton();
             const textbox = findTextbox();
             const submit = findSubmitButton();
+            const lexicalEditorAttached = textbox instanceof HTMLElement
+              && '__lexicalEditor' in (textbox as HTMLElement & Record<string, unknown>);
             return {
               path: window.location.pathname,
               hasComposer: host instanceof HTMLElement,
+              hasCommentButton: commentButton instanceof HTMLElement,
               hasTextbox: textbox instanceof HTMLElement,
               hasSubmitButton: submit instanceof HTMLButtonElement,
+              lexicalEditorAttached,
             };
           };
 
@@ -157,12 +275,19 @@ export const commentOnPostCommand: SiteCommand = {
             return false;
           };
 
-          console.log('Waiting for comment composer to be ready...', diagnostics());
+          await wait(500);
+          const commentButton = findCommentButton();
+          if (!(commentButton instanceof HTMLElement)) {
+            throw new Error(`reddit_post_comment_button_missing:${JSON.stringify(diagnostics())}`);
+          }
+          commentButton.click();
+
           const composerReady = await waitFor(() => Boolean(findTextbox()) && Boolean(findSubmitButton()), 10000, 150);
           if (!composerReady) {
             throw new Error(`reddit_post_comment_composer_missing:${JSON.stringify(diagnostics())}`);
           }
 
+          await wait(500);
           const textbox = findTextbox();
           if (!(textbox instanceof HTMLElement)) {
             throw new Error(`reddit_post_comment_textbox_missing:${JSON.stringify(diagnostics())}`);
@@ -173,14 +298,22 @@ export const commentOnPostCommand: SiteCommand = {
             throw new Error(`reddit_post_comment_submit_missing:${JSON.stringify(diagnostics())}`);
           }
 
-          textbox.click();
-          textbox.focus();
-          textbox.textContent = commentValue;
-          textbox.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }));
-          textbox.dispatchEvent(new Event('change', { bubbles: true }));
+          injectTextboxValue(textbox, commentValue);
 
           await wait(150);
           submitButton.click();
+          await wait(500);
+
+          const submitErrorAlert = queryDeep(document, '.text-alert-negative');
+          if (submitErrorAlert) {
+            const submitErrorMessageRoot = queryDeep(document, '#comment-composer-message-root');
+            const submitErrorMessage = submitErrorMessageRoot?.textContent?.trim() ?? '';
+            throw new Error(
+              submitErrorMessage.length > 0
+                ? submitErrorMessage
+                : `reddit_post_comment_submit_error:${JSON.stringify(diagnostics())}`,
+            );
+          }
 
           const cleared = await waitFor(() => {
             const currentTextbox = findTextbox();
