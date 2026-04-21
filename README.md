@@ -1,4 +1,4 @@
-# Otto
+# Otto - Secure Browser Automation
 
 Otto is a secure remote browser automation platform with three runtime components:
 
