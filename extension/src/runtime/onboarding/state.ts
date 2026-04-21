@@ -83,7 +83,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
         return {
           state: 'version_mismatch',
           stateLabel: 'Extension update required',
-          detail: `Version mismatch: extension v${extensionVersion} and relay v${relayVersion}. Action required: run \"otto extension update\" in terminal, then reload Otto in chrome://extensions or restart your browser.`,
+          detail: `Version mismatch: extension v${extensionVersion} and relay v${relayVersion}. Action required: run "otto extension update" in terminal, then reload Otto in chrome://extensions or restart your browser.`,
           nodeId,
           relayUrl,
           badgeText: 'UPDT',
