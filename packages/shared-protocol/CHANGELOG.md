@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/telepat-io/otto/compare/protocol-v0.2.0...protocol-v0.3.0) (2026-04-21)
+
+
+### Features
+
+* update package versions and enhance release management for extension ([0351790](https://github.com/telepat-io/otto/commit/0351790c93993a5148308eb6a2cdada0f78e7425))
+* update setup and extension management to support version checks ([e9d67b1](https://github.com/telepat-io/otto/commit/e9d67b1a3d0b83a499492c182f2bf1cf6a6558dc))
+
 ## [0.2.0](https://github.com/telepat-io/otto/compare/protocol-v0.1.0...protocol-v0.2.0) (2026-04-21)
 
 
