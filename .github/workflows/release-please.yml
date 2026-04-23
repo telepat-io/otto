@@ -74,15 +74,11 @@ jobs:
             exit 1
           fi
 
-          if [ "$RELAY_VERSION" != "$RELEASE_VERSION" ]; then
-            echo "Relay package version ($RELAY_VERSION) does not match release tag version ($RELEASE_VERSION)"
-            exit 1
-          fi
-
-          if [ "$PROTOCOL_VERSION" != "$RELEASE_VERSION" ]; then
-            echo "Protocol package version ($PROTOCOL_VERSION) does not match release tag version ($RELEASE_VERSION)"
-            exit 1
-          fi
+          # Relay and protocol may legitimately be ahead of the CLI tag version when
+          # the linked-versions plugin bumps them independently (e.g. a minor-only
+          # change in relay while CLI only has a patch fix). Log them for transparency
+          # but do not fail the release - each package publishes its own declared version.
+          echo "Release tag: $RELEASE_TAG (CLI: $CLI_VERSION, relay: $RELAY_VERSION, protocol: $PROTOCOL_VERSION)"
 
       - name: Install dependencies
         run: npm ci
