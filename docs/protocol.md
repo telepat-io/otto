@@ -98,6 +98,14 @@ Every `command` payload must identify a target node and include replay protectio
 
 `command.list` advertises site command metadata, including optional `preloadHost`, `inputFields`, and `inputAtLeastOneOf`. `command.run` executes command logic, while `command.test` executes command test hooks and falls back to `execute` when no hook is declared. The legacy alias `command.reddit_feed` remains supported and maps to `command.run` (`site=reddit.com`, `command=getFeed`).
 
+Primitive extraction actions are also routed through `command` payloads:
+
+- `primitive.dom.extract_html`
+- `primitive.dom.extract_distilled_html`
+- `primitive.dom.extract_markdown`
+
+These actions accept either `tabSessionId` or `url`. URL-only requests are executed against a temporary background tab and return terminal `result` frames (no streaming/listener lifecycle).
+
 `command.test` may return a `stream` manifest in `result.payload.data`. Controllers should keep follow-up subscribe traffic on the same authenticated websocket, maintain heartbeat (`ping`/`pong`) for long sessions, and use `command_cancel` against the original test `requestId` when shutting down active stream tests.
 
 ## Routing, Queueing, and Reliability

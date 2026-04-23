@@ -40,6 +40,12 @@ When relay sends a `command` frame, offscreen forwards it to background, backgro
 
 Replay safety is enforced by background-level dedupe keyed by `idempotencyKey` (or `requestId` fallback), so retried frames return cached terminal results instead of rerunning side effects.
 
+### Distillation library loading
+
+Content extraction primitives (`primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown`) load third-party distillation libraries as packaged extension assets via `chrome.scripting.executeScript({ files: [...] })` in page context.
+
+This replaced prior eval-string injection to avoid scope instability between script executions and to keep library loading deterministic across tabs. Distillation failures now include explicit mode-specific details (for example readability constructor unavailable, empty parse output, or script execution error) to improve operator debugging in CLI and relay logs.
+
 ### Site command orchestration
 
 Site command execution follows one consistent order so failures remain deterministic:

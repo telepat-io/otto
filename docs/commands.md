@@ -21,7 +21,7 @@ The protocol exposes low-level primitive actions and higher-level site command a
 
 | Group | Actions |
 | --- | --- |
-| Primitive | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query`, `primitive.dom.extract_text` |
+| Primitive | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query`, `primitive.dom.extract_text`, `primitive.dom.extract_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown` |
 | Command | `command.list`, `command.run`, `command.test`, `command.reddit_feed` (legacy alias) |
 | Common CLI entrypoints | `otto commands list`, `otto test <site> <command>`, `otto cmd --action ...` |
 
@@ -220,3 +220,30 @@ Ownership boundary reminder:
 - Extension runtime configuration for node connectivity is managed in extension options.
 
 Command constraints remain the same: bounded runtime and payloads, explicit warning/error schemas, and sensitivity-aware output suitable for redaction policy.
+
+## Primitive Content Extraction
+
+Three new primitive actions provide site-agnostic content extraction for controller workflows.
+
+| Action | Purpose | Content source |
+| --- | --- | --- |
+| `primitive.dom.extract_html` | Return raw HTML from `selector` (default `body`) | Live DOM outerHTML |
+| `primitive.dom.extract_distilled_html` | Return distilled article HTML | Readability by default, optional `dom-distiller` mode |
+| `primitive.dom.extract_markdown` | Return Markdown content | Distilled HTML piped through Turndown + GFM |
+
+Payload model:
+
+- Accepts either `tabSessionId` or `url` (at least one is required).
+- If both are present, runtime prefers `tabSessionId`.
+- For `url` only requests, runtime opens a temporary background tab and closes it after extraction.
+- Optional knobs: `mode` (`readability` or `dom-distiller`), `fallbackToReadability` (default `true`), and `maxChars` bounds.
+
+Result model (all three actions):
+
+- `tabSessionId`: caller session id when provided, otherwise `null`.
+- `sourceUrl`: resolved page URL used for extraction.
+- `title`: extracted or document title when available.
+- `extractionMode`: `raw_html`, `readability`, or `dom-distiller`.
+- `fallbackUsed`: `true` only when `dom-distiller` mode falls back to Readability.
+- `contentLength`: post-limit content length.
+- `content`: extracted HTML or Markdown payload.

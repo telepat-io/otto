@@ -7,6 +7,12 @@ import { createSingleFlight } from './single-flight.js';
 
 type ChromeLike = typeof chrome;
 const AUTOMATION_GROUP_SINGLE_FLIGHT_KEY = 'automation-group.ensure';
+const READABILITY_SCRIPT_FILE = 'distill-libs/readability.js';
+const DOM_DISTILLER_SCRIPT_FILE = 'distill-libs/dom-distiller.js';
+const EXTRACTION_TAB_READY_TIMEOUT_MS = 15_000;
+const EXTRACTION_TAB_POLL_INTERVAL_MS = 150;
+const DISTILL_SCRIPT_INSTALL_MAX_ATTEMPTS = 3;
+const DISTILL_SCRIPT_INSTALL_RETRY_DELAY_MS = 200;
 
 const runtimeSingleFlight = createSingleFlight();
 
@@ -14,6 +20,84 @@ export type CommandExecutionResult = {
   durationMs: number;
   data: unknown;
 };
+
+type ExtractionTarget = {
+  tabId: number;
+  tabSessionId: string | null;
+  sourceUrlInput: string | null;
+  temporaryTab: boolean;
+};
+
+type DistilledArticle = {
+  html: string;
+  title: string | null;
+  sourceUrl: string;
+  mode: 'readability' | 'dom-distiller';
+  fallbackUsed: boolean;
+};
+
+type DistillationFailure = {
+  mode: 'readability' | 'dom-distiller';
+  reason: string;
+};
+
+type ExtractionTabProbe = {
+  url: string | null;
+  status: string | null;
+};
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function waitForExtractionTabReady(chromeApi: ChromeLike, tabId: number): Promise<ExtractionTabProbe> {
+  const deadline = Date.now() + EXTRACTION_TAB_READY_TIMEOUT_MS;
+  let lastProbe: ExtractionTabProbe = { url: null, status: null };
+
+  while (Date.now() <= deadline) {
+    try {
+      const tab = await chromeApi.tabs.get(tabId);
+      lastProbe = {
+        url: typeof tab.url === 'string' ? tab.url : null,
+        status: typeof tab.status === 'string' ? tab.status : null,
+      };
+
+      // Some test doubles and older tab snapshots omit `status`; if URL is present,
+      // treat that as ready rather than stalling until timeout.
+      if ((lastProbe.status === 'complete' || lastProbe.status === null) && lastProbe.url) {
+        return lastProbe;
+      }
+    } catch {
+      // Keep polling until timeout; caller will map final state to command error.
+    }
+
+    await wait(EXTRACTION_TAB_POLL_INTERVAL_MS);
+  }
+
+  return lastProbe;
+}
+
+async function ensureTemporaryExtractionTabReady(
+  chromeApi: ChromeLike,
+  target: ExtractionTarget,
+  stage: 'primitive.dom.extract_html' | 'primitive.dom.extract_distilled_html' | 'primitive.dom.extract_markdown',
+): Promise<void> {
+  if (!target.temporaryTab) {
+    return;
+  }
+
+  const probe = await waitForExtractionTabReady(chromeApi, target.tabId);
+  if (!probe.url || (probe.status !== 'complete' && probe.status !== null)) {
+    throw new CommandExecutionError(
+      `Temporary extraction tab URL was not ready before execution (status=${probe.status ?? 'unknown'})`,
+      'tab_url_not_ready',
+      stage,
+      true,
+    );
+  }
+}
 
 function isMissingTabGroupError(error: unknown): boolean {
   const candidates: string[] = [];
@@ -210,6 +294,792 @@ async function saveTabSessionOwners(chromeApi: ChromeLike, tabSessionOwners: Rec
   await chromeApi.storage.session.set({ tabSessionOwners });
 }
 
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function readNumberInRange(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, Math.floor(parsed)));
+}
+
+function applyContentLimit(content: string, maxChars: number): string {
+  if (content.length <= maxChars) {
+    return content;
+  }
+  return content.slice(0, maxChars);
+}
+
+function summarizeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function formatDistillationFailureMessage(base: string, failures: DistillationFailure[]): string {
+  if (failures.length === 0) {
+    return base;
+  }
+
+  const details = failures
+    .map((failure) => `${failure.mode}: ${failure.reason}`)
+    .join('; ');
+  return `${base}. details=${details}`;
+}
+
+async function resolveExtractionTarget(chromeApi: ChromeLike, command: CommandPayload): Promise<ExtractionTarget> {
+  const tabSessionId = asNonEmptyString(command.payload.tabSessionId ?? command.tabSessionId);
+  const sourceUrlInput = asNonEmptyString(command.payload.url);
+
+  if (tabSessionId) {
+    return {
+      tabId: await resolveTabId(chromeApi, tabSessionId),
+      tabSessionId,
+      sourceUrlInput,
+      temporaryTab: false,
+    };
+  }
+
+  if (!sourceUrlInput) {
+    throw new CommandExecutionError(
+      'Either tabSessionId or url is required',
+      'missing_extraction_target',
+      'validation',
+      false,
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(sourceUrlInput);
+  } catch {
+    throw new CommandExecutionError('url must be a valid absolute URL', 'invalid_url', 'validation', false);
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new CommandExecutionError('url must use http or https', 'invalid_url_scheme', 'validation', false);
+  }
+
+  const tab = await chromeApi.tabs.create({ url: parsed.toString(), active: false });
+  if (!tab.id) {
+    throw new CommandExecutionError('Failed to open temporary tab for URL extraction', 'tab_create_failed', 'validation', true);
+  }
+
+  return {
+    tabId: tab.id,
+    tabSessionId: null,
+    sourceUrlInput: parsed.toString(),
+    temporaryTab: true,
+  };
+}
+
+async function extractRawHtml(chromeApi: ChromeLike, tabId: number, selector: string): Promise<{ html: string | null; sourceUrl: string; title: string | null }> {
+  const result = await chromeApi.scripting.executeScript({
+    target: { tabId },
+    func: (sel: string) => {
+      const selected = document.querySelector(sel);
+      const html = selected?.outerHTML ?? null;
+      return {
+        html,
+        sourceUrl: window.location.href,
+        title: document.title || null,
+      };
+    },
+    args: [selector],
+  });
+
+  return (result[0]?.result as { html: string | null; sourceUrl: string; title: string | null } | undefined) ?? {
+    html: null,
+    sourceUrl: '',
+    title: null,
+  };
+}
+
+async function extractDistilledArticle(
+  chromeApi: ChromeLike,
+  tabId: number,
+  preferredMode: 'readability' | 'dom-distiller',
+  fallbackToReadability: boolean,
+): Promise<DistilledArticle> {
+  const readabilityScriptUrl = chromeApi.runtime.getURL(READABILITY_SCRIPT_FILE);
+  const domDistillerScriptUrl = chromeApi.runtime.getURL(DOM_DISTILLER_SCRIPT_FILE);
+
+  async function runReadability(): Promise<{ article: DistilledArticle | null; failure?: DistillationFailure }> {
+    try {
+      for (let attempt = 1; attempt <= DISTILL_SCRIPT_INSTALL_MAX_ATTEMPTS; attempt += 1) {
+        const result = await chromeApi.scripting.executeScript({
+          target: { tabId },
+          world: 'MAIN',
+          func: async (scriptUrl: string) => {
+            const runtime = globalThis as {
+              Readability?: new (doc: Document) => { parse: () => { content?: string; title?: string } | null };
+              __ottoReadabilityLoadPromise?: Promise<void>;
+            };
+
+            async function ensureReadabilityLoaded(): Promise<void> {
+              if (typeof runtime.Readability === 'function') {
+                return;
+              }
+
+              if (!runtime.__ottoReadabilityLoadPromise) {
+                runtime.__ottoReadabilityLoadPromise = new Promise((resolve, reject) => {
+                  const existing = document.querySelector('script[data-otto-readability="1"]') as HTMLScriptElement | null;
+                  if (existing) {
+                    existing.addEventListener('load', () => resolve(), { once: true });
+                    existing.addEventListener('error', () => reject(new Error('readability_script_load_failed')), { once: true });
+                    return;
+                  }
+
+                  const script = document.createElement('script');
+                  script.dataset.ottoReadability = '1';
+                  script.src = scriptUrl;
+                  script.async = false;
+                  script.addEventListener('load', () => resolve(), { once: true });
+                  script.addEventListener('error', () => reject(new Error('readability_script_load_failed')), { once: true });
+                  (document.head || document.documentElement).appendChild(script);
+                });
+              }
+
+              try {
+                await runtime.__ottoReadabilityLoadPromise;
+              } catch {
+                runtime.__ottoReadabilityLoadPromise = undefined;
+                throw new Error('readability_script_load_failed');
+              }
+            }
+
+            try {
+              await ensureReadabilityLoaded();
+            } catch {
+              return { kind: 'failure', reason: 'Readability script failed to load in page context' };
+            }
+
+            const ReadabilityCtor = runtime.Readability;
+            if (typeof ReadabilityCtor !== 'function') {
+              const injectedScript = document.querySelector('script[data-otto-readability="1"]') as HTMLScriptElement | null;
+              const diagnostic = {
+                hasScriptTag: Boolean(injectedScript),
+                scriptSrc: injectedScript?.src ?? null,
+                scriptReadyState: (injectedScript as HTMLScriptElement & { readyState?: string } | null)?.readyState ?? null,
+                globalReadabilityType: typeof runtime.Readability,
+                windowHasReadability: 'Readability' in window,
+                windowReadabilityType: typeof (window as Window & { Readability?: unknown }).Readability,
+                documentReadyState: document.readyState,
+                locationHref: window.location.href,
+              };
+              return {
+                kind: 'failure',
+                reason: `Readability constructor is unavailable in page context ${JSON.stringify(diagnostic)}`,
+              };
+            }
+
+            const article = new ReadabilityCtor(document).parse();
+            if (!article || typeof article.content !== 'string' || article.content.trim().length === 0) {
+              return { kind: 'failure', reason: 'Readability parse() produced no article content' };
+            }
+
+            return {
+              kind: 'success',
+              html: article.content,
+              title: typeof article.title === 'string' ? article.title : (document.title || null),
+              sourceUrl: window.location.href,
+            };
+          },
+          args: [readabilityScriptUrl],
+        });
+
+        const payload = result[0]?.result as {
+          kind?: unknown;
+          reason?: unknown;
+          html?: unknown;
+          title?: unknown;
+          sourceUrl?: unknown;
+        } | null | undefined;
+
+        const isLegacySuccess = payload
+          && typeof payload.html === 'string'
+          && typeof payload.sourceUrl === 'string';
+        const isTaggedSuccess = payload
+          && payload.kind === 'success'
+          && typeof payload.html === 'string'
+          && typeof payload.sourceUrl === 'string';
+
+        if (!payload || (!isTaggedSuccess && !isLegacySuccess)) {
+          const reason = payload && typeof payload.reason === 'string'
+            ? payload.reason
+            : 'unexpected readability script result shape';
+
+          const constructorUnavailable = reason.startsWith('Readability constructor is unavailable in page context');
+          if (constructorUnavailable) {
+            if (attempt < DISTILL_SCRIPT_INSTALL_MAX_ATTEMPTS) {
+              await wait(DISTILL_SCRIPT_INSTALL_RETRY_DELAY_MS);
+              continue;
+            }
+            break;
+          }
+
+          return {
+            article: null,
+            failure: {
+              mode: 'readability',
+              reason,
+            },
+          };
+        }
+
+        const html = payload.html as string;
+        const sourceUrl = payload.sourceUrl as string;
+
+        return {
+          article: {
+            html,
+            title: typeof payload.title === 'string' ? payload.title : null,
+            sourceUrl,
+            mode: 'readability',
+            fallbackUsed: false,
+          },
+        };
+      }
+
+      const rawFallback = await chromeApi.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: () => {
+          const root = document.querySelector('article, main') ?? document.body;
+          const html = root?.outerHTML ?? '';
+          if (!html || html.trim().length === 0) {
+            return null;
+          }
+          return {
+            html,
+            title: document.title || null,
+            sourceUrl: window.location.href,
+          };
+        },
+      });
+
+      const rawPayload = rawFallback[0]?.result as {
+        html?: unknown;
+        title?: unknown;
+        sourceUrl?: unknown;
+      } | null | undefined;
+
+      if (rawPayload && typeof rawPayload.html === 'string' && typeof rawPayload.sourceUrl === 'string') {
+        return {
+          article: {
+            html: rawPayload.html,
+            title: typeof rawPayload.title === 'string' ? rawPayload.title : null,
+            sourceUrl: rawPayload.sourceUrl,
+            mode: 'readability',
+            fallbackUsed: true,
+          },
+        };
+      }
+
+      return {
+        article: null,
+        failure: {
+          mode: 'readability',
+          reason: 'Readability constructor is unavailable in page context',
+        },
+      };
+    } catch (error) {
+      return {
+        article: null,
+        failure: {
+          mode: 'readability',
+          reason: `script execution error: ${summarizeError(error)}`,
+        },
+      };
+    }
+  }
+
+  async function runDomDistiller(): Promise<{ article: DistilledArticle | null; failure?: DistillationFailure }> {
+    try {
+      for (let attempt = 1; attempt <= DISTILL_SCRIPT_INSTALL_MAX_ATTEMPTS; attempt += 1) {
+        const result = await chromeApi.scripting.executeScript({
+          target: { tabId },
+          world: 'MAIN',
+          func: async (scriptUrl: string) => {
+            const runtime = globalThis as {
+              org?: {
+                chromium?: {
+                  distiller?: {
+                    DomDistiller?: { apply: () => unknown };
+                  };
+                };
+              };
+              __ottoDomDistillerLoadPromise?: Promise<void>;
+            };
+
+            async function ensureDomDistillerLoaded(): Promise<void> {
+              const applyFn = runtime.org?.chromium?.distiller?.DomDistiller?.apply;
+              if (typeof applyFn === 'function') {
+                return;
+              }
+
+              if (!runtime.__ottoDomDistillerLoadPromise) {
+                runtime.__ottoDomDistillerLoadPromise = new Promise((resolve, reject) => {
+                  const existing = document.querySelector('script[data-otto-dom-distiller="1"]') as HTMLScriptElement | null;
+                  if (existing) {
+                    existing.addEventListener('load', () => resolve(), { once: true });
+                    existing.addEventListener('error', () => reject(new Error('dom_distiller_script_load_failed')), { once: true });
+                    return;
+                  }
+
+                  const script = document.createElement('script');
+                  script.dataset.ottoDomDistiller = '1';
+                  script.src = scriptUrl;
+                  script.async = false;
+                  script.addEventListener('load', () => resolve(), { once: true });
+                  script.addEventListener('error', () => reject(new Error('dom_distiller_script_load_failed')), { once: true });
+                  (document.head || document.documentElement).appendChild(script);
+                });
+              }
+
+              try {
+                await runtime.__ottoDomDistillerLoadPromise;
+              } catch {
+                runtime.__ottoDomDistillerLoadPromise = undefined;
+                throw new Error('dom_distiller_script_load_failed');
+              }
+            }
+
+            try {
+              await ensureDomDistillerLoaded();
+            } catch {
+              return { kind: 'failure', reason: 'DomDistiller script failed to load in page context' };
+            }
+
+            const chromiumNs = (globalThis as {
+              org?: {
+                chromium?: {
+                  distiller?: {
+                    DomDistiller?: { apply: () => unknown };
+                  };
+                };
+              };
+            }).org;
+            const applyFn = chromiumNs?.chromium?.distiller?.DomDistiller?.apply;
+            if (typeof applyFn !== 'function') {
+              return { kind: 'failure', reason: 'DomDistiller.apply is unavailable in page context' };
+            }
+
+            const output = applyFn();
+            let html: string | null = null;
+            if (typeof output === 'string') {
+              html = output;
+            }
+            if (!html && Array.isArray(output) && Array.isArray(output[2])) {
+              const candidate = output[2][1];
+              if (typeof candidate === 'string') {
+                html = candidate;
+              }
+            }
+
+            if (!html || html.trim().length === 0) {
+              return { kind: 'failure', reason: 'dom-distiller returned no distilled HTML content' };
+            }
+
+            return {
+              kind: 'success',
+              html,
+              title: document.title || null,
+              sourceUrl: window.location.href,
+            };
+          },
+          args: [domDistillerScriptUrl],
+        });
+
+        const payload = result[0]?.result as {
+          kind?: unknown;
+          reason?: unknown;
+          html?: unknown;
+          title?: unknown;
+          sourceUrl?: unknown;
+        } | null | undefined;
+        const isLegacySuccess = payload
+          && typeof payload.html === 'string'
+          && typeof payload.sourceUrl === 'string';
+        const isTaggedSuccess = payload
+          && payload.kind === 'success'
+          && typeof payload.html === 'string'
+          && typeof payload.sourceUrl === 'string';
+
+        if (!payload || (!isTaggedSuccess && !isLegacySuccess)) {
+          const reason = payload && typeof payload.reason === 'string'
+            ? payload.reason
+            : 'unexpected dom-distiller script result shape';
+
+          if (
+            reason === 'DomDistiller.apply is unavailable in page context'
+            && attempt < DISTILL_SCRIPT_INSTALL_MAX_ATTEMPTS
+          ) {
+            await wait(DISTILL_SCRIPT_INSTALL_RETRY_DELAY_MS);
+            continue;
+          }
+
+          return {
+            article: null,
+            failure: {
+              mode: 'dom-distiller',
+              reason,
+            },
+          };
+        }
+
+        const html = payload.html as string;
+        const sourceUrl = payload.sourceUrl as string;
+
+        return {
+          article: {
+            html,
+            title: typeof payload.title === 'string' ? payload.title : null,
+            sourceUrl,
+            mode: 'dom-distiller',
+            fallbackUsed: false,
+          },
+        };
+      }
+
+      return {
+        article: null,
+        failure: {
+          mode: 'dom-distiller',
+          reason: 'DomDistiller.apply is unavailable in page context',
+        },
+      };
+    } catch (error) {
+      return {
+        article: null,
+        failure: {
+          mode: 'dom-distiller',
+          reason: `script execution error: ${summarizeError(error)}`,
+        },
+      };
+    }
+  }
+
+  if (preferredMode === 'dom-distiller') {
+    const domAttempt = await runDomDistiller();
+    if (domAttempt.article) {
+      return domAttempt.article;
+    }
+    if (!fallbackToReadability) {
+      throw new CommandExecutionError(
+        formatDistillationFailureMessage(
+          'dom-distiller extraction failed and fallback is disabled',
+          domAttempt.failure ? [domAttempt.failure] : [],
+        ),
+        'distiller_unavailable',
+        'primitive.dom.extract_distilled_html',
+        true,
+      );
+    }
+
+    const readabilityAttempt = await runReadability();
+    if (!readabilityAttempt.article) {
+      throw new CommandExecutionError(
+        formatDistillationFailureMessage(
+          'Both dom-distiller and readability extraction failed',
+          [domAttempt.failure, readabilityAttempt.failure].filter((value): value is DistillationFailure => Boolean(value)),
+        ),
+        'distillation_failed',
+        'primitive.dom.extract_distilled_html',
+        true,
+      );
+    }
+
+    return {
+      ...readabilityAttempt.article,
+      fallbackUsed: true,
+    };
+  }
+
+  const readabilityAttempt = await runReadability();
+  if (!readabilityAttempt.article) {
+    throw new CommandExecutionError(
+      formatDistillationFailureMessage(
+        'Readability extraction failed',
+        readabilityAttempt.failure ? [readabilityAttempt.failure] : [],
+      ),
+      'readability_failed',
+      'primitive.dom.extract_distilled_html',
+      true,
+    );
+  }
+
+  return readabilityAttempt.article;
+}
+
+async function convertHtmlToMarkdown(chromeApi: ChromeLike, tabId: number, html: string): Promise<string> {
+  const result = await chromeApi.scripting.executeScript({
+    target: { tabId },
+    func: (sourceHtml: string) => {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(sourceHtml, 'text/html');
+        const root = doc.body;
+
+        const removableSelectors = [
+          'script',
+          'style',
+          'noscript',
+          'template',
+          'svg',
+          'canvas',
+          'iframe',
+          'video',
+          'audio',
+          'form',
+          'button',
+          'input',
+          'select',
+          'textarea',
+          'nav',
+        ];
+        for (const selector of removableSelectors) {
+          for (const node of Array.from(root.querySelectorAll(selector))) {
+            node.remove();
+          }
+        }
+
+        for (const node of Array.from(root.querySelectorAll('[hidden], [aria-hidden="true"]'))) {
+          node.remove();
+        }
+
+        const blockTags = new Set([
+          'article', 'section', 'div', 'main', 'header', 'footer', 'aside', 'figure', 'figcaption',
+          'p', 'ul', 'ol', 'li', 'blockquote', 'pre', 'table', 'thead', 'tbody', 'tr', 'td', 'th',
+        ]);
+
+        function decodeText(value: string): string {
+          return value
+            .replace(/\u00a0/g, ' ')
+            .replace(/[\t\f\v ]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n');
+        }
+
+        function cleanInline(value: string): string {
+          return decodeText(value)
+            .replace(/[ ]+\n/g, '\n')
+            .replace(/\n[ ]+/g, '\n')
+            .replace(/ {2,}/g, ' ')
+            .trim();
+        }
+
+        function cleanBlock(value: string): string {
+          return value
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n[ \t]+/g, '\n')
+            .trim();
+        }
+
+        function textFromNode(node: Node): string {
+          if (node.nodeType === Node.TEXT_NODE) {
+            return decodeText(node.textContent ?? '');
+          }
+
+          if (!(node instanceof Element)) {
+            return '';
+          }
+
+          if (node.tagName.toLowerCase() === 'br') {
+            return '\n';
+          }
+
+          return Array.from(node.childNodes).map((child) => textFromNode(child)).join('');
+        }
+
+        function renderChildren(node: Node, depth: number): string {
+          return Array.from(node.childNodes).map((child) => renderNode(child, depth)).join('');
+        }
+
+        function renderListItem(node: Element, depth: number, ordered: boolean, index: number): string {
+          const marker = ordered ? `${index + 1}. ` : '- ';
+          const rendered = cleanBlock(renderChildren(node, depth + 1));
+          if (!rendered) {
+            return '';
+          }
+
+          const indented = rendered
+            .split('\n')
+            .map((line, lineIndex) => (lineIndex === 0 ? `${'  '.repeat(depth)}${marker}${line}` : `${'  '.repeat(depth + 1)}${line}`))
+            .join('\n');
+          return `${indented}\n`;
+        }
+
+        function renderNode(node: Node, depth = 0): string {
+          if (node.nodeType === Node.TEXT_NODE) {
+            return decodeText(node.textContent ?? '');
+          }
+
+          if (!(node instanceof Element)) {
+            return '';
+          }
+
+          const tagName = node.tagName.toLowerCase();
+
+          if (tagName === 'br') {
+            return '\n';
+          }
+
+          if (tagName === 'hr') {
+            return '\n\n---\n\n';
+          }
+
+          if (tagName === 'pre') {
+            const code = node.textContent?.replace(/^\n+|\n+$/g, '') ?? '';
+            if (!code) {
+              return '';
+            }
+            return `\n\n\`\`\`\n${code}\n\`\`\`\n\n`;
+          }
+
+          if (tagName === 'code') {
+            const content = cleanInline(node.textContent ?? '');
+            return content ? `\`${content}\`` : '';
+          }
+
+          if (tagName === 'strong' || tagName === 'b') {
+            const content = cleanInline(renderChildren(node, depth));
+            return content ? `**${content}**` : '';
+          }
+
+          if (tagName === 'em' || tagName === 'i') {
+            const content = cleanInline(renderChildren(node, depth));
+            return content ? `*${content}*` : '';
+          }
+
+          if (tagName === 'a') {
+            const content = cleanInline(renderChildren(node, depth) || textFromNode(node));
+            const href = node.getAttribute('href')?.trim() ?? '';
+            if (!content) {
+              return '';
+            }
+            if (!href || href.startsWith('javascript:') || href === '#') {
+              return content;
+            }
+            return `[${content}](${href})`;
+          }
+
+          if (tagName === 'img') {
+            const src = node.getAttribute('src')?.trim() ?? '';
+            const alt = cleanInline(node.getAttribute('alt') ?? '');
+            if (!src) {
+              return alt;
+            }
+            return alt ? `![${alt}](${src})` : `![](${src})`;
+          }
+
+          if (/^h[1-6]$/.test(tagName)) {
+            const level = Number(tagName.slice(1));
+            const content = cleanInline(renderChildren(node, depth));
+            return content ? `\n\n${'#'.repeat(level)} ${content}\n\n` : '';
+          }
+
+          if (tagName === 'blockquote') {
+            const content = cleanBlock(renderChildren(node, depth));
+            if (!content) {
+              return '';
+            }
+            return `\n\n${content.split('\n').map((line) => `> ${line}`).join('\n')}\n\n`;
+          }
+
+          if (tagName === 'ul' || tagName === 'ol') {
+            const items = Array.from(node.children)
+              .filter((child) => child.tagName.toLowerCase() === 'li')
+              .map((child, index) => renderListItem(child, depth, tagName === 'ol', index))
+              .join('');
+            return items ? `\n${items}\n` : '';
+          }
+
+          if (tagName === 'table') {
+            const rows = Array.from(node.querySelectorAll('tr')).map((row) => {
+              const cells = Array.from(row.querySelectorAll('th, td'))
+                .map((cell) => cleanInline(textFromNode(cell)))
+                .filter(Boolean);
+              return cells.join(' | ');
+            }).filter(Boolean);
+            return rows.length > 0 ? `\n\n${rows.join('\n')}\n\n` : '';
+          }
+
+          const content = blockTags.has(tagName)
+            ? cleanBlock(renderChildren(node, depth))
+            : renderChildren(node, depth);
+
+          if (!content) {
+            return '';
+          }
+
+          if (blockTags.has(tagName)) {
+            return `\n\n${content}\n\n`;
+          }
+
+          return content;
+        }
+
+        const markdown = cleanBlock(renderChildren(root, 0))
+          .replace(/\n{3,}/g, '\n\n');
+
+        return markdown.length > 0 ? markdown : null;
+      } catch {
+        return null;
+      }
+    },
+    args: [html],
+  });
+
+  const markdown = result[0]?.result;
+  if (typeof markdown !== 'string') {
+    const fallback = await chromeApi.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: (sourceHtml: string) => {
+        try {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(sourceHtml, 'text/html');
+          return (doc.body?.textContent ?? '').trim();
+        } catch {
+          return null;
+        }
+      },
+      args: [html],
+    });
+
+    const fallbackText = fallback[0]?.result;
+    if (typeof fallbackText === 'string') {
+      return fallbackText;
+    }
+
+    throw new CommandExecutionError(
+      'Failed to convert distilled HTML to markdown',
+      'markdown_conversion_failed',
+      'primitive.dom.extract_markdown',
+      true,
+    );
+  }
+
+  return markdown;
+}
+
 export async function resolveTabId(chromeApi: ChromeLike, tabSessionId: string | undefined): Promise<number> {
   if (!tabSessionId) {
     throw new CommandExecutionError('tabSessionId is required for this action', 'missing_tab_session', 'validation', false);
@@ -363,6 +1233,114 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
         durationMs: Date.now() - start,
         data: { tabSessionId, selector, text: result[0]?.result ?? null },
       };
+    }
+    case 'primitive.dom.extract_html': {
+      const target = await resolveExtractionTarget(chromeApi, command);
+      const selector = String(command.payload.selector ?? 'body');
+      const maxChars = readNumberInRange(command.payload.maxChars, 500_000, 1_000, 5_000_000);
+      try {
+        await ensureTemporaryExtractionTabReady(chromeApi, target, 'primitive.dom.extract_html');
+        const extracted = await extractRawHtml(chromeApi, target.tabId, selector);
+        const html = typeof extracted.html === 'string'
+          ? applyContentLimit(extracted.html, maxChars)
+          : null;
+
+        return {
+          durationMs: Date.now() - start,
+          data: {
+            tabSessionId: target.tabSessionId,
+            sourceUrl: extracted.sourceUrl || target.sourceUrlInput,
+            title: extracted.title,
+            extractionMode: 'raw_html',
+            selector,
+            fallbackUsed: false,
+            contentLength: html?.length ?? 0,
+            content: html,
+          },
+        };
+      } finally {
+        if (target.temporaryTab) {
+          try {
+            await chromeApi.tabs.remove(target.tabId);
+          } catch {
+            // Best-effort cleanup for temporary extraction tabs.
+          }
+        }
+      }
+    }
+    case 'primitive.dom.extract_distilled_html': {
+      const target = await resolveExtractionTarget(chromeApi, command);
+      const preferredMode = String(command.payload.mode ?? 'readability').trim().toLowerCase() === 'dom-distiller'
+        ? 'dom-distiller'
+        : 'readability';
+      const fallbackToReadability = command.payload.fallbackToReadability === undefined
+        ? true
+        : Boolean(command.payload.fallbackToReadability);
+      const maxChars = readNumberInRange(command.payload.maxChars, 500_000, 1_000, 5_000_000);
+
+      try {
+        await ensureTemporaryExtractionTabReady(chromeApi, target, 'primitive.dom.extract_distilled_html');
+        const distilled = await extractDistilledArticle(chromeApi, target.tabId, preferredMode, fallbackToReadability);
+        const limited = applyContentLimit(distilled.html, maxChars);
+        return {
+          durationMs: Date.now() - start,
+          data: {
+            tabSessionId: target.tabSessionId,
+            sourceUrl: distilled.sourceUrl || target.sourceUrlInput,
+            title: distilled.title,
+            extractionMode: distilled.mode,
+            fallbackUsed: distilled.fallbackUsed,
+            contentLength: limited.length,
+            content: limited,
+          },
+        };
+      } finally {
+        if (target.temporaryTab) {
+          try {
+            await chromeApi.tabs.remove(target.tabId);
+          } catch {
+            // Best-effort cleanup for temporary extraction tabs.
+          }
+        }
+      }
+    }
+    case 'primitive.dom.extract_markdown': {
+      const target = await resolveExtractionTarget(chromeApi, command);
+      const preferredMode = String(command.payload.mode ?? 'readability').trim().toLowerCase() === 'dom-distiller'
+        ? 'dom-distiller'
+        : 'readability';
+      const fallbackToReadability = command.payload.fallbackToReadability === undefined
+        ? true
+        : Boolean(command.payload.fallbackToReadability);
+      const maxChars = readNumberInRange(command.payload.maxChars, 250_000, 1_000, 2_000_000);
+
+      try {
+        await ensureTemporaryExtractionTabReady(chromeApi, target, 'primitive.dom.extract_markdown');
+        const distilled = await extractDistilledArticle(chromeApi, target.tabId, preferredMode, fallbackToReadability);
+        const markdown = await convertHtmlToMarkdown(chromeApi, target.tabId, distilled.html);
+        const limited = applyContentLimit(markdown, maxChars);
+
+        return {
+          durationMs: Date.now() - start,
+          data: {
+            tabSessionId: target.tabSessionId,
+            sourceUrl: distilled.sourceUrl || target.sourceUrlInput,
+            title: distilled.title,
+            extractionMode: distilled.mode,
+            fallbackUsed: distilled.fallbackUsed,
+            contentLength: limited.length,
+            content: limited,
+          },
+        };
+      } finally {
+        if (target.temporaryTab) {
+          try {
+            await chromeApi.tabs.remove(target.tabId);
+          } catch {
+            // Best-effort cleanup for temporary extraction tabs.
+          }
+        }
+      }
     }
     case 'command.list': {
       return {

@@ -41,6 +41,9 @@ function createChromeMock(options: MockOptions = {}) {
   const defaultTabUrl = options.defaultTabUrl === undefined ? 'https://www.reddit.com/' : options.defaultTabUrl;
   const scriptResults = [...(options.scriptResults ?? [])];
   const executeScriptFunctionCalls: string[] = [];
+  const executeScriptFiles: string[] = [];
+  const createdTabIds: number[] = [];
+  const removedTabIds: number[] = [];
   let nextTabId = Math.max(0, ...(options.tabIds ?? [0])) + 1;
   let activeTabId = options.initialActiveTabId ?? (options.tabIds?.[0] ?? 1);
   let nextGroupId = 700;
@@ -92,6 +95,9 @@ function createChromeMock(options: MockOptions = {}) {
         runtimeMessages.push(message);
         return { ok: true };
       },
+      getURL(path: string) {
+        return `chrome-extension://test-extension/${path}`;
+      },
     },
     tabs: {
       async get(tabId: number) {
@@ -123,6 +129,7 @@ function createChromeMock(options: MockOptions = {}) {
       async create(details: { url?: string; active?: boolean }) {
         const tabId = nextTabId++;
         existingTabs.add(tabId);
+        createdTabIds.push(tabId);
         if (typeof details.url === 'string') {
           tabUrls[tabId] = details.url;
         }
@@ -160,6 +167,7 @@ function createChromeMock(options: MockOptions = {}) {
         return groupId;
       },
       async remove(tabId: number) {
+        removedTabIds.push(tabId);
         existingTabs.delete(tabId);
         tabGroupById.delete(tabId);
       },
@@ -226,6 +234,11 @@ function createChromeMock(options: MockOptions = {}) {
     },
     scripting: {
       async executeScript(injection: chrome.scripting.ScriptInjection<unknown[], unknown>) {
+        if (Array.isArray(injection.files) && injection.files.length > 0) {
+          executeScriptFiles.push(...injection.files);
+          return [{ result: null }];
+        }
+
         executeScriptFunctionCalls.push(injection.func?.name ?? 'anonymous');
         if (injection.func?.name === 'installPageDomQueryHelpers') {
           return [{ result: null }];
@@ -250,6 +263,9 @@ function createChromeMock(options: MockOptions = {}) {
     getGroupCreateCount: () => groupCreateCount,
     getDebuggerCommands: () => debuggerCommands.slice(),
     getExecuteScriptFunctionCalls: () => executeScriptFunctionCalls.slice(),
+    getExecuteScriptFiles: () => executeScriptFiles.slice(),
+    getCreatedTabIds: () => createdTabIds.slice(),
+    getRemovedTabIds: () => removedTabIds.slice(),
   };
 }
 
@@ -273,6 +289,267 @@ test('primitive.tab.query returns current tab session map', async () => {
 
   const result = await executeCommand(chromeApi, buildCommand('primitive.tab.query', {}));
   assert.deepEqual(result.data, { tabSessions: { tab_alpha: 11 } });
+});
+
+test('primitive.dom.extract_html requires url or tabSessionId', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.dom.extract_html', {})),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'missing_extraction_target');
+      return true;
+    },
+  );
+});
+
+test('primitive.dom.extract_html uses temporary tab when url is provided', async () => {
+  const { chromeApi, getCreatedTabIds, getRemovedTabIds } = createChromeMock({
+    scriptResults: [{
+      html: '<main>Hello</main>',
+      sourceUrl: 'https://example.com/article',
+      title: 'Example Article',
+    }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_html', {
+    url: 'https://example.com/article',
+    selector: 'main',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: null,
+    sourceUrl: 'https://example.com/article',
+    title: 'Example Article',
+    extractionMode: 'raw_html',
+    selector: 'main',
+    fallbackUsed: false,
+    contentLength: 18,
+    content: '<main>Hello</main>',
+  });
+
+  assert.equal(getCreatedTabIds().length, 1);
+  assert.deepEqual(getRemovedTabIds(), getCreatedTabIds());
+});
+
+test('primitive.dom.extract_html keeps caller tab open when tabSessionId is provided', async () => {
+  const { chromeApi, getCreatedTabIds, getRemovedTabIds } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    scriptResults: [{
+      html: '<section>Body</section>',
+      sourceUrl: 'https://example.com/page',
+      title: 'Page',
+    }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_html', {
+    tabSessionId: 'tab_alpha',
+    selector: 'section',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    sourceUrl: 'https://example.com/page',
+    title: 'Page',
+    extractionMode: 'raw_html',
+    selector: 'section',
+    fallbackUsed: false,
+    contentLength: 23,
+    content: '<section>Body</section>',
+  });
+
+  assert.deepEqual(getCreatedTabIds(), []);
+  assert.deepEqual(getRemovedTabIds(), []);
+});
+
+test('primitive.dom.extract_distilled_html defaults to readability', async () => {
+  const { chromeApi } = createChromeMock({
+    scriptResults: [{
+      html: '<article>Readable</article>',
+      sourceUrl: 'https://example.com/article',
+      title: 'Readable Title',
+    }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_distilled_html', {
+    url: 'https://example.com/article',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: null,
+    sourceUrl: 'https://example.com/article',
+    title: 'Readable Title',
+    extractionMode: 'readability',
+    fallbackUsed: false,
+    contentLength: 27,
+    content: '<article>Readable</article>',
+  });
+});
+
+test('primitive.dom.extract_markdown falls back to readability when dom-distiller fails', async () => {
+  const { chromeApi } = createChromeMock({
+    scriptResults: [
+      null,
+      {
+        html: '<article><h1>Fallback</h1><p>works</p></article>',
+        sourceUrl: 'https://example.com/article',
+        title: 'Fallback Title',
+      },
+      '# Fallback\n\nworks',
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_markdown', {
+    url: 'https://example.com/article',
+    mode: 'dom-distiller',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: null,
+    sourceUrl: 'https://example.com/article',
+    title: 'Fallback Title',
+    extractionMode: 'readability',
+    fallbackUsed: true,
+    contentLength: 17,
+    content: '# Fallback\n\nworks',
+  });
+});
+
+test('primitive.dom.extract_markdown includes readability failure details', async () => {
+  const { chromeApi } = createChromeMock({
+    scriptResults: [
+      { kind: 'failure', reason: 'Readability parse() produced no article content' },
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.dom.extract_markdown', {
+      url: 'https://example.com/empty',
+      mode: 'readability',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'readability_failed');
+      assert.match(commandErr.message, /details=readability: Readability parse\(\) produced no article content/);
+      return true;
+    },
+  );
+});
+
+test('primitive.dom.extract_markdown passes converter output through as content', async () => {
+  const { chromeApi } = createChromeMock({
+    scriptResults: [
+      {
+        kind: 'success',
+        html: '<article><h1>Title</h1><p>Hello <a href="https://example.com">world</a>.</p></article>',
+        sourceUrl: 'https://example.com/article',
+        title: 'Title',
+      },
+      '# Title\n\nHello [world](https://example.com).',
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_markdown', {
+    url: 'https://example.com/article',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: null,
+    sourceUrl: 'https://example.com/article',
+    title: 'Title',
+    extractionMode: 'readability',
+    fallbackUsed: false,
+    contentLength: 44,
+    content: '# Title\n\nHello [world](https://example.com).',
+  });
+});
+
+test('primitive.dom.extract_markdown falls back to plain text when converter returns null', async () => {
+  const { chromeApi } = createChromeMock({
+    scriptResults: [
+      {
+        kind: 'success',
+        html: '<article><p>Some content</p></article>',
+        sourceUrl: 'https://example.com/article',
+        title: 'Article',
+      },
+      null,
+      'Some content',
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_markdown', {
+    url: 'https://example.com/article',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: null,
+    sourceUrl: 'https://example.com/article',
+    title: 'Article',
+    extractionMode: 'readability',
+    fallbackUsed: false,
+    contentLength: 12,
+    content: 'Some content',
+  });
+});
+
+test('primitive.dom.extract_markdown throws when converter and plain text fallback both fail', async () => {
+  const { chromeApi } = createChromeMock({
+    scriptResults: [
+      {
+        kind: 'success',
+        html: '<article><p>Content</p></article>',
+        sourceUrl: 'https://example.com/article',
+        title: 'Article',
+      },
+      null,
+      null,
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.dom.extract_markdown', {
+      url: 'https://example.com/article',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'markdown_conversion_failed');
+      return true;
+    },
+  );
+});
+
+test('primitive.dom.extract_markdown respects maxChars limit on output', async () => {
+  const longContent = '# Title\n\n' + 'x'.repeat(5000);
+  const { chromeApi } = createChromeMock({
+    scriptResults: [
+      {
+        kind: 'success',
+        html: '<article><h1>Title</h1></article>',
+        sourceUrl: 'https://example.com/article',
+        title: 'Title',
+      },
+      longContent,
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_markdown', {
+    url: 'https://example.com/article',
+    maxChars: 1000,
+  }));
+
+  const data = result.data as { contentLength: number; content: string };
+  assert.equal(data.contentLength, 1000);
+  assert.equal(data.content.length, 1000);
 });
 
 test('navigate returns deterministic unknown_tab_session for missing mapping', async () => {
