@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/telepat-io/otto/compare/protocol-v0.3.0...protocol-v0.4.0) (2026-04-23)
+
+
+### Miscellaneous Chores
+
+* **protocol:** Synchronize otto npm packages versions
+
 ## [0.3.0](https://github.com/telepat-io/otto/compare/protocol-v0.2.0...protocol-v0.3.0) (2026-04-21)
 
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/telepat-io/otto/compare/extension-v0.3.0...extension-v0.4.0) (2026-04-23)
+
+
+### Features
+
+* page markdown extraction ([6d80258](https://github.com/telepat-io/otto/commit/6d80258a48b7be61f06f74dcdf72fb337a8f858d))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.3.0 to 0.4.0
+
 ## [0.3.0](https://github.com/telepat-io/otto/compare/extension-v0.1.0...extension-v0.3.0) (2026-04-21)
 
 
