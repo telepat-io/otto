@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/telepat-io/otto/compare/extension-v0.4.0...extension-v0.5.0) (2026-04-26)
+
+
+### Features
+
+* add page screenshot functionality with CLI support and update related documentation ([0395835](https://github.com/telepat-io/otto/commit/0395835ca809fbb02877d49bd0de4bbac4fdaf6a))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.4.0 to 0.5.0
+
 ## [0.4.0](https://github.com/telepat-io/otto/compare/extension-v0.3.0...extension-v0.4.0) (2026-04-23)
 
 
