@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomBytes } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import {
