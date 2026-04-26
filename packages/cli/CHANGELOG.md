@@ -94,7 +94,7 @@
 
 ### Dependencies
 
-* The following workspace dependencies were updated
+* The following workspace dependencies were updated:
   * dependencies
     * @telepat/otto-protocol bumped from 0.1.0 to 0.2.0
     * @telepat/otto-relay bumped from 0.1.0 to 0.2.0
