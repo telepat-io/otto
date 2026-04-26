@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/telepat-io/otto/compare/v0.3.1...v0.4.0) (2026-04-26)
+
+
+### Miscellaneous
+
+* align CLI version with relay, protocol, and extension packages
+
 ## [0.3.1](https://github.com/telepat-io/otto/compare/v0.3.0...v0.3.1) (2026-04-23)
 
 
