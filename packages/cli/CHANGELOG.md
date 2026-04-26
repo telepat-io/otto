@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/telepat-io/otto/compare/v0.5.0...v0.5.1) (2026-04-26)
+
+
+### Bug Fixes
+
+* standardize indentation for Node.js setup in CI workflows ([728204c](https://github.com/telepat-io/otto/commit/728204cf872b280b07d75627b9c8d1fa0e91f24e))
+
 ## [0.5.0](https://github.com/telepat-io/otto/compare/v0.4.0...v0.5.0) (2026-04-26)
 
 
