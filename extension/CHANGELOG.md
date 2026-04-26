@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/telepat-io/otto/compare/extension-v0.5.0...extension-v0.6.0) (2026-04-26)
+
+
+### Miscellaneous Chores
+
+* **extension:** Synchronize otto npm packages versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.5.0 to 0.6.0
+
 ## [0.5.0](https://github.com/telepat-io/otto/compare/extension-v0.4.0...extension-v0.5.0) (2026-04-26)
 
 
