@@ -217,7 +217,13 @@ export function handleRelayWsPreCommandMessage(params: {
     return { handled: true, client };
   }
 
-  if (!checkRateLimit(client.id)) {
+  // listener_update events from nodes are high-frequency; skip rate limiting for them.
+  const isListenerUpdateFromNode =
+    client.role === 'node' &&
+    msg.messageType === 'event' &&
+    (msg.payload as { type?: unknown })?.type === 'listener_update';
+
+  if (!isListenerUpdateFromNode && !checkRateLimit(client.id)) {
     send(ws, buildError(msg.requestId, 'relay', {
       category: 'auth',
       code: 'rate_limited',
