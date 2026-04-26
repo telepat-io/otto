@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0](https://github.com/telepat-io/otto/compare/relay-v0.5.0...relay-v0.6.0) (2026-04-26)
+
+
+### Features
+
+* enhance relay functionality with new configuration and context management ([f17eafd](https://github.com/telepat-io/otto/commit/f17eafd171102d04c4cda17e22f35e6a2285a839))
+
+
+### Bug Fixes
+
+* remove unnecessary eslint disable comment for explicit any type ([f4cdb7f](https://github.com/telepat-io/otto/commit/f4cdb7f1ec85d1e190fa90164b4dbee45c2b32e9))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.5.0 to 0.6.0
+
 ## [0.5.0](https://github.com/telepat-io/otto/compare/relay-v0.4.0...relay-v0.5.0) (2026-04-26)
 
 
