@@ -46,6 +46,8 @@ Content extraction primitives (`primitive.dom.extract_distilled_html`, `primitiv
 
 This replaced prior eval-string injection to avoid scope instability between script executions and to keep library loading deterministic across tabs. Distillation failures now include explicit mode-specific details (for example readability constructor unavailable, empty parse output, or script execution error) to improve operator debugging in CLI and relay logs.
 
+Page screenshot primitive (`primitive.page.screenshot`) also follows extraction-style tab targeting (`tabSessionId` or `url`) with temporary-tab cleanup in `finally`. Viewport mode uses tab capture APIs, while full-page mode uses CDP `Page.captureScreenshot` against computed layout metrics and returns terminal base64 payload plus dimensions/byte metadata. Oversized captures run bounded quality/scale reduction before returning deterministic `screenshot_too_large` errors.
+
 ### Site command orchestration
 
 Site command execution follows one consistent order so failures remain deterministic:

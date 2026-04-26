@@ -13,6 +13,12 @@ const EXTRACTION_TAB_READY_TIMEOUT_MS = 15_000;
 const EXTRACTION_TAB_POLL_INTERVAL_MS = 150;
 const DISTILL_SCRIPT_INSTALL_MAX_ATTEMPTS = 3;
 const DISTILL_SCRIPT_INSTALL_RETRY_DELAY_MS = 200;
+const SCREENSHOT_MAX_BYTES_DEFAULT = 1_500_000;
+const SCREENSHOT_MAX_BYTES_MIN = 50_000;
+const SCREENSHOT_MAX_BYTES_MAX = 20_000_000;
+const SCREENSHOT_MAX_CAPTURE_ATTEMPTS = 5;
+const SCREENSHOT_MIN_JPEG_QUALITY = 35;
+const SCREENSHOT_MIN_SCALE = 0.4;
 
 const runtimeSingleFlight = createSingleFlight();
 
@@ -39,6 +45,32 @@ type DistilledArticle = {
 type DistillationFailure = {
   mode: 'readability' | 'dom-distiller';
   reason: string;
+};
+
+type ScreenshotFormat = 'png' | 'jpeg';
+
+type ScreenshotMode = 'viewport' | 'full_page';
+
+type ScreenshotPayload = {
+  format: ScreenshotFormat;
+  mode: ScreenshotMode;
+  quality: number;
+  maxBytes: number;
+};
+
+type ScreenshotCaptureResult = {
+  contentBase64: string;
+  mimeType: string;
+  byteLength: number;
+  width: number | null;
+  height: number | null;
+  quality: number;
+  scale: number;
+};
+
+type CdpLayoutMetrics = {
+  width: number;
+  height: number;
 };
 
 type ExtractionTabProbe = {
@@ -82,7 +114,7 @@ async function waitForExtractionTabReady(chromeApi: ChromeLike, tabId: number): 
 async function ensureTemporaryExtractionTabReady(
   chromeApi: ChromeLike,
   target: ExtractionTarget,
-  stage: 'primitive.dom.extract_html' | 'primitive.dom.extract_distilled_html' | 'primitive.dom.extract_markdown',
+  stage: 'primitive.dom.extract_html' | 'primitive.dom.extract_distilled_html' | 'primitive.dom.extract_markdown' | 'primitive.page.screenshot',
 ): Promise<void> {
   if (!target.temporaryTab) {
     return;
@@ -316,6 +348,408 @@ function applyContentLimit(content: string, maxChars: number): string {
     return content;
   }
   return content.slice(0, maxChars);
+}
+
+function parseScreenshotFormat(value: unknown): ScreenshotFormat {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : 'png';
+  if (normalized === 'png') {
+    return 'png';
+  }
+  if (normalized === 'jpeg' || normalized === 'jpg') {
+    return 'jpeg';
+  }
+
+  throw new CommandExecutionError(
+    'format must be png or jpeg',
+    'invalid_screenshot_format',
+    'validation',
+    false,
+  );
+}
+
+function parseScreenshotMode(value: unknown): ScreenshotMode {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : 'viewport';
+  if (normalized === 'viewport') {
+    return 'viewport';
+  }
+  if (normalized === 'full_page' || normalized === 'fullpage' || normalized === 'full-page') {
+    return 'full_page';
+  }
+
+  throw new CommandExecutionError(
+    'mode must be viewport or full_page',
+    'invalid_screenshot_mode',
+    'validation',
+    false,
+  );
+}
+
+function parseScreenshotQuality(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 80;
+  }
+
+  const floored = Math.floor(parsed);
+  if (floored < 1 || floored > 100) {
+    throw new CommandExecutionError(
+      'quality must be between 1 and 100',
+      'invalid_screenshot_quality',
+      'validation',
+      false,
+    );
+  }
+
+  return floored;
+}
+
+function parseScreenshotPayload(command: CommandPayload): ScreenshotPayload {
+  return {
+    format: parseScreenshotFormat(command.payload.format),
+    mode: parseScreenshotMode(command.payload.mode),
+    quality: parseScreenshotQuality(command.payload.quality),
+    maxBytes: readNumberInRange(
+      command.payload.maxBytes,
+      SCREENSHOT_MAX_BYTES_DEFAULT,
+      SCREENSHOT_MAX_BYTES_MIN,
+      SCREENSHOT_MAX_BYTES_MAX,
+    ),
+  };
+}
+
+function computeBase64ByteLength(base64: string): number {
+  const len = base64.length;
+  if (len === 0) {
+    return 0;
+  }
+
+  let padding = 0;
+  if (base64.endsWith('==')) {
+    padding = 2;
+  } else if (base64.endsWith('=')) {
+    padding = 1;
+  }
+
+  return Math.max(0, Math.floor((len * 3) / 4) - padding);
+}
+
+function decodeBase64ToBytes(base64: string): Uint8Array {
+  const decode = typeof atob === 'function'
+    ? atob
+    : (value: string) => {
+      const runtime = globalThis as {
+        Buffer?: {
+          from: (input: string, encoding: string) => { toString: (format: string) => string };
+        };
+      };
+      if (!runtime.Buffer) {
+        throw new Error('base64_decode_unavailable');
+      }
+      return runtime.Buffer.from(value, 'base64').toString('binary');
+    };
+
+  const text = decode(base64);
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i += 1) {
+    bytes[i] = text.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function getPngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 24) {
+    return null;
+  }
+
+  const pngHeader = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  for (let i = 0; i < pngHeader.length; i += 1) {
+    if (bytes[i] !== pngHeader[i]) {
+      return null;
+    }
+  }
+
+  const width = (bytes[16] << 24) + (bytes[17] << 16) + (bytes[18] << 8) + bytes[19];
+  const height = (bytes[20] << 24) + (bytes[21] << 16) + (bytes[22] << 8) + bytes[23];
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return { width, height };
+}
+
+function getJpegDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) {
+    return null;
+  }
+
+  let offset = 2;
+  while (offset + 9 < bytes.length) {
+    if (bytes[offset] !== 0xFF) {
+      offset += 1;
+      continue;
+    }
+
+    const marker = bytes[offset + 1];
+    if (marker === 0xD9 || marker === 0xDA) {
+      break;
+    }
+
+    const size = (bytes[offset + 2] << 8) + bytes[offset + 3];
+    if (size < 2 || offset + 2 + size > bytes.length) {
+      break;
+    }
+
+    const isSofMarker = (marker >= 0xC0 && marker <= 0xC3)
+      || (marker >= 0xC5 && marker <= 0xC7)
+      || (marker >= 0xC9 && marker <= 0xCB)
+      || (marker >= 0xCD && marker <= 0xCF);
+    if (isSofMarker) {
+      const height = (bytes[offset + 5] << 8) + bytes[offset + 6];
+      const width = (bytes[offset + 7] << 8) + bytes[offset + 8];
+      if (width > 0 && height > 0) {
+        return { width, height };
+      }
+      return null;
+    }
+
+    offset += 2 + size;
+  }
+
+  return null;
+}
+
+function tryReadImageDimensions(contentBase64: string, mimeType: string): { width: number; height: number } | null {
+  try {
+    const bytes = decodeBase64ToBytes(contentBase64);
+    if (mimeType === 'image/png') {
+      return getPngDimensions(bytes);
+    }
+    if (mimeType === 'image/jpeg') {
+      return getJpegDimensions(bytes);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function getTabSourceUrl(chromeApi: ChromeLike, tabId: number, fallback: string | null): Promise<string | null> {
+  try {
+    const tab = await chromeApi.tabs.get(tabId);
+    if (typeof tab.url === 'string' && tab.url.length > 0) {
+      return tab.url;
+    }
+  } catch {
+    // Ignore failures and use fallback below.
+  }
+  return fallback;
+}
+
+async function captureViewportScreenshot(
+  chromeApi: ChromeLike,
+  tabId: number,
+  format: ScreenshotFormat,
+  quality: number,
+): Promise<ScreenshotCaptureResult> {
+  // tabs.captureVisibleTab only works for the active (foreground) tab, so we use CDP
+  // Page.captureScreenshot without captureBeyondViewport to capture the viewport of any tab.
+  if (!chromeApi.debugger) {
+    throw new CommandExecutionError(
+      'Debugger API is unavailable; cannot capture viewport screenshot',
+      'screenshot_debugger_unavailable',
+      'primitive.page.screenshot',
+      false,
+    );
+  }
+
+  let ownsAttachment = false;
+
+  try {
+    try {
+      await chromeApi.debugger.attach({ tabId }, '1.3');
+      ownsAttachment = true;
+    } catch (error) {
+      const classified = classifyScreenshotDebuggerAttachError(error);
+      if (classified.code !== 'screenshot_debugger_conflict') {
+        throw classified;
+      }
+      ownsAttachment = false;
+    }
+
+    const response = await chromeApi.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', {
+      format,
+      ...(format === 'jpeg' ? { quality } : {}),
+      fromSurface: true,
+    }) as {
+      data?: string;
+    };
+
+    if (typeof response.data !== 'string' || response.data.length === 0) {
+      throw new CommandExecutionError(
+        'CDP screenshot capture returned empty image data',
+        'screenshot_capture_failed',
+        'primitive.page.screenshot',
+        true,
+      );
+    }
+
+    const byteLength = computeBase64ByteLength(response.data);
+    const dimensions = tryReadImageDimensions(response.data, format === 'jpeg' ? 'image/jpeg' : 'image/png');
+
+    return {
+      contentBase64: response.data,
+      mimeType: format === 'jpeg' ? 'image/jpeg' : 'image/png',
+      byteLength,
+      width: dimensions?.width ?? 0,
+      height: dimensions?.height ?? 0,
+      quality,
+      scale: 1,
+    };
+  } finally {
+    if (ownsAttachment) {
+      try { await chromeApi.debugger.detach({ tabId }); } catch { /* ignore */ }
+    }
+  }
+}
+
+function classifyScreenshotDebuggerAttachError(error: unknown): CommandExecutionError {
+  const message = String(error instanceof Error ? error.message : error ?? '').toLowerCase();
+  if (message.includes('another debugger is already attached')) {
+    return new CommandExecutionError(
+      'Cannot capture full-page screenshot because another debugger is attached to the tab',
+      'screenshot_debugger_conflict',
+      'primitive.page.screenshot',
+      false,
+    );
+  }
+
+  if (message.includes('cannot access a chrome://') || message.includes('cannot access contents of')) {
+    return new CommandExecutionError(
+      'Cannot capture full-page screenshot on this tab due to browser security restrictions',
+      'screenshot_debugger_permission_denied',
+      'primitive.page.screenshot',
+      false,
+    );
+  }
+
+  return new CommandExecutionError(
+    'Failed to attach debugger for full-page screenshot capture',
+    'screenshot_debugger_attach_failed',
+    'primitive.page.screenshot',
+    true,
+  );
+}
+
+async function getCdpLayoutMetrics(chromeApi: ChromeLike, tabId: number): Promise<CdpLayoutMetrics> {
+  const response = await chromeApi.debugger.sendCommand({ tabId }, 'Page.getLayoutMetrics') as {
+    contentSize?: {
+      width?: number;
+      height?: number;
+    };
+  };
+
+  const width = Math.max(1, Math.ceil(Number(response?.contentSize?.width ?? 0)));
+  const height = Math.max(1, Math.ceil(Number(response?.contentSize?.height ?? 0)));
+  return { width, height };
+}
+
+async function captureFullPageScreenshot(
+  chromeApi: ChromeLike,
+  tabId: number,
+  format: ScreenshotFormat,
+  quality: number,
+  scale: number,
+): Promise<ScreenshotCaptureResult> {
+  if (!chromeApi.debugger) {
+    throw new CommandExecutionError(
+      'Debugger API is unavailable; cannot capture full-page screenshot',
+      'screenshot_debugger_unavailable',
+      'primitive.page.screenshot',
+      false,
+    );
+  }
+
+  let ownsAttachment = false;
+
+  try {
+    try {
+      await chromeApi.debugger.attach({ tabId }, '1.3');
+      ownsAttachment = true;
+    } catch (error) {
+      const classified = classifyScreenshotDebuggerAttachError(error);
+      if (classified.code !== 'screenshot_debugger_conflict') {
+        throw classified;
+      }
+      ownsAttachment = false;
+    }
+
+    const metrics = await getCdpLayoutMetrics(chromeApi, tabId);
+    const response = await chromeApi.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', {
+      format,
+      ...(format === 'jpeg' ? { quality } : {}),
+      clip: {
+        x: 0,
+        y: 0,
+        width: metrics.width,
+        height: metrics.height,
+        scale,
+      },
+      captureBeyondViewport: true,
+      fromSurface: true,
+    }) as {
+      data?: string;
+    };
+
+    if (typeof response.data !== 'string' || response.data.length === 0) {
+      throw new CommandExecutionError(
+        'CDP screenshot capture returned empty image data',
+        'screenshot_capture_failed',
+        'primitive.page.screenshot',
+        true,
+      );
+    }
+
+    const byteLength = computeBase64ByteLength(response.data);
+    const dimensions = tryReadImageDimensions(response.data, format === 'jpeg' ? 'image/jpeg' : 'image/png');
+    const width = dimensions?.width ?? Math.max(1, Math.round(metrics.width * scale));
+    const height = dimensions?.height ?? Math.max(1, Math.round(metrics.height * scale));
+
+    return {
+      contentBase64: response.data,
+      mimeType: format === 'jpeg' ? 'image/jpeg' : 'image/png',
+      byteLength,
+      width,
+      height,
+      quality,
+      scale,
+    };
+  } catch (error) {
+    if (error instanceof CommandExecutionError) {
+      throw error;
+    }
+    throw new CommandExecutionError(
+      `Failed to capture full-page screenshot via CDP: ${summarizeError(error)}`,
+      'screenshot_capture_failed',
+      'primitive.page.screenshot',
+      true,
+    );
+  } finally {
+    if (ownsAttachment) {
+      try {
+        await chromeApi.debugger.detach({ tabId });
+      } catch {
+        // Ignore detach failures for transient tab lifecycle states.
+      }
+    }
+  }
+}
+
+function nextScreenshotQuality(current: number): number {
+  return Math.max(SCREENSHOT_MIN_JPEG_QUALITY, current - 15);
+}
+
+function nextScreenshotScale(current: number): number {
+  return Math.max(SCREENSHOT_MIN_SCALE, Number((current * 0.8).toFixed(2)));
 }
 
 function summarizeError(error: unknown): string {
@@ -1338,6 +1772,102 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
             await chromeApi.tabs.remove(target.tabId);
           } catch {
             // Best-effort cleanup for temporary extraction tabs.
+          }
+        }
+      }
+    }
+    case 'primitive.page.screenshot': {
+      const target = await resolveExtractionTarget(chromeApi, command);
+      const screenshot = parseScreenshotPayload(command);
+      let quality = screenshot.quality;
+      let scale = 1;
+      let downscaled = false;
+      let capture: ScreenshotCaptureResult | null = null;
+
+      try {
+        await ensureTemporaryExtractionTabReady(chromeApi, target, 'primitive.page.screenshot');
+        if (!target.temporaryTab) {
+          await waitForExtractionTabReady(chromeApi, target.tabId);
+        }
+
+        for (let attempt = 1; attempt <= SCREENSHOT_MAX_CAPTURE_ATTEMPTS; attempt += 1) {
+          capture = screenshot.mode === 'full_page'
+            ? await captureFullPageScreenshot(chromeApi, target.tabId, screenshot.format, quality, scale)
+            : await captureViewportScreenshot(chromeApi, target.tabId, screenshot.format, quality);
+
+          if (capture.byteLength <= screenshot.maxBytes) {
+            break;
+          }
+
+          if (attempt === SCREENSHOT_MAX_CAPTURE_ATTEMPTS) {
+            break;
+          }
+
+          if (screenshot.format === 'jpeg' && quality > SCREENSHOT_MIN_JPEG_QUALITY) {
+            const nextQuality = nextScreenshotQuality(quality);
+            if (nextQuality !== quality) {
+              quality = nextQuality;
+              downscaled = true;
+              continue;
+            }
+          }
+
+          if (screenshot.mode === 'full_page' && scale > SCREENSHOT_MIN_SCALE) {
+            const nextScale = nextScreenshotScale(scale);
+            if (nextScale !== scale) {
+              scale = nextScale;
+              downscaled = true;
+              continue;
+            }
+          }
+
+          break;
+        }
+
+        if (!capture) {
+          throw new CommandExecutionError(
+            'Screenshot capture did not return any image payload',
+            'screenshot_capture_failed',
+            'primitive.page.screenshot',
+            true,
+          );
+        }
+
+        if (capture.byteLength > screenshot.maxBytes) {
+          throw new CommandExecutionError(
+            `Screenshot payload exceeds maxBytes (${capture.byteLength} > ${screenshot.maxBytes})`,
+            'screenshot_too_large',
+            'primitive.page.screenshot',
+            false,
+          );
+        }
+
+        const sourceUrl = await getTabSourceUrl(chromeApi, target.tabId, target.sourceUrlInput);
+
+        return {
+          durationMs: Date.now() - start,
+          data: {
+            tabSessionId: target.tabSessionId,
+            sourceUrl,
+            mode: screenshot.mode,
+            format: screenshot.format,
+            mimeType: capture.mimeType,
+            width: capture.width,
+            height: capture.height,
+            byteLength: capture.byteLength,
+            maxBytes: screenshot.maxBytes,
+            quality: capture.quality,
+            scale: capture.scale,
+            downscaled,
+            contentBase64: capture.contentBase64,
+          },
+        };
+      } finally {
+        if (target.temporaryTab) {
+          try {
+            await chromeApi.tabs.remove(target.tabId);
+          } catch {
+            // Best-effort cleanup for temporary screenshot tabs.
           }
         }
       }

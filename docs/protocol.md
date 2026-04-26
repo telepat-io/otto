@@ -103,8 +103,9 @@ Primitive extraction actions are also routed through `command` payloads:
 - `primitive.dom.extract_html`
 - `primitive.dom.extract_distilled_html`
 - `primitive.dom.extract_markdown`
+- `primitive.page.screenshot`
 
-These actions accept either `tabSessionId` or `url`. URL-only requests are executed against a temporary background tab and return terminal `result` frames (no streaming/listener lifecycle).
+These actions accept either `tabSessionId` or `url`. URL-only requests are executed against a temporary background tab and return terminal `result` frames (no streaming/listener lifecycle). Screenshot responses include image metadata and base64 payload content; `mode=full_page` executes via CDP screenshot capture.
 
 `command.test` may return a `stream` manifest in `result.payload.data`. Controllers should keep follow-up subscribe traffic on the same authenticated websocket, maintain heartbeat (`ping`/`pong`) for long sessions, and use `command_cancel` against the original test `requestId` when shutting down active stream tests.
 

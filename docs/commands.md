@@ -21,7 +21,7 @@ The protocol exposes low-level primitive actions and higher-level site command a
 
 | Group | Actions |
 | --- | --- |
-| Primitive | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query`, `primitive.dom.extract_text`, `primitive.dom.extract_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown` |
+| Primitive | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query`, `primitive.dom.extract_text`, `primitive.dom.extract_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown`, `primitive.page.screenshot` |
 | Command | `command.list`, `command.run`, `command.test`, `command.reddit_feed` (legacy alias) |
 | Common CLI entrypoints | `otto commands list`, `otto test <site> <command>`, `otto cmd --action ...` |
 
@@ -32,6 +32,8 @@ The protocol exposes low-level primitive actions and higher-level site command a
 Commands are grouped by site under `extension/src/commands/<site>/`. Each site bundle provides auth primitives (`checkLogin`, `gotoLogin`) plus one or more command modules exporting metadata and execution logic. Runtime payloads for `command.run` and `command.test` share the same shape (`site`, `command`, optional `input`, optional `authMode`) so test paths can mirror production execution.
 
 For command script execution, runtime exposes both `executeScript(...)` and `executeScriptWithDomHelpers(...)`. Use the DOM-helper variant when selectors can traverse nested shadow roots.
+
+`primitive.page.screenshot` accepts either `tabSessionId` or `url` target resolution (temporary tab for URL-only calls), and returns terminal payloads with image metadata plus `contentBase64`. `mode=viewport` uses tab capture APIs, while `mode=full_page` uses CDP screenshot capture.
 
 ## Command Contract
 

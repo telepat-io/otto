@@ -54,6 +54,7 @@ const DEFAULT_CONTROLLER_SCOPES =
     'primitive.dom.extract_html',
     'primitive.dom.extract_distilled_html',
     'primitive.dom.extract_markdown',
+    'primitive.page.screenshot',
     'command.list',
     'command.run',
     'command.test',

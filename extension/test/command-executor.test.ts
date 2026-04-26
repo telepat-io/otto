@@ -23,6 +23,8 @@ type MockOptions = {
   invalidTabGroupUpdateErrorValue?: unknown;
   debuggerAttachErrorValue?: unknown;
   debuggerSendCommandErrorByMethod?: Record<string, unknown>;
+  debuggerSendCommandResultByMethod?: Record<string, unknown>;
+  debuggerSendCommandResultSequenceByMethod?: Record<string, unknown[]>;
   disableDebugger?: boolean;
 };
 
@@ -54,6 +56,11 @@ function createChromeMock(options: MockOptions = {}) {
   const invalidTabGroupUpdateErrorValue = options.invalidTabGroupUpdateErrorValue;
   const debuggerAttachErrorValue = options.debuggerAttachErrorValue;
   const debuggerSendCommandErrorByMethod = options.debuggerSendCommandErrorByMethod ?? {};
+  const debuggerSendCommandResultByMethod = options.debuggerSendCommandResultByMethod ?? {};
+  const debuggerSendCommandResultSequenceByMethod: Record<string, unknown[]> = {};
+  for (const [method, seq] of Object.entries(options.debuggerSendCommandResultSequenceByMethod ?? {})) {
+    debuggerSendCommandResultSequenceByMethod[method] = [...seq];
+  }
   const debuggerCommands: Array<{ method: string; params: unknown }> = [];
 
   if (!existingTabs.has(activeTabId)) {
@@ -180,6 +187,9 @@ function createChromeMock(options: MockOptions = {}) {
         }
         return { id: tabId, ...changes };
       },
+      async captureVisibleTab() {
+        throw new Error('captureVisibleTab should not be called; all screenshot capture uses CDP');
+      },
       onRemoved: {
         addListener() {
           return;
@@ -206,6 +216,13 @@ function createChromeMock(options: MockOptions = {}) {
           debuggerCommands.push({ method, params });
           if (Object.prototype.hasOwnProperty.call(debuggerSendCommandErrorByMethod, method)) {
             throw debuggerSendCommandErrorByMethod[method];
+          }
+          const seq = debuggerSendCommandResultSequenceByMethod[method];
+          if (seq && seq.length > 0) {
+            return seq.shift() as Record<string, unknown>;
+          }
+          if (Object.prototype.hasOwnProperty.call(debuggerSendCommandResultByMethod, method)) {
+            return debuggerSendCommandResultByMethod[method] as Record<string, unknown>;
           }
           return {};
         },
@@ -526,6 +543,156 @@ test('primitive.dom.extract_markdown throws when converter and plain text fallba
       return true;
     },
   );
+});
+
+test('primitive.page.screenshot captures viewport image for tabSessionId target', async () => {
+  const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+  const { chromeApi, getDebuggerCommands } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: {
+      11: 'https://example.com/page',
+    },
+    debuggerSendCommandResultByMethod: {
+      'Page.captureScreenshot': { data: pngBase64 },
+    },
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.page.screenshot', {
+    tabSessionId: 'tab_alpha',
+    mode: 'viewport',
+    format: 'png',
+  }));
+
+  const methods = getDebuggerCommands().map((c) => c.method);
+  assert.ok(methods.includes('Page.captureScreenshot'));
+  assert.ok(!methods.includes('Page.getLayoutMetrics'), 'viewport should not call getLayoutMetrics');
+  assert.equal((result.data as { tabSessionId?: unknown }).tabSessionId, 'tab_alpha');
+  assert.equal((result.data as { mode?: unknown }).mode, 'viewport');
+  assert.equal((result.data as { format?: unknown }).format, 'png');
+  assert.equal((result.data as { mimeType?: unknown }).mimeType, 'image/png');
+  assert.equal((result.data as { downscaled?: unknown }).downscaled, false);
+  assert.equal(typeof (result.data as { contentBase64?: unknown }).contentBase64, 'string');
+});
+
+test('primitive.page.screenshot uses temporary tab for url target and cleans up', async () => {
+  const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+  const { chromeApi, getCreatedTabIds, getRemovedTabIds } = createChromeMock({
+    tabUrlSequenceById: {
+      1: ['https://example.com/page'],
+    },
+    debuggerSendCommandResultByMethod: {
+      'Page.captureScreenshot': { data: pngBase64 },
+    },
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.page.screenshot', {
+    url: 'https://example.com/page',
+  }));
+
+  assert.equal((result.data as { tabSessionId?: unknown }).tabSessionId, null);
+  assert.equal(getCreatedTabIds().length, 1);
+  assert.deepEqual(getRemovedTabIds(), getCreatedTabIds());
+});
+
+test('primitive.page.screenshot full_page uses CDP capture', async () => {
+  const { chromeApi, getDebuggerCommands } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    debuggerSendCommandResultByMethod: {
+      'Page.getLayoutMetrics': {
+        contentSize: {
+          width: 100,
+          height: 200,
+        },
+      },
+      'Page.captureScreenshot': {
+        data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
+      },
+    },
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.page.screenshot', {
+    tabSessionId: 'tab_alpha',
+    mode: 'full_page',
+    format: 'png',
+  }));
+
+  const methods = getDebuggerCommands().map((entry) => entry.method);
+  assert.ok(methods.includes('Page.getLayoutMetrics'));
+  assert.ok(methods.includes('Page.captureScreenshot'));
+  assert.equal((result.data as { mode?: unknown }).mode, 'full_page');
+  assert.equal((result.data as { mimeType?: unknown }).mimeType, 'image/png');
+});
+
+test('primitive.page.screenshot reports deterministic debugger conflict errors', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    debuggerAttachErrorValue: new Error('Another debugger is already attached to the tab'),
+    debuggerSendCommandErrorByMethod: {
+      'Page.getLayoutMetrics': new Error('CDP unavailable for shared attachment'),
+    },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.page.screenshot', {
+      tabSessionId: 'tab_alpha',
+      mode: 'full_page',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal((err as CommandExecutionError).code, 'screenshot_capture_failed');
+      return true;
+    },
+  );
+});
+
+test('primitive.page.screenshot downscales jpeg quality when payload is oversized', async () => {
+  const oversized = 'A'.repeat(3_500_000);
+  const reduced = 'A'.repeat(80_000);
+
+  const { chromeApi, getDebuggerCommands } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    debuggerSendCommandResultSequenceByMethod: {
+      'Page.captureScreenshot': [
+        { data: oversized },
+        { data: reduced },
+      ],
+    },
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.page.screenshot', {
+    tabSessionId: 'tab_alpha',
+    mode: 'viewport',
+    format: 'jpeg',
+    quality: 90,
+    maxBytes: 100_000,
+  }));
+
+  const screenshotCalls = getDebuggerCommands().filter((c) => c.method === 'Page.captureScreenshot');
+  assert.equal(screenshotCalls.length, 2);
+  assert.equal((screenshotCalls[0]?.params as { quality?: number } | undefined)?.quality, 90);
+  assert.equal((screenshotCalls[1]?.params as { quality?: number } | undefined)?.quality, 75);
+  assert.equal((result.data as { downscaled?: unknown }).downscaled, true);
+  assert.ok(((result.data as { byteLength?: unknown }).byteLength as number) <= 100_000);
 });
 
 test('primitive.dom.extract_markdown respects maxChars limit on output', async () => {

@@ -52,7 +52,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Write new tests for any new features or edge cases, and ensure they pass reliably.
 - Update the documentation extensively to reflect any changes in behavior, architecture, or developer experience.
 - For big changes, where it makes sense, also make concise updates to AGENTS.md.
-- Never leave debug artifact files (`*.txt`, `*.log`, `*.json`, `*.html`, `*.md` outside `docs/`) in the repo root. Delete them immediately after use and do not commit them.
+- Never leave debug artifact files anywhere in the repo. This includes files like `test_results.txt`, `*.log`, scratch `*.json`, or any `*.html`/`*.md` outside `docs/` — at any directory level (repo root, `extension/`, `packages/`, etc.). Delete them immediately after use and do not commit them.
 
 ## Where To Change Things
 - Protocol contracts: `packages/shared-protocol/src/index.ts`

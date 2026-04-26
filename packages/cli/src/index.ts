@@ -2375,6 +2375,76 @@ logs
     console.log(data);
   });
 
+program
+  .command('screenshot')
+  .description('Capture a screenshot of a page and open it locally')
+  .argument('<url>', 'Page URL to screenshot')
+  .option('--mode <mode>', 'viewport or full_page', 'viewport')
+  .option('--format <format>', 'png or jpeg', 'png')
+  .option('--quality <n>', 'JPEG quality 1-100 (ignored for png)', '80')
+  .option('--max-bytes <n>', 'Max output bytes before downscale', String(1_500_000))
+  .option('--node-id <id>', 'Override target node id')
+  .option('--timeout <ms>', 'Command timeout in milliseconds', '60000')
+  .option('--out <path>', 'Save to file instead of opening in Preview')
+  .option('--json', 'Print raw JSON result instead of opening image', false)
+  .action(async (url: string, opts) => {
+    const config = loadConfig();
+    const targetNodeId = await resolveTargetNodeId(config, opts.nodeId);
+
+    const response = await runCommandOnce(config, targetNodeId, {
+      action: 'primitive.page.screenshot',
+      payload: {
+        url,
+        mode: opts.mode,
+        format: opts.format,
+        quality: Number(opts.quality),
+        maxBytes: Number(opts.maxBytes),
+      },
+      timeoutMs: Number(opts.timeout),
+    });
+
+    if (opts.json || isJsonOutput(config)) {
+      console.log(JSON.stringify(response, null, 2));
+      if (response.messageType === 'error') process.exitCode = 1;
+      return;
+    }
+
+    if (response.messageType === 'error') {
+      console.error(JSON.stringify(response, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+
+    const envelopePayload = response.payload as {
+      data?: unknown;
+    };
+    const result = (envelopePayload.data && typeof envelopePayload.data === 'object'
+      ? envelopePayload.data
+      : response.payload) as Record<string, unknown>;
+    const b64 = result['contentBase64'] as string | undefined;
+    if (!b64) {
+      console.error('No contentBase64 in response');
+      process.exitCode = 1;
+      return;
+    }
+
+    const { writeFileSync } = await import('node:fs');
+    const { execSync } = await import('node:child_process');
+    const { tmpdir } = await import('node:os');
+    const { join: pathJoin } = await import('node:path');
+
+    const ext = (result['format'] as string | undefined) ?? opts.format;
+    const outPath = opts.out ?? pathJoin(tmpdir(), `otto-screenshot.${ext}`);
+    writeFileSync(outPath, Buffer.from(b64, 'base64'));
+
+    if (opts.out) {
+      console.log(outPath);
+    } else {
+      execSync(`open ${JSON.stringify(outPath)}`);
+      console.log(`[otto] screenshot saved to ${outPath} and opened in Preview`);
+    }
+  });
+
 program.parseAsync().catch((err) => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);

@@ -9,6 +9,7 @@ extension/.output/
 extension/output/
 coverage/
 *.log
+test_results.txt
 .otto-relay/
 .env
 .DS_Store

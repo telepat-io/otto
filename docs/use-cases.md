@@ -71,6 +71,17 @@ otto logs list --source node --latest 300
 
 Use one request id to trace controller, relay, and node behavior.
 
+## 6) Capture Page Screenshots
+
+Use primitive screenshot actions when controllers need a visual artifact in a terminal result payload.
+
+```bash
+otto cmd --action primitive.page.screenshot --payload '{"tabSessionId":"<TAB_SESSION_ID>","mode":"viewport","format":"png"}'
+otto cmd --action primitive.page.screenshot --payload '{"url":"https://example.com","mode":"full_page","format":"jpeg","quality":85,"maxBytes":1200000}'
+```
+
+`mode=full_page` uses CDP capture; URL-targeted requests auto-open and auto-close a temporary background tab.
+
 ## Related Docs
 
 - docs/command-authoring.md
