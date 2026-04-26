@@ -104,8 +104,6 @@ jobs:
           npm publish --workspace @telepat/otto-protocol --access public --provenance
           npm publish --workspace @telepat/otto-relay --access public --provenance
           npm publish --workspace @telepat/otto --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   upload-extension-assets:
     name: Attach extension zip/checksum to semver release

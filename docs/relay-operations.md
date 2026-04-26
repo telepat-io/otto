@@ -206,7 +206,7 @@ GitHub Actions workflows:
 
 Required repository secrets:
 
-- `NPM_TOKEN`: npm registry token for protocol/relay/CLI publish in the consolidated release workflow.
+- None for npm publish. Protocol, relay, and CLI packages publish through npm trusted publishing from GitHub Actions using OIDC (`id-token: write`). Configure the trusted publisher relationship in npm for the release workflow instead of storing an `NPM_TOKEN` secret in GitHub.
 
 Extension release channels:
 

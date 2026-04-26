@@ -254,7 +254,7 @@ CI/CD and release channels:
 
 Required repository secrets:
 
-- `NPM_TOKEN` for npm publish workflows.
+- None for npm publish. The release workflow uses npm trusted publishing via GitHub Actions OIDC (`id-token: write`), so package publishing is authorized in npm rather than by a repository token.
 
 ## Command Framework
 
