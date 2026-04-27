@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.3](https://github.com/telepat-io/otto/compare/v0.5.2...v0.5.3) (2026-04-27)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.6.0 to 0.7.0
+    * @telepat/otto-relay bumped from 0.6.0 to 0.7.0
+
 ## [0.5.2](https://github.com/telepat-io/otto/compare/v0.5.1...v0.5.2) (2026-04-26)
 
 

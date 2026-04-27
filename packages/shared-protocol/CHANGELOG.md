@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/telepat-io/otto/compare/protocol-v0.6.0...protocol-v0.7.0) (2026-04-27)
+
+
+### Features
+
+* add Google site commands for login and search results ([ac51468](https://github.com/telepat-io/otto/commit/ac51468f8da01848a2fed2088edb3de0c1641b3e))
+
 ## [0.6.0](https://github.com/telepat-io/otto/compare/protocol-v0.5.0...protocol-v0.6.0) (2026-04-26)
 
 

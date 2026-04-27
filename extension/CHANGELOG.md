@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/telepat-io/otto/compare/extension-v0.6.0...extension-v0.7.0) (2026-04-27)
+
+
+### Features
+
+* add Google site commands for login and search results ([ac51468](https://github.com/telepat-io/otto/commit/ac51468f8da01848a2fed2088edb3de0c1641b3e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.6.0 to 0.7.0
+
 ## [0.6.0](https://github.com/telepat-io/otto/compare/extension-v0.5.0...extension-v0.6.0) (2026-04-26)
 
 

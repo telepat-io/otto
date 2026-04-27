@@ -1,6 +1,6 @@
 {
-  "packages/cli": "0.5.2",
-  "extension": "0.6.0",
-  "packages/relay": "0.6.0",
-  "packages/shared-protocol": "0.6.0"
+  "packages/cli": "0.5.3",
+  "extension": "0.7.0",
+  "packages/relay": "0.7.0",
+  "packages/shared-protocol": "0.7.0"
 }
