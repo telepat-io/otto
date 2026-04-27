@@ -220,41 +220,16 @@ node packages/cli/dist/index.js logs follow
 
 完整 CLI 参考：[docs.telepat.io/otto/cli](https://docs.telepat.io/otto/cli)
 
-- `otto start`
-  - 未运行时以守护进程模式启动中继。
-  - 若中继已在运行，打印现有 pid 和日志路径。
-
-- `otto start --attached`
-  - 以前台附加模式启动中继（开发用途，日志输出到当前终端）。
-
-- `otto stop`
-  - 停止运行中的中继守护进程。
-
-- `otto status`
-  - 显示中继守护进程是否在运行。
-  - 若守护进程未运行，打印 `otto start` 作为建议的下一步命令。
-
-- `otto setup`
-  - 在 TTY 上默认为交互式向导。
-  - 添加 `--non-interactive` 输出确定性 JSON。
-  - 添加 `--yes` 无提示接受默认值。
-  - 添加 `--force` 强制重新安装扩展构件（即使已缓存）。
-  - 将中继 URL 规范化为控制器角色（`?role=controller`）。
-  - 除非设置 `--force`，否则复用当前 CLI 版本的缓存扩展构件。
-
-- `otto extension update`
-  - 下载当前 CLI 版本的发布扩展构件并更新缓存的已解压文件。
-  - 打印重新加载说明，以便浏览器节点使用更新后的扩展重新连接。
-
-- `otto extension info`
-  - 显示 `~/.otto/config.json` 中已安装扩展构件的元数据。
-
-- `otto settings`
-  - 打开控制器全局设置 TUI。
-  - CLI 交互式 TUI 界面正在基于 Ink + `@inkjs/ui` 进行标准化，以获得更一致的操作体验。
-  - 操作方式：上/下选择设置项，Enter 打开选择器选项，上/下选择选项，Enter 应用。
-  - 按 `s` 保存；按 `q` 或 `Esc` 退出。
-  - 设置更改通过选择器进行（TUI 内无自由文本输入）。
+| 命令 | 说明 |
+|---|---|
+| `otto start` | 以守护进程模式启动中继。若已在运行，打印现有 pid 和日志路径。 |
+| `otto start --attached` | 以前台模式启动中继，日志输出到当前终端（开发用途）。 |
+| `otto stop` | 停止中继守护进程。 |
+| `otto status` | 显示中继守护进程是否在运行。 |
+| `otto setup` | 交互式引导初始化（TTY）。参数：`--non-interactive` 输出 JSON，`--yes` 接受默认值，`--force` 强制重装扩展构件。 |
+| `otto extension update` | 下载当前 CLI 版本的发布扩展构件并更新缓存的已解压文件。 |
+| `otto extension info` | 显示 `~/.otto/config.json` 中已安装扩展构件的元数据。 |
+| `otto settings` | 打开控制器全局设置 TUI。操作：↑/↓ 选择，Enter 展开选项，`s` 保存，`q`/Esc 退出。 |
 
 设置所有权边界：
 

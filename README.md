@@ -220,41 +220,16 @@ node packages/cli/dist/index.js logs follow
 
 Full CLI reference: [docs.telepat.io/otto/cli](https://docs.telepat.io/otto/cli)
 
-- `otto start`
-- Starts relay in daemon mode when not already running.
-- If relay is already running, prints the existing pid and log path.
-
-- `otto start --attached`
-- Starts relay in attached foreground mode for development (logs in current terminal).
-
-- `otto stop`
-- Stops relay daemon if running.
-
-- `otto status`
-- Shows whether relay daemon is running.
-- If daemon is not running, prints: `otto start` as the suggested next command.
-
-- `otto setup`
-- Interactive wizard by default on TTY.
-- Add `--non-interactive` for deterministic JSON output.
-- Add `--yes` to accept defaults without prompts.
-- Add `--force` to reinstall extension artifact even when cached.
-- Normalizes relay URL to controller role (`?role=controller`).
-- Reuses cached extension artifact for current CLI version unless `--force` is set.
-
-- `otto extension update`
-- Downloads the release extension artifact for the current CLI version and updates cached unpacked files.
-- Prints reload instructions so browser node can reconnect using the updated extension build.
-
-- `otto extension info`
-- Shows installed extension artifact metadata from `~/.otto/config.json`.
-
-- `otto settings`
-- Opens controller-global settings TUI.
-- CLI interactive TUI surfaces are being standardized on Ink + `@inkjs/ui` for a more consistent operator experience.
-- Navigation: up/down to select setting, Enter to open selector options, up/down to choose option, Enter to apply.
-- Save with `s`; exit with `q` or `Esc`.
-- Settings changes are selector-based (no free-text entry inside the TUI).
+| Command | Description |
+|---|---|
+| `otto start` | Start relay in daemon mode. Prints existing pid/log path if already running. |
+| `otto start --attached` | Start relay in foreground mode with logs in current terminal (dev). |
+| `otto stop` | Stop relay daemon. |
+| `otto status` | Show whether relay daemon is running. |
+| `otto setup` | Interactive guided setup (TTY). Flags: `--non-interactive` for JSON output, `--yes` to accept defaults, `--force` to reinstall extension artifact. |
+| `otto extension update` | Download release extension artifact for current CLI version and update cached unpacked files. |
+| `otto extension info` | Show installed extension artifact metadata from `~/.otto/config.json`. |
+| `otto settings` | Open controller-global settings TUI. Navigate: ↑/↓ to select, Enter to open options, `s` to save, `q`/Esc to exit. |
 
 Settings ownership boundary:
 
