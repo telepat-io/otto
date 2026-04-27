@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/telepat-io/otto/compare/relay-v0.6.0...relay-v0.7.0) (2026-04-27)
+
+
+### Miscellaneous Chores
+
+* **relay:** Synchronize otto npm packages versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @telepat/otto-protocol bumped from 0.6.0 to 0.7.0
+
 ## [0.6.0](https://github.com/telepat-io/otto/compare/relay-v0.5.0...relay-v0.6.0) (2026-04-26)
 
 
