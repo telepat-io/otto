@@ -634,7 +634,11 @@ async function executeCommandAction(
     throw new CommandExecutionError(`Unknown command site: ${run.site}`, 'unknown_site', actionName, false);
   }
 
-  const command = findSiteCommand(bundle, run.commandId);
+  const command = mode === 'test' && run.commandId === bundle.checkLogin.metadata.id
+    ? bundle.checkLogin
+    : mode === 'test' && run.commandId === bundle.gotoLogin.metadata.id
+      ? bundle.gotoLogin
+      : findSiteCommand(bundle, run.commandId);
   if (!command) {
     throw new CommandExecutionError(`Unknown command: ${run.site}/${run.commandId}`, 'unknown_command', actionName, false);
   }

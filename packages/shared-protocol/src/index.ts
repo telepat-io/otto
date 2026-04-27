@@ -245,6 +245,25 @@ export interface Post {
   originalEntity?: unknown;
 }
 
+export interface SearchResultLink {
+  text: string;
+  url: string;
+}
+
+export interface SearchResult {
+  kind: 'content.search_result';
+  id: string;
+  title: string | null;
+  url?: string | null;
+  description?: string | null;
+  links?: SearchResultLink[];
+  image?: string | null;
+  rank?: number;
+  isAd?: boolean;
+  meta?: DomainMeta;
+  originalEntity?: unknown;
+}
+
 export type StreamDomainObject =
   | ChatMessage
   | ChatTypingEvent
@@ -252,7 +271,8 @@ export type StreamDomainObject =
   | ChatMessageDeletedEvent
   | Article
   | Post
-  | PostComment;
+  | PostComment
+  | SearchResult;
 
 export type CommandOutcome = 'completed' | 'failed' | 'timed_out' | 'cancelled';
 

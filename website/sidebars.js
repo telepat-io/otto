@@ -74,7 +74,8 @@ module.exports = {
       label: 'For Agents',
       items: [
         'for-agents/index',
-        'for-agents/automation-guide'
+        'for-agents/automation-guide',
+        'for-agents/command-development'
       ]
     }
   ]

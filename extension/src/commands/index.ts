@@ -1,9 +1,10 @@
 import type { CommandDescriptor } from '@telepat/otto-protocol';
+import { googleCommands } from './google.com/index.js';
 import { hackerNewsCommands } from './hackernews.com/index.js';
 import { redditCommands } from './reddit.com/index.js';
 import type { SiteCommand, SiteCommandBundle } from './types.js';
 
-const bundles = [redditCommands, hackerNewsCommands];
+const bundles = [redditCommands, hackerNewsCommands, googleCommands];
 
 function normalizeHost(host: string): string {
   return host.toLowerCase().replace(/^www\./, '');

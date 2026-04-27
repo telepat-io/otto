@@ -91,6 +91,13 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 |---|---|
 | `reddit.com` | `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
+| `google.com` | `getSearchResults` |
+
+### Google command notes
+
+| Command | Key behavior |
+|---|---|
+| `getSearchResults` | Requires `query`; navigates to Google Search and extracts first-page results by default. Optional `pages` (1–5, default 1) controls how many SERP pages to fetch. Optional `limit` (1–100, default 10) caps total results returned. Each result carries `title`, `url`, `description`, `links` (sitelinks), `image` (thumbnail or null), `rank`, and `isAd`. Returns `content.search_result` entities. |
 
 ### Reddit command notes
 

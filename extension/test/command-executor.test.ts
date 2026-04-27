@@ -1848,6 +1848,281 @@ test('command.test getChatMessages returns buffered polling fallback when interc
   assert.equal(bufferedResult.totalCount, 1);
 });
 
+// ── google.com getSearchResults ──────────────────────────────────────────────
+
+test('command.run getSearchResults returns results for a valid query', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+    scriptResults: [
+      [
+        { kind: 'content.search_result', id: '1', title: 'Steel Purchasing Guide', url: 'https://example.com/steel', description: 'How to buy steel.', links: undefined, image: null, rank: 1, isAd: false },
+        { kind: 'content.search_result', id: '2', title: 'Buy Steel Online', url: 'https://steel.example.com', description: null, links: undefined, image: null, rank: 2, isAd: true },
+      ],
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'getSearchResults',
+    input: { query: 'steel purchasing' },
+    authMode: 'skip',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.site, 'google.com');
+  assert.equal(data.command, 'getSearchResults');
+  assert.equal(data.query, 'steel purchasing');
+  const results = data.results as unknown[];
+  assert.equal(results.length, 2);
+  assert.equal((results[0] as { kind: string }).kind, 'content.search_result');
+  assert.equal((results[0] as { rank: number }).rank, 1);
+  assert.equal((results[1] as { isAd: boolean }).isAd, true);
+});
+
+test('command.run getSearchResults rejects missing required query', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'google.com',
+      command: 'getSearchResults',
+      input: {},
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'missing_command_input');
+      return true;
+    },
+  );
+});
+
+test('command.run getSearchResults rejects unexpected input fields', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'google.com',
+      command: 'getSearchResults',
+      input: { query: 'test', unknownField: true },
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'unexpected_command_input');
+      return true;
+    },
+  );
+});
+
+test('command.run getSearchResults rejects invalid type for limit', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'google.com',
+      command: 'getSearchResults',
+      input: { query: 'test', limit: 'ten' },
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'invalid_command_input_type');
+      return true;
+    },
+  );
+});
+
+test('command.run getSearchResults rejects invalid type for pages', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'google.com',
+      command: 'getSearchResults',
+      input: { query: 'test', pages: 'two' },
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'invalid_command_input_type');
+      return true;
+    },
+  );
+});
+
+test('command.run getSearchResults rejects site mismatch', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'google.com',
+      command: 'getSearchResults',
+      input: { query: 'test' },
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'site_mismatch');
+      return true;
+    },
+  );
+});
+
+test('command.run getSearchResults fetches multiple pages and accumulates results', async () => {
+  const { chromeApi, tabUrls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+    scriptResults: [
+      [
+        { kind: 'content.search_result', id: '1', title: 'Result 1', url: 'https://a.com', description: null, links: undefined, image: null, rank: 1, isAd: false },
+        { kind: 'content.search_result', id: '2', title: 'Result 2', url: 'https://b.com', description: null, links: undefined, image: null, rank: 2, isAd: false },
+      ],
+      [
+        { kind: 'content.search_result', id: '11', title: 'Result 11', url: 'https://c.com', description: null, links: undefined, image: null, rank: 11, isAd: false },
+      ],
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'getSearchResults',
+    input: { query: 'multi page', pages: 2 },
+    authMode: 'skip',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  const results = data.results as unknown[];
+  assert.equal(results.length, 3);
+  assert.equal((results[0] as { rank: number }).rank, 1);
+  assert.equal((results[2] as { rank: number }).rank, 11);
+  // Second page URL should have been navigated to
+  assert.ok(tabUrls[11]?.includes('start=10'));
+});
+
+test('command.run getSearchResults stops early when page returns no results', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+    scriptResults: [
+      [
+        { kind: 'content.search_result', id: '1', title: 'Only Result', url: 'https://a.com', description: null, links: undefined, image: null, rank: 1, isAd: false },
+      ],
+      [],
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'getSearchResults',
+    input: { query: 'rare query', pages: 2 },
+    authMode: 'skip',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  const results = data.results as unknown[];
+  assert.equal(results.length, 1);
+});
+
+test('command.run getSearchResults respects limit across pages', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+    scriptResults: [
+      [
+        { kind: 'content.search_result', id: '1', title: 'R1', url: 'https://a.com', description: null, links: undefined, image: null, rank: 1, isAd: false },
+        { kind: 'content.search_result', id: '2', title: 'R2', url: 'https://b.com', description: null, links: undefined, image: null, rank: 2, isAd: false },
+      ],
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'getSearchResults',
+    input: { query: 'test', limit: 1, pages: 3 },
+    authMode: 'skip',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  // limit=1 reached after page 1 first result, loop exits; second scriptResult never consumed
+  assert.ok((data.results as unknown[]).length <= 1);
+});
+
+test('command.run getSearchResults returns empty results when page script returns empty array', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+    scriptResults: [[]],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'getSearchResults',
+    input: { query: 'unparseable query' },
+    authMode: 'skip',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  assert.deepEqual(data.results, []);
+  assert.equal(data.query, 'unparseable query');
+});
+
 test('command.run rejects unexpected input fields before execute', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
@@ -2317,6 +2592,62 @@ test('command.test sendChatMessage with roomId opens direct room URL using mocke
     sent: true,
     roomId: 'room_99',
     attempts: 1,
+  });
+});
+
+test('command.test supports running checkLogin helper command', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+    scriptResults: [true],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'checkLogin',
+    input: {},
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'checkLogin',
+    authenticated: true,
+  });
+});
+
+test('command.test supports running gotoLogin helper command', async () => {
+  const { chromeApi, tabUrls } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.google.com/' },
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'gotoLogin',
+    input: {},
+    authMode: 'strict_fail',
+  }));
+
+  assert.equal(tabUrls[11], 'https://accounts.google.com/ServiceLogin');
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'google.com',
+    command: 'gotoLogin',
+    loginUrl: 'https://accounts.google.com/ServiceLogin',
   });
 });
 
