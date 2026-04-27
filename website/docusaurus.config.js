@@ -25,6 +25,7 @@ const config = {
     }
   },
   markdown: {
+    mermaid: true,
     hooks: {
       onBrokenMarkdownLinks: 'throw'
     }
@@ -47,6 +48,7 @@ const config = {
       }
     ]
   ],
+  themes: ['@docusaurus/theme-mermaid'],
   themeConfig: {
     colorMode: {
       respectPrefersColorScheme: true
