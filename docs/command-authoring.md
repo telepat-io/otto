@@ -1,92 +1,170 @@
+---
+title: Command Authoring
+sidebar_position: 3
+description: Add a site command to the Otto extension runtime. Covers metadata contracts, runtime validation, error surfacing patterns, safety rules, and the testing matrix.
+keywords:
+  - command authoring
+  - site command
+  - extension runtime
+  - command metadata
+  - browser automation
+---
+
 # Command Authoring
 
-Last Updated: 2026-04-14
-Owner: Browser Runtime
+This guide explains how to add a site command in the Otto extension runtime without breaking protocol, auth, or lifecycle guarantees. After completing these steps, your command will be discoverable via `otto commands list`, executable via `otto cmd`, and testable via `otto test`.
 
-This guide explains how to add a site command in Otto extension runtime without breaking protocol, auth, or lifecycle guarantees. It is written for command authors who need a reliable implementation flow and a compact validation checklist.
+## Before you start
 
-## Source-of-Truth Code Paths
+- Familiarity with the [Architecture overview](./architecture.md) and [Extension Runtime](./extension-runtime.md).
+- A working monorepo build (`npm install && npm run build`).
+- Understanding of the target site's DOM and network behavior.
 
-| Concern | Source |
-| --- | --- |
+## Source of truth
+
+| Concern | Path |
+|---|---|
 | Command types and metadata contracts | `extension/src/commands/types.ts` |
 | Site command registration | `extension/src/commands/index.ts` |
 | Site command orchestration | `extension/src/runtime/command-runtime.ts` |
 | Action execution dispatch | `extension/src/runtime/command-executor.ts` |
 
-## Implementation Steps
+## Steps
 
-Start by creating a command module under `extension/src/commands/<site>/` and declaring metadata that matches actual runtime behavior. Metadata should not be treated as documentation only; runtime uses it to gate execution and sanitize inputs before your handler runs. Implement `execute(ctx, input, authMode)` with bounded work and deterministic errors. When command behavior needs setup, stream manifests, or assertions, add an optional `test(ctx, input, helpers)` hook and keep it deterministic.
+### 1. Create a command module
 
-After implementation, register the command in the site bundle index and add tests that cover validation, auth preflight behavior, and execute/test fallback semantics.
+Create `extension/src/commands/<site>/<command-id>.ts`. Declare metadata that matches actual runtime behavior — runtime uses metadata to gate execution and sanitize inputs before your handler runs.
 
-## Metadata Contract Table
+```typescript
+import type { SiteCommand } from '../types.js';
+
+export const getItemsCommand: SiteCommand = {
+  metadata: {
+    site: 'example.com',
+    id: 'getItems',
+    displayName: 'Get Items',
+    requiresAuth: false,
+    inputFields: [
+      { name: 'limit', type: 'number', optional: true, description: 'Max items to return' }
+    ]
+  },
+  async execute(ctx, input) {
+    const limit = Number((input as { limit?: number }).limit ?? 20);
+    const items = await ctx.executeScript((max: number) => {
+      return Array.from(document.querySelectorAll('[data-item]'))
+        .slice(0, max)
+        .map((el) => ({ text: (el.textContent ?? '').trim() }));
+    }, [limit]);
+    return { count: items.length, items };
+  }
+};
+```
+
+### 2. Understand the metadata contract
 
 | Field | Required | Purpose |
 |---|---|---|
-| `site` | Yes | Site bundle ownership |
-| `id` | Yes | Command id |
-| `requiresAuth` | Yes | Auth preflight behavior |
-| `requiresDebuggerFocus` | No | Focus emulation opt-in |
-| `preloadHost` | No | Pre-execution host guarantee |
-| `inputFields` | No | Declarative input schema |
-| `inputAtLeastOneOf` | No | Conditional input requirement |
+| `site` | Yes | Site bundle ownership and tab URL validation |
+| `id` | Yes | Command identifier used in `command.run` / `command.test` |
+| `requiresAuth` | Yes | Whether auth preflight runs before execute |
+| `requiresDebuggerFocus` | No | Opt in to focus emulation via `chrome.debugger` |
+| `preloadHost` | No | Guarantee navigation to host before execute |
+| `inputFields` | No | Declarative input schema; drives runtime validation |
+| `inputAtLeastOneOf` | No | Cross-field conditional requirement |
 
-## Runtime Validation Behavior
+### 3. Implement execute with bounded, deterministic logic
 
-Runtime validation is strict when metadata declares input contracts. Unknown keys produce `unexpected_command_input`, missing required fields produce `missing_command_input`, type mismatches produce `invalid_command_input_type`, and unmet cross-field constraints produce `missing_command_input_one_of`.
+Keep `execute(ctx, input, authMode)` bounded: no infinite loops, no unbounded DOM scraping. Return deterministic errors instead of silent retries. Never automate credential submission.
 
-## Inside-Page Error Surfacing
+### 4. Handle inside-page errors explicitly
 
-When a command uses `ctx.executeScript` or `ctx.executeScriptWithDomHelpers`, do not rely on browser injection APIs to propagate thrown page errors. In Chromium, in-page throws can be lost and appear as `null`/`undefined` results. Use an explicit error payload contract:
-
-1. Wrap the injected script body in `try/catch`.
-2. Return a serialized marker object from the `catch` path.
-3. In command code, detect that marker and return it as-is.
-4. Runtime will rethrow that payload as a command error so controller and CLI see the inside-page error.
-
-Minimal pattern:
+When using `ctx.executeScript` or `ctx.executeScriptWithDomHelpers`, Chromium can silently swallow in-page throws. Use this pattern to preserve page-level errors:
 
 ```typescript
 const result = await ctx.executeScriptWithDomHelpers(async () => {
-	try {
-		// Page logic
-		return { ok: true };
-	} catch (error) {
-		return {
-			__ottoSerializedCommandError: true,
-			code: 'site_specific_error_code',
-			message: error instanceof Error ? error.message : 'site_specific_error_code',
-		};
-	}
+  try {
+    // Your page logic here
+    return { ok: true };
+  } catch (error) {
+    return {
+      __ottoSerializedCommandError: true,
+      code: 'site_specific_error_code',
+      message: error instanceof Error ? error.message : 'site_specific_error_code',
+    };
+  }
 }, []);
 
 if (ctx.isSerializedScriptError(result)) {
-	return result;
+  return result;
 }
 ```
 
-This keeps command failures deterministic and preserves specific inside-page diagnostics (for example `reddit_post_comment_composer_missing`) in `otto test` output.
+This keeps command failures deterministic and surfaces specific inside-page diagnostics (for example `reddit_post_comment_composer_missing`) in `otto test` output.
 
-## Safety Rules
+### 5. Add a test hook for stream commands (optional)
 
-Never automate credential submission, keep site URL validation strict, and return deterministic precondition errors instead of silent retries. Command output should avoid sensitive values and remain stable enough for CLI and agent parsing.
+For commands that stream network events, add `test(ctx, input, helpers)`. See [Command Authoring Templates](./command-authoring-templates.md) for a copy-ready stream test hook template.
 
-## Testing Matrix
+### 6. Register the command in the site bundle
+
+Add your command to `extension/src/commands/index.ts` in the relevant site bundle. The command is now discoverable via `command.list`.
+
+### 7. Write tests
+
+Add tests covering validation gating, auth preflight behavior, and execute/test fallback semantics. See the testing matrix below.
+
+## Runtime validation behavior
+
+Runtime validates inputs strictly when `inputFields` is declared:
+
+| Condition | Error code |
+|---|---|
+| Unknown input key | `unexpected_command_input` |
+| Missing required field | `missing_command_input` |
+| Type mismatch | `invalid_command_input_type` |
+| Unmet cross-field constraint | `missing_command_input_one_of` |
+
+Validation errors reject the command before `execute` runs. Command handlers always receive sanitized, validated input.
+
+## Verify success
+
+After registering your command:
+
+```bash
+# Confirm it appears in discovery
+otto commands list --site example.com
+
+# Run it with otto test
+otto test example.com getItems
+
+# Run with explicit input
+otto test example.com getItems --payload '{"limit": 5}'
+```
+
+A successful run returns a JSON result with `messageType: result` and exits with code `0`.
+
+## Safety rules
+
+- Never automate credential submission. Use `manual_login_required` handoff for auth-required commands.
+- Keep site URL validation strict. Commands run only on matching tab domains.
+- Return deterministic precondition errors instead of silent retries.
+- Keep command output free of sensitive values.
+- Keep output shape stable enough for CLI and agent parsing.
+
+## Testing matrix
 
 | Scenario | Why it matters |
-| --- | --- |
+|---|---|
 | Successful execution with valid input | Confirms happy-path contract and payload shape |
 | Missing required input | Verifies metadata validation gating |
 | Unexpected input key | Prevents hidden/legacy payload drift |
-| Requires-auth command on unauthenticated page | Verifies explicit manual login handoff |
+| `requiresAuth` command on unauthenticated page | Verifies explicit `manual_login_required` handoff |
 | `command.test` stream declaration path | Confirms stream lifecycle and listener manifest behavior |
 | `command.test` execute fallback path | Ensures compatibility for commands without custom test hook |
 
-## Related Docs
+## Next steps
 
-- `docs/commands.md`
-- `docs/protocol.md`
-- `docs/listener-development.md`
-- `docs/use-cases.md`
-- `docs/error-codes.md`
+- [Command Authoring Templates](./command-authoring-templates.md) — copy-ready code templates.
+- [Listener Development](./listener-development.md) — stream integration patterns.
+- [Commands Reference](./commands.md) — action surface and runtime execution flow.
+- [Error Codes](./error-codes.md) — all command validation error codes.

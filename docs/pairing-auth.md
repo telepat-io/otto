@@ -1,146 +1,164 @@
+---
+title: Pairing and Auth
+sidebar_position: 2
+description: How Otto's token-free pairing flow, controller client registration, WebSocket auth, and token refresh and revocation work.
+keywords:
+  - pairing
+  - token auth
+  - controller client
+  - websocket authentication
+  - refresh token
+---
+
 # Pairing and Auth
 
-Last Updated: 2026-04-14
-Owner: Security
+Otto uses two separate trust flows: a **node pairing flow** that establishes a trusted relationship between the extension node and the relay, and a **controller client flow** for long-lived controller identities. Both flows end in access/refresh token pairs that authenticate WebSocket sessions.
 
-## Source-of-Truth Code Paths
+## Source of truth
 
-| Concern | Source |
-| --- | --- |
-| Pairing, token, refresh, revoke endpoints | `packages/relay/src/index.ts` |
-| CLI auth, pair, revoke, and controller client commands | `packages/cli/src/index.ts` |
+| Concern | Path |
+|---|---|
+| Pairing, token, refresh, and revoke endpoints | `packages/relay/src/index.ts` |
+| CLI auth, pair, revoke, and client commands | `packages/cli/src/index.ts` |
 | Extension pairing poll and token hydration | `extension/src/runtime/background-bootstrap.ts` |
 
-## Pairing Flow
+## Node pairing flow
 
-Pairing exists to establish a trusted node-controller relationship without sharing raw credentials between roles. The node requests a challenge, relay issues a short approval code, controller approves that code, and node polls challenge state until approved token material is available.
+Pairing establishes a trusted node-controller relationship without sharing raw credentials. The node requests a challenge, relay issues a short approval code, the controller approves that code, and the node polls challenge state until approved token material is available.
+
+```mermaid
+flowchart TD
+    A[Node requests challenge\nPOST /api/pairing/request] --> B[Relay issues code\n e.g. 123-456]
+    B --> C[Controller approves code\notto pair 123-456]
+    C --> D[Node polls challenge status\nGET /api/pairing/status?challengeId=...]
+    D --> E{Approved?}
+    E -- Yes --> F[Node stores nodeAccessToken\nand nodeRefreshToken]
+    E -- No --> D
+```
 
 | Step | Endpoint | Notes |
-| --- | --- | --- |
+|---|---|---|
 | Node requests challenge | `POST /api/pairing/request` | Payload: `{ nodeId }` |
 | Controller inspects pending | `GET /api/pairing/pending` | Optional visibility step |
 | Controller approves code | `POST /api/pairing/approve` | Payload: `{ code }` |
-| Node checks status | `GET /api/pairing/status?challengeId=...` | On approval, node stores `nodeAccessToken` and `nodeRefreshToken` |
+| Node checks status | `GET /api/pairing/status?challengeId=...` | On approval, node stores tokens |
 
-CLI workflow:
+CLI commands for this flow:
 
-- `otto authcode` lists pending challenges.
-- `otto pair <code>` approves and stores controller access/refresh tokens locally.
-- `otto revoke` revokes refresh token and clears local controller auth.
-- CLI command paths auto-attempt access token refresh when relay returns `invalid_access_token`; manual re-pair is only required when refresh also fails.
+```bash
+# List pending auth codes from connected nodes
+otto authcode
 
-Setup workflow integration:
+# Approve a code and store controller tokens locally
+otto pair 123-456
 
-- `otto setup` prepares controller config, ensures relay daemon readiness on the selected setup relay URL port, and provides extension artifact handoff.
-- `otto setup` does not write extension runtime settings directly.
-- Extension node relay URL and node tokens remain extension-owned in `chrome.storage.*`.
+# Revoke refresh token and clear local controller auth
+otto revoke
+```
 
-## Independent Controller Client Flow
+The CLI auto-attempts access token refresh when relay returns `invalid_access_token`. Manual re-pair is only needed when the refresh token also fails or has been revoked.
 
-Controller clients can register independently of pairing, and this is the recommended model for long-lived controller identities.
+### Challenge recovery semantics
+
+The extension handles orphaned or expired challenge state automatically on bootstrap:
+
+- **Orphaned metadata** — `pairingChallengeId` exists without `pairingCode`: clears stale keys and requests a fresh challenge.
+- **Expired by local clock** — `pairingExpiresAt <= now`: clears stale keys and reissues a challenge immediately.
+- **Challenge not found at relay** — `GET /api/pairing/status` returns `404`: treats as stale and reissues.
+- **Transient relay errors** — `5xx` responses: retries with bounded backoff, then resets and reissues.
+- **`expired` status from relay** — immediately triggers challenge reissue.
+
+This keeps onboarding from getting stuck at "waiting for challenge" after browser or relay restarts.
+
+## Controller client flow
+
+Controller clients can register independently of node pairing. This is the recommended model for long-lived controller identities.
 
 | Phase | Endpoint | Notes |
-| --- | --- | --- |
-| Register controller client | `POST /api/controller/register` | Returns one-time `clientSecret` and stable `clientId`; rejects normalized name collisions with `controller_name_conflict` |
-| Exchange credentials | `POST /api/controller/token` | Payload: `{ clientId, clientSecret }`; returns access/refresh tokens and scopes |
-| Grant node access | `POST /api/controller/access` | Node bearer token required; grants are node-owned ACL decisions |
+|---|---|---|
+| Register client | `POST /api/controller/register` | Returns one-time `clientSecret` and stable `clientId` |
+| Exchange credentials | `POST /api/controller/token` | Payload: `{ clientId, clientSecret }`; returns access/refresh tokens |
+| Grant node access | `POST /api/controller/access` | Node bearer token required; node-owned ACL decision |
 
-CLI onboarding commands for this flow:
+```bash
+# Register a new controller client
+otto client register --name "my-laptop" --description "Primary workstation controller"
 
-- `otto client register [--name <name>] [--description <description>] [--avatar-seed <seed>]`
-- `otto client login [--client-id <id>] [--client-secret <secret>]`
-- `otto client remove [--client-id <id> | --all]`
-- `otto client status`
-- `otto client forget`
+# Exchange credentials for tokens
+otto client login
 
-Controller removal behavior:
+# Check current client state and secret resolution source
+otto client status
 
-- `POST /api/controller/remove` with `{ clientId }` revokes the controller record and immediately removes ACL grants, refresh sessions, and active controller sockets for that client.
-- `POST /api/controller/remove-all` revokes and purges all controller records.
-- Relay immediately removes all ACL grants for that client, revokes its refresh sessions, and disconnects active controller websocket sessions for that client.
-- Bulk removal applies the same ACL/session revocation semantics to every registered controller client.
-- Repeating bulk removal after a full purge is idempotent and reports `removedCount: 0`.
+# Remove a specific client from relay
+otto client remove --client-id <id>
 
-Secret handling behavior:
+# Remove all registered clients
+otto client remove --all
 
-- CLI stores controller client secrets in OS keychain when available (via cross-platform keytar integration).
-- Environment variable fallback: `OTTO_CONTROLLER_CLIENT_SECRET`.
+# Clear local credentials without removing from relay
+otto client forget
+```
+
+### Secret handling
+
+- CLI stores client secrets in OS keychain when available (cross-platform via keytar).
+- Fallback environment variable: `OTTO_CONTROLLER_CLIENT_SECRET`.
 - `OTTO_CONTROLLER_CLIENT_SECRET` takes precedence over keychain lookup.
-- Relay stores only salted client-secret hashes at rest (never plaintext secrets).
+- Relay stores only salted client-secret hashes at rest — never plaintext secrets.
 
-Default behavior is least privilege: newly registered controller clients start with no node grants.
-Relay enforces ACL on every node-targeted command and returns `acl_missing_node_grant` when denied.
+### Controller removal behavior
 
-Pairing flow for extension onboarding remains supported and backward-compatible.
+- `POST /api/controller/remove` with `{ clientId }` revokes the controller record and immediately removes ACL grants, refresh sessions, and active controller sockets.
+- `POST /api/controller/remove-all` applies the same semantics to every registered client.
+- Repeating bulk removal after a full purge is idempotent (`removedCount: 0`).
 
-Test-flow cleanup behavior:
+Newly registered controller clients start with no node grants (least-privilege default). Relay enforces ACL on every node-targeted command and returns `acl_missing_node_grant` when access is denied.
 
-- `otto test` auto self-registers a controller only when no local controller identity/tokens are present.
-- Auto-registration now defaults to `name=otto-tester` and description `Auto-registered controller for otto test flows.` and does not prompt interactively when defaults are used.
-- That auto-registered controller is retained automatically at the end of the test run by default.
-- Use `--cleanup-test-controller` to remove the auto-registered controller after the run.
+### Test flow self-registration
 
-Extension onboarding UI (v1):
+`otto test` auto self-registers a controller when no local identity or tokens are present:
 
-- Users open the Otto toolbar popup after loading the extension.
-- Popup owns node relay URL entry and live pairing/connection status display.
-- Pairing approval remains CLI-driven: use `otto authcode` and `otto pair <code>`.
-- After approval, popup updates automatically to authenticated/connected state.
+- Default name: `otto-tester`; description: `Auto-registered controller for otto test flows.`
+- No interactive prompts when defaults are used.
+- Auto-registered controller is retained by default after the run.
+- Use `--cleanup-test-controller` to remove it after completion.
 
-Challenge recovery semantics (restart-safe):
+## WebSocket auth flow
 
-- If local pairing metadata is orphaned (for example, `pairingChallengeId` exists without `pairingCode`), extension bootstrap clears stale keys and requests a fresh challenge in the same maintenance pass.
-- If local pairing metadata is expired by local clock (`pairingExpiresAt <= now`), extension clears stale keys and requests a fresh challenge immediately.
-- If relay status check returns `404` for the stored challenge id, extension treats it as a stale challenge and reissues a new challenge.
-- If relay status check returns transient non-OK responses (for example `5xx`), extension retries with bounded backoff before resetting challenge state and reissuing.
-- `expired` status from relay now immediately triggers challenge reissue (no extra keep-warm cycle required).
-
-This keeps onboarding from becoming stuck at "waiting for challenge" after browser or relay restarts.
-
-## WebSocket Auth Flow
-
-After `hello`, each client sends `auth` with `{ accessToken }`. Relay verifies signature and claims (`iss`, `aud`, role, and optional node binding), then responds with `auth_ack` containing effective role and scopes.
+After `hello`, each client sends an `auth` frame with `{ accessToken }`. Relay verifies signature and claims (`iss`, `aud`, role, optional node binding), then responds with `auth_ack` containing effective role and scopes.
 
 Unauthenticated clients cannot send command, lock, or subscription frames.
 
-Command streaming note:
+## Refresh flow
 
-- `command.test` stream sessions remain listener-lifecycle terminal commands (`listener.subscribe`/`listener.unsubscribe`) plus async `listener_update` events.
-- Stream payload shaping is command-owned through adapter hints (for example `streamAdapter`) and does not change relay auth/session ownership semantics.
+Refresh can be performed over HTTP or WebSocket:
 
-Scope behavior:
+- HTTP: `POST /api/auth/refresh` with `{ refreshToken }` — returns new access token and rotates refresh token.
+- WebSocket: `refresh` frame with the same token payload.
 
-Controller command authorization is action-based. Default scopes include primitive actions and command actions (`command.list`, `command.run`), while narrow-scope tokens are supported and enforced deterministically with `forbidden_action` on violations.
+Relay persists refresh sessions in runtime storage so valid sessions survive relay restarts.
 
-## Refresh Flow
+| Token | Default lifetime | Config env var |
+|---|---|---|
+| Access token | 15 minutes | `OTTO_TOKEN_TTL_MINUTES` |
+| Refresh token | 30 days | `OTTO_REFRESH_TTL_DAYS` |
 
-Refresh can be performed over HTTP (`POST /api/auth/refresh` with `{ refreshToken }`) or websocket (`refresh` frame with the same token payload). Refresh returns a new access token, and HTTP refresh also rotates refresh tokens by invalidating the prior token. Relay persists refresh sessions in runtime storage so valid sessions survive relay restarts.
+## Revoke flow
 
-Default token lifetimes:
+`POST /api/auth/revoke` with `{ refreshToken }` returns `{ revoked: boolean }`. After revocation, that refresh token can no longer mint access tokens. `otto revoke` wraps this and also clears local controller credentials.
 
-| Token | Default lifetime | Config |
-| --- | --- | --- |
-| Access token | `15m` | `OTTO_TOKEN_TTL_MINUTES` |
-| Refresh token | `30d` | `OTTO_REFRESH_TTL_DAYS` |
+## Claims and rotation
 
-Common usage:
+Access tokens include issuer, audience, role, identity bindings, and action scopes. Relay validates issuer and audience on every verification. Secret rotation uses dual-key verification with `OTTO_TOKEN_SECRET` and optional `OTTO_TOKEN_PREVIOUS_SECRET` for controlled key rollover without immediate session invalidation.
 
-- Long-running CLI sessions should prefer refresh over re-pairing.
-- Node keep-warm flow refreshes access via stored refresh token lifecycle.
+:::note
+Relay auth controls API access. Command `requiresAuth` controls website session prerequisites. These are independent — a valid relay token does not mean the extension is logged into the target website.
+:::
 
-## Revoke Flow
+## Next steps
 
-Revoke uses `POST /api/auth/revoke` with `{ refreshToken }` and returns `{ revoked: boolean }`. After revocation, that refresh token can no longer mint access tokens. CLI wraps this behavior via `otto revoke`, which also clears local controller credentials.
-
-## Claims and Rotation
-
-Access tokens include issuer, audience, role, identity bindings, and action scopes. Relay validates issuer and audience on every access-token verification. Secret rotation supports dual-key verification using `OTTO_TOKEN_SECRET` and optional `OTTO_TOKEN_PREVIOUS_SECRET`, allowing controlled key rollover without immediate session invalidation.
-
-## Security Notes
-
-Access tokens are intentionally short-lived and refresh tokens are longer-lived. Claims enforce role and scope boundaries, and extension-origin checks apply to browser-originated node websocket upgrades.
-
-Command auth note:
-
-Command-level website login state is separate from relay token authentication: relay auth controls API access, while command `requiresAuth` controls website session prerequisites.
+- [Controller Implementation](./controller-implementation.md) — build a custom controller over the relay protocol.
+- [Error Codes](./error-codes.md) — auth error codes and remediation.
+- [Relay API](./relay-api.md) — full endpoint reference.
 

@@ -1,0 +1,71 @@
+# Otto
+
+> Otto is a secure, debuggable remote browser automation platform. A CLI-managed relay daemon routes commands from controller clients (scripts, AI agents, CI jobs) to browser extension nodes running in Chrome. Commands execute in managed browser tabs with site-scoped validation, structured logging, and deterministic terminal outcomes.
+
+## Architecture
+
+Three components:
+- **Relay** (`@telepat/otto-relay`): Node.js daemon. HTTP + WebSocket server. Routes commands, manages auth, persists logs.
+- **Extension** (`@telepat/otto-extension`): Chrome MV3 extension. WebSocket node. Executes commands in browser context.
+- **CLI** (`@telepat/otto`): Controller and operator tool. Manages daemon, pairing, client identity, and command execution.
+
+Authentication flow: extension pairs with relay → relay issues node tokens → CLI registers controller client → CLI authenticates → relay ACL grants controller access to node → commands route.
+
+## Key invariants
+
+- `targetNodeId` is always required on commands (CLI auto-selects when one node is connected)
+- Command outcomes are always terminal: `completed`, `failed`, `timed_out`, or `cancelled`
+- Per-tab execution is serial (FIFO); cross-tab execution is parallel
+- Never automate credential submission — `manual_login_required` requires human handoff
+- Controller-to-node routing requires explicit ACL grant from the node
+
+## Quickstart
+
+```bash
+npm install -g @telepat/otto
+otto setup
+otto authcode       # show in extension popup
+otto pair <code>
+otto client register --name my-agent
+otto client login
+otto commands list
+otto test reddit.com getFeed
+```
+
+## Command execution
+
+```bash
+# Open a managed tab
+otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}'
+
+# Run a site command
+otto cmd --action command.run --tab-session <id> --payload '{"site":"reddit.com","command":"getFeed"}'
+
+# Stream-capable command
+otto test reddit.com getChatMessages --stream-follow-ms 30000 --json
+```
+
+## Logging and debugging
+
+```bash
+otto logs list --source all --latest 200
+otto logs follow --source node
+otto logs list --request-id <requestId> --source all
+```
+
+## Documentation
+
+- Full docs: https://docs.telepat.io/otto/
+- Protocol reference: https://docs.telepat.io/otto/protocol
+- CLI reference: https://docs.telepat.io/otto/cli
+- Commands reference: https://docs.telepat.io/otto/commands
+- Error codes: https://docs.telepat.io/otto/error-codes
+- For Agents: https://docs.telepat.io/otto/for-agents
+- Automation Guide: https://docs.telepat.io/otto/for-agents/automation-guide
+- llms-full.txt: https://docs.telepat.io/otto/llms-full.txt
+
+## Source
+
+- GitHub: https://github.com/telepat-io/otto
+- npm (CLI): https://www.npmjs.com/package/@telepat/otto
+- npm (relay): https://www.npmjs.com/package/@telepat/otto-relay

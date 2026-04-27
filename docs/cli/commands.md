@@ -1,0 +1,172 @@
+---
+title: Command Execution
+sidebar_position: 8
+description: CLI reference for otto commands list, otto cmd, and otto test — browse available browser commands, run one-shot actions, and stream test sessions.
+keywords:
+  - otto commands list
+  - otto cmd
+  - otto test
+  - command execution
+  - stream follow
+---
+
+# Command Execution
+
+Browse available browser commands, run one-shot actions, and run streaming test sessions.
+
+## `otto commands list`
+
+Lists all commands available on a connected node, optionally filtered by site.
+
+### Usage
+
+```bash
+otto commands list [options]
+```
+
+### Flags
+
+| Flag | Shorthand | Required | Type | Default | Description |
+|---|---|---|---|---|---|
+| `--site` | `-s` | No | string | | Filter by site (e.g. `reddit.com`) |
+| `--node-id` | | No | string | Auto-selected | Target node ID |
+| `--json` | | No | boolean | false | Output as JSON |
+
+### Examples
+
+```bash
+# List all commands
+otto commands list
+
+# List commands for a specific site
+otto commands list --site reddit.com
+
+# Machine-readable output
+otto commands list --json
+```
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Commands listed |
+| `1` | No node connected or relay error |
+
+---
+
+## `otto cmd`
+
+Executes a single command action on a connected node. Useful for primitives and one-shot commands.
+
+### Usage
+
+```bash
+otto cmd [options]
+```
+
+### Flags
+
+| Flag | Shorthand | Required | Type | Default | Description |
+|---|---|---|---|---|---|
+| `--action` | `-a` | Yes | string | | Action to execute (e.g. `primitive.tab.open`) |
+| `--payload` | `-p` | No | string | `{}` | JSON payload string |
+| `--node-id` | | No | string | Auto-selected | Target node ID |
+| `--tab-session` | | No | string | | Tab session ID for tab-scoped actions |
+| `--timeout` | | No | number | 30000 | Command timeout in milliseconds |
+| `--json` | | No | boolean | false | Output result as JSON |
+
+### Examples
+
+```bash
+# Open a managed tab
+otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}'
+
+# Extract text from an open tab
+otto cmd --action primitive.dom.extract_text --tab-session <tabSessionId>
+
+# Take a screenshot by URL
+otto cmd --action primitive.page.screenshot --payload '{"url":"https://example.com"}'
+
+# Run a site command directly
+otto cmd --action command.run --payload '{"site":"reddit.com","command":"getFeed"}'
+```
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Command completed successfully |
+| `1` | Command failed, timed out, or relay error |
+
+---
+
+## `otto test`
+
+Runs a site command in test mode, with optional stream follow for streaming commands.
+
+### Usage
+
+```bash
+otto test <site> <command> [options]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|---|---|---|
+| `<site>` | Yes | Site identifier (e.g. `reddit.com`) |
+| `<command>` | Yes | Command name (e.g. `getChatMessages`) |
+
+### Flags
+
+| Flag | Shorthand | Required | Type | Default | Description |
+|---|---|---|---|---|---|
+| `--payload` | `-p` | No | string | `{}` | JSON payload for the command |
+| `--node-id` | | No | string | Auto-selected | Target node ID |
+| `--tab-session` | | No | string | | Existing tab session ID (skips auto-open) |
+| `--timeout` | | No | number | 30000 | Command timeout in milliseconds |
+| `--stream-follow-ms` | | No | number | | How long to follow stream updates after command completes (ms) |
+| `--stream-probe` | | No | boolean | false | Force traffic probe immediately after stream subscribe |
+| `--wait-for-interrupt` | | No | boolean | false | Keep the managed tab open until Ctrl+C |
+| `--json` | | No | boolean | false | Output as JSON (machine-readable stream frames) |
+
+### Examples
+
+```bash
+# Run a simple site command test
+otto test reddit.com getFeed
+
+# Run with payload
+otto test reddit.com getFeed --payload '{"limit":5}'
+
+# Stream-follow a chat command for 45 seconds
+otto test reddit.com getChatMessages --stream-follow-ms 45000
+
+# Stream with probe and JSON output for automation
+otto test reddit.com getChatMessages --stream-probe --stream-follow-ms 45000 --json
+
+# Keep the tab open after test
+otto test reddit.com getFeed --wait-for-interrupt
+```
+
+### Stream follow behavior
+
+When `--stream-follow-ms` is set, `otto test` subscribes to any stream manifest returned by the command and follows listener updates until the timeout elapses. Press `Ctrl+C` to cancel early — this sends `command_cancel` for active stream tests and closes the auto-opened tab.
+
+### Tab auto-open
+
+If `--tab-session` is omitted, `otto test` auto-opens a tab to the command's `preloadHost` if available, otherwise `https://<site>`. The tab is auto-closed after the test unless `--wait-for-interrupt` is set.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Test completed successfully |
+| `1` | Test failed, timed out, `manual_login_required`, or relay error |
+
+---
+
+## Related commands
+
+- [otto listener subscribe-network](./listener.md) — manually subscribe to network events.
+- [Commands Reference](../commands.md) — full action surface and site command model.

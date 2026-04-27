@@ -1,28 +1,39 @@
+---
+title: Reusable Snippets
+sidebar_position: 11
+description: Copy-paste curl and WebSocket snippets for Otto controller bootstrap, session discovery, token refresh, command execution, stream lifecycle, and teardown.
+keywords:
+  - snippets
+  - curl examples
+  - websocket frames
+  - controller bootstrap
+  - stream lifecycle
+---
+
 # Reusable Snippets
 
-Last Updated: 2026-04-14
-Owner: Platform
+Copy-paste snippets for common controller, command, and stream workflows. All examples use environment variables for sensitive values.
 
-Copy-paste snippets for common controller, command, and stream workflows. Use the table first to pick the right snippet for your stage, then copy the matching block.
+## Snippet index
 
-## Snippet Index
-
-| Stage | Snippets |
-| --- | --- |
-| Controller bootstrap | Register client, exchange token |
-| Session discovery | Connected node lookup |
-| Session maintenance | Token refresh |
-| Transport bootstrap | `hello` and `auth` websocket frames |
-| Command execution | `command.run`, `command.test` |
-| Stream lifecycle | `listener.subscribe`, `command_cancel` |
+| Stage | Section |
+|---|---|
+| Controller bootstrap | [Register and get token](#controller-registration-and-token) |
+| Session discovery | [Connected nodes](#node-discovery) |
+| Session maintenance | [Token refresh](#token-refresh) |
+| Transport bootstrap | [WebSocket hello and auth frames](#websocket-bootstrap) |
+| Command execution | [command.run and command.test](#command-frames) |
+| Stream lifecycle | [listener.subscribe and command_cancel](#stream-lifecycle) |
 
 ## Controller registration and token
 
 ```bash
+# Register a new controller client
 curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/controller/register" \
   -H "Content-Type: application/json" \
   -d '{"name":"my-controller","description":"automation worker"}'
 
+# Exchange client credentials for an access token
 curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/controller/token" \
   -H "Content-Type: application/json" \
   -d '{"clientId":"'$OTTO_CLIENT_ID'","clientSecret":"'$OTTO_CLIENT_SECRET'"}'
@@ -35,6 +46,12 @@ curl -sS "$OTTO_RELAY_HTTP_URL/api/nodes/connected" \
   -H "Authorization: Bearer $OTTO_ACCESS_TOKEN"
 ```
 
+Response:
+
+```json
+{ "nodes": [{ "nodeId": "node_local_1" }] }
+```
+
 ## Token refresh
 
 ```bash
@@ -43,9 +60,9 @@ curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/auth/refresh" \
   -d '{"refreshToken":"'$OTTO_REFRESH_TOKEN'"}'
 ```
 
-## Core controller websocket frames
+## WebSocket bootstrap
 
-Use these frames in order, and wait for `auth_ack` before sending command envelopes.
+Send `hello` and then `auth` in order. Wait for `auth_ack` before sending command envelopes.
 
 ```json
 {
@@ -69,9 +86,9 @@ Use these frames in order, and wait for `auth_ack` before sending command envelo
 }
 ```
 
-## command.run and command.test frames
+## Command frames
 
-These frames demonstrate the minimum replay-safe command shape for runtime routing.
+Minimum replay-safe `command.run` envelope:
 
 ```json
 {
@@ -90,6 +107,8 @@ These frames demonstrate the minimum replay-safe command shape for runtime routi
 }
 ```
 
+`command.test` envelope (same shape, different action):
+
 ```json
 {
   "protocolVersion": "1.0",
@@ -107,9 +126,9 @@ These frames demonstrate the minimum replay-safe command shape for runtime routi
 }
 ```
 
-## Stream listener subscribe and cancel
+## Stream lifecycle
 
-Use subscribe request ids for listener-update correlation. Use `command_cancel` on the original streaming command request to terminate command-owned stream sessions.
+Subscribe to a network listener. Use the subscribe `requestId` to correlate incoming `listener_update` events.
 
 ```json
 {
@@ -130,6 +149,8 @@ Use subscribe request ids for listener-update correlation. Use `command_cancel` 
 }
 ```
 
+Cancel an active stream session using the original `command.test` `requestId`:
+
 ```json
 {
   "protocolVersion": "1.0",
@@ -141,10 +162,8 @@ Use subscribe request ids for listener-update correlation. Use `command_cancel` 
 }
 ```
 
-## Related Docs
+## Next steps
 
-- docs/controller-implementation.md
-- docs/agent-automation.md
-- docs/relay-api.md
-- docs/protocol.md
-- docs/use-cases.md
+- [Controller Implementation Guide](./controller-implementation.md) — full HTTP + WebSocket flow.
+- [Protocol Reference](./protocol.md) — envelope contract and all message families.
+- [Relay API Reference](./relay-api.md) — full endpoint documentation.

@@ -1,6 +1,12 @@
 ---
 title: Development
 sidebar_position: 1
+description: Local development setup, required validation sequence, and docs authoring guidance for Otto contributors.
+keywords:
+  - development
+  - contributing
+  - local setup
+  - build commands
 ---
 
 ## Local development

@@ -1,40 +1,72 @@
+---
+title: Tab Management
+sidebar_position: 10
+description: Managed tab session lifecycle in Otto. Covers primitive.tab actions, tabSessionId ownership, stale session recovery, MV3 URL commit race, and owner-scoped cleanup.
+keywords:
+  - tab management
+  - tabSessionId
+  - primitive.tab.open
+  - tab lifecycle
+  - owner-scoped cleanup
+---
+
 # Tab Management
 
-Last Updated: 2026-04-14
-Owner: Platform
+Otto tracks browser tabs as managed sessions identified by `tabSessionId`. Ownership metadata on each session enables safe cleanup when a controller disconnects.
 
-This page documents managed tab session lifecycle and owner-scoped cleanup behavior.
+## Tab session lifecycle
 
-## Lifecycle
+```mermaid
+flowchart LR
+    A[primitive.tab.open] --> B[Receive tabSessionId]
+    B --> C[Run tab-scoped commands]
+    C --> D{Done?}
+    D -- Explicit close --> E[primitive.tab.close]
+    D -- Controller disconnect --> F[Relay issues primitive.tab.close_owned]
+    E --> G[Session removed]
+    F --> G
+```
 
-1. Open tab with `primitive.tab.open`.
-2. Receive `tabSessionId`.
-3. Use session id for tab-scoped commands.
-4. Close explicitly or allow cleanup when ownership lifecycle ends.
+## Primitive tab actions
 
-## Ownership Rules
+| Action | Description |
+|---|---|
+| `primitive.tab.open` | Open a new managed tab; returns `tabSessionId` |
+| `primitive.tab.close` | Explicitly close a managed tab by `tabSessionId` |
+| `primitive.tab.navigate` | Navigate a managed tab to a new URL |
+| `primitive.tab.query` | Query managed tab state |
+| `primitive.tab.close_owned` | Internal relay action: close all tabs owned by a controller identity |
 
-- Relay injects internal owner metadata on open requests.
-- Owner metadata is relay-owned, not controller-owned.
-- Disconnect cleanup closes only tabs owned by that controller identity.
+## Ownership rules
 
-## Common Stale Session Causes
+- Relay injects internal owner metadata when forwarding `primitive.tab.open` from a controller.
+- Owner metadata is relay-owned and not modifiable by the controller.
+- When a controller disconnects or heartbeat times out, relay dispatches `primitive.tab.close_owned` to connected nodes with the disconnected controller's `clientId`.
+- Node runtime closes only tabs owned by that controller identity. Tabs owned by other controllers are not affected.
 
-- manual tab close
-- extension reload/restart
-- reconnect with old tabSessionId cache
+## Stale session causes and recovery
 
-Recovery:
+| Cause | Recovery |
+|---|---|
+| Manual tab close in browser | Open a new managed tab with `primitive.tab.open` |
+| Extension reload or restart | Open a new managed tab; previous sessions are invalid |
+| Cached `tabSessionId` after reconnect | Discard cached value; open a fresh session |
+| Controller disconnect and cleanup | Open a new managed tab after reconnecting |
 
-- open a new managed tab
-- use new session id
+After opening a new tab, always use the new `tabSessionId` for subsequent commands.
 
-## MV3 URL Commit Race
+## MV3 URL commit race
 
-New tabs may not expose committed URL immediately. Runtime uses bounded polling before strict site matching to avoid false mismatch outcomes.
+Chrome MV3 service-worker tabs may not expose a committed URL immediately after `primitive.tab.open` completes. Otto runtime uses bounded polling before strict site matching to avoid false `site_mismatch` or `tab_url_not_ready` outcomes.
 
-## Related Docs
+If `tab_url_not_ready` is returned, retry after a short delay.
 
-- `docs/tab-lock-model.md`
-- `docs/protocol.md`
-- `docs/troubleshooting-advanced.md`
+## Tab automation groups
+
+Otto tracks tabs opened through automation workflows in a Chrome tab group (`automationGroupId`). Initialization is single-flight guarded to prevent duplicate group creation under concurrent `primitive.tab.open` calls.
+
+## Next steps
+
+- [Tab Lock Model](./tab-lock-model.md) — per-tab FIFO execution and wait policies.
+- [Protocol Reference](./protocol.md) — tab ownership and cleanup semantics.
+- [Advanced Troubleshooting](./troubleshooting-advanced.md) — stale session error resolution.

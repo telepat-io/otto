@@ -1,0 +1,262 @@
+# Otto — Full Documentation Summary for LLMs
+
+> This file concatenates key sections from Otto's documentation for use in LLM context windows. For the full site, see https://docs.telepat.io/otto/
+
+---
+
+## Overview
+
+Otto is a secure, debuggable remote browser automation platform. Three components work together:
+
+1. **Relay** — Node.js HTTP + WebSocket server that routes commands, manages authentication, and persists structured logs.
+2. **Extension** — Chrome MV3 extension that connects to relay as a node and executes commands in browser tabs.
+3. **CLI** — Operator and controller tool for managing the relay daemon, pairing nodes, registering controller clients, and executing commands.
+
+Controllers connect to relay via WebSocket. Relay routes each command to the target node (the extension). The node executes the command in a managed Chrome tab and returns a terminal result.
+
+---
+
+## Architecture
+
+```
+Controller (CLI / script)
+    |
+    | WebSocket (authenticated)
+    v
+Relay daemon (port 8787)
+    |
+    | WebSocket (authenticated, node)
+    v
+Extension node (Chrome)
+    |
+    | chrome.tabs / chrome.scripting / chrome.debugger
+    v
+Browser tab (managed, site-scoped)
+```
+
+Key invariants:
+- `targetNodeId` always required (CLI auto-selects when one node is connected)
+- Terminal outcomes: `completed`, `failed`, `timed_out`, `cancelled`
+- Per-tab execution: serial (FIFO)
+- Cross-tab execution: parallel
+- Never automate credential submission
+- Controller-to-node routing requires explicit node-owned ACL grant
+
+---
+
+## Quickstart
+
+```bash
+npm install -g @telepat/otto
+otto setup
+otto authcode       # generates pairing code for extension popup
+otto pair <code>    # approves pairing after user enters code
+otto client register --name my-agent
+otto client login
+otto commands list
+otto test reddit.com getFeed
+```
+
+---
+
+## Protocol
+
+Every WebSocket frame uses a shared envelope:
+
+| Field | Description |
+|---|---|
+| `protocolVersion` | Currently `1.0` |
+| `messageType` | Frame family: `hello`, `auth`, `command`, `result`, `event`, etc. |
+| `requestId` | Primary correlation key |
+| `timestamp` | ISO-8601; enforced against replay skew windows |
+| `senderRole` | `controller`, `relay`, or `node` |
+| `payload` | Message-specific object |
+
+Command payload required fields: `targetNodeId`, `action`, `payload`, `replayNonce`. Optional: `tabSessionId`, `timeoutMs`, `waitPolicy`, `idempotencyKey`.
+
+Message families: `hello`/`hello_ack`, `auth`/`auth_ack`, `refresh`/`refresh_ack`, `command`, `result`/`error`, `event`, `ping`/`pong`, `tab_lock`/`tab_unlock`, `command_cancel`.
+
+---
+
+## Commands
+
+Action surface:
+
+| Group | Actions |
+|---|---|
+| Primitive tab | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query` |
+| Primitive DOM | `primitive.dom.extract_text`, `primitive.dom.extract_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown` |
+| Primitive page | `primitive.page.screenshot` |
+| Command | `command.list`, `command.run`, `command.test` |
+| Listener | `listener.subscribe`, `listener.unsubscribe` |
+
+Bundled sites:
+- `reddit.com`: `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost`
+- `news.ycombinator.com`: `getFrontPage`
+
+Runtime execution order: resolve site bundle → validate tab URL → validate inputs → auth preflight → execute.
+
+---
+
+## CLI Commands
+
+### Relay lifecycle
+- `otto start [--attached] [--port N]` — start relay daemon
+- `otto stop` — stop relay daemon
+- `otto status` — check daemon status
+
+### Setup
+- `otto setup [--relay-url URL] [--non-interactive]` — first-run wizard
+
+### Pairing
+- `otto authcode` — generate pairing code
+- `otto pair <code>` — approve pairing
+- `otto revoke [--node-id ID]` — revoke node pairing
+
+### Client management
+- `otto client register --name NAME [--json]` — register controller client
+- `otto client login [--client-id ID]` — authenticate client
+- `otto client status [--json]` — show auth status
+- `otto client forget` — clear local credentials
+- `otto client remove [--client-id ID | --all]` — revoke and remove client
+
+### Command execution
+- `otto commands list [--site SITE] [--json]` — list available commands
+- `otto cmd --action ACTION [--payload JSON] [--tab-session ID]` — execute action
+- `otto test SITE COMMAND [--payload JSON] [--stream-follow-ms N] [--json]` — test command
+
+### Logs
+- `otto logs list [--source SOURCE] [--latest N] [--request-id ID] [--json]`
+- `otto logs follow [--source SOURCE] [--json]`
+- `otto logs status [--json]`
+- `otto logs export [--source SOURCE] [--latest N] [-o FILE]`
+
+Log sources: `relay`, `controller`, `node`, `all`
+
+### Listeners
+- `otto listener subscribe-network --tab-session ID --site SITE [--pattern GLOB] [--mode network|fetch|hybrid]`
+- `otto listener unsubscribe --target-request-id ID`
+- `otto listener list [--json]`
+
+---
+
+## Pairing and Auth
+
+1. Extension stores `nodeId` in `chrome.storage.local`.
+2. Extension requests pairing challenge from relay (`/api/pairing/request`).
+3. User runs `otto pair <code>` to approve.
+4. Relay issues node tokens; extension stores them.
+5. Extension authenticates WebSocket with node access token.
+6. Controller registers via `/api/controller/register`, gets client secret.
+7. Controller authenticates via `/api/controller/token`, gets access + refresh tokens.
+8. Node grants controller access via extension popup → Controller Access.
+9. Controller sends commands; relay routes to node after ACL check.
+
+Token rotation: access tokens expire per `OTTO_TOKEN_TTL_MINUTES`. Refresh via `/api/auth/refresh`. Refresh tokens rotate on each use.
+
+---
+
+## Relay Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OTTO_RELAY_PORT` | `8787` | Listen port |
+| `OTTO_TOKEN_SECRET` | Required | JWT signing secret |
+| `OTTO_LOG_DIR` | — | JSONL log directory |
+| `OTTO_LOG_MAX_FILE_BYTES` | `100MB` | Log file size before spillover |
+| `OTTO_RATE_LIMIT_PER_MIN` | — | Per-session frame rate limit |
+| `OTTO_CONTROLLER_HEARTBEAT_INTERVAL_MS` | `8000` | Heartbeat interval |
+| `OTTO_CONTROLLER_HEARTBEAT_MISS_LIMIT` | `3` | Missed heartbeats before disconnect |
+
+---
+
+## Relay Endpoints
+
+### Pairing: `POST /api/pairing/request`, `GET /api/pairing/pending`, `POST /api/pairing/approve`
+### Auth: `POST /api/auth/refresh`, `POST /api/auth/revoke`
+### Nodes: `GET /api/nodes/connected` (controller bearer)
+### Controller: `POST /api/controller/register`, `POST /api/controller/token`, `POST /api/controller/remove`, `POST /api/controller/remove-all`, `GET/POST /api/controller/access` (node bearer)
+### Logs: `GET /api/logs`, `GET /api/logs/status`, `GET /api/logs/export`
+### WebSocket: `ws://host:port?role=controller`, `ws://host:port?role=node`
+
+---
+
+## Error Codes (Key)
+
+| Code | Meaning |
+|---|---|
+| `manual_login_required` | Site requires human login; do not automate |
+| `acl_missing_node_grant` | Node has not granted controller access |
+| `node_offline` | Target node not connected |
+| `site_mismatch` | Tab URL does not match command site |
+| `tab_url_not_ready` | Tab URL not committed yet; retry |
+| `missing_tab_session` | `tabSessionId` required but not provided |
+| `unknown_tab_session` | `tabSessionId` not found; open new tab |
+| `replay_rejected` | Replay nonce already used or expired |
+| `forbidden_action` | Controller lacks required scope |
+| `rate_limited` | Too many frames per minute |
+| `queue_wait_timed_out` | Command exceeded queue wait budget |
+| `lock_conflict` | Another controller holds tab lock |
+
+---
+
+## For Agents — Constraints
+
+1. Never automate credential submission. Return `manual_login_required` and ask the human.
+2. Never bypass ACL. Ask the human to approve in extension popup.
+3. Always use `targetNodeId` (or rely on auto-select with one node).
+4. Never expose secrets in logs.
+5. Keep payloads bounded; avoid unbounded loops.
+
+### Health check before any task
+
+```bash
+otto commands list --json
+```
+
+Success means relay running, node connected, controller authenticated, ACL grants active.
+
+### Failure handling
+
+```bash
+# Correlate any failure
+otto logs list --request-id <requestId> --source all --json
+
+# Extension-specific
+otto logs list --source node --latest 50 --json
+```
+
+---
+
+## Extension Runtime
+
+Split runtime under MV3:
+- **Background**: orchestration, dispatch, replay safety
+- **Offscreen**: WebSocket continuity, heartbeat, reconnect
+
+Pairing states: `needs_relay_url` → `requesting_pairing_code` → `waiting_for_pair_approval` → `authenticated_connecting` → `authenticated_connected`.
+
+Command execution: resolve site → validate tab URL → validate inputs → auth preflight → preloadHost gate → execute.
+
+Storage: `chrome.storage.local` for durable state (tokens, relay URL). `chrome.storage.session` for reconstructable runtime state (tab sessions, replay ledger).
+
+---
+
+## Tab Lock Model
+
+- Locks are per `targetNodeId:tabSessionId` pair
+- Only one controller can hold a lock at a time
+- `waitPolicy=fail_fast` returns `lock_conflict` immediately
+- `waitPolicy=wait_with_timeout` queues until `timeoutMs`
+- Lease expiration auto-releases locks
+- Controller disconnect cleans up owned locks and tabs
+
+---
+
+## Listener Lifecycle
+
+`listener.subscribe` and `listener.unsubscribe` are terminal commands (immediate `result` or `error`). Streaming data arrives later as `event` frames with `payload.type=listener_update`, correlated by original subscribe `requestId`.
+
+After unsubscribe, further updates for that `requestId` are rejected with `listener_not_found`.
+
+`network.http_intercept` options: `tabSessionId` (required), `site` (required), `urlPatterns`, `requestHostAllowlist`, `mode` (network/fetch/hybrid), `includeBody`, `includeHeaders`, `maxBodyBytes`, `mimeTypes`.

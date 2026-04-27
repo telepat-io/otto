@@ -1,59 +1,83 @@
+---
+title: Extension Runtime
+sidebar_position: 6
+description: How the Otto Chrome extension keeps command execution deterministic under MV3 constraints. Covers split runtime, pairing flow, command execution path, listener infrastructure, and storage boundaries.
+keywords:
+  - extension runtime
+  - MV3
+  - background service worker
+  - offscreen
+  - command execution
+---
+
 # Extension Runtime
 
-Last Updated: 2026-04-14  
-Owner: Browser Runtime
+This page explains how the extension keeps command execution deterministic under MV3 constraints. Read it when you need to reason about pairing state, transport behavior, listener routing, and command-runtime guarantees.
 
-This document explains how the extension keeps command execution deterministic under MV3 constraints. Read it when you need to reason about pairing state, transport behavior, listener routing, and command-runtime guarantees.
+## Source-of-truth code paths
 
-## Runtime Composition
+| Concern | Source |
+|---|---|
+| Background orchestration | `extension/entrypoints/background.ts`, `extension/src/runtime/background-bootstrap.ts` |
+| WebSocket transport | `extension/src/runtime/offscreen-client.ts` |
+| Command execution | `extension/src/runtime/command-executor.ts`, `extension/src/runtime/command-runtime.ts` |
+| Listener runtime | `extension/src/runtime/network-intercept/listener.ts`, `extension/src/runtime/listener-managers.ts` |
+| Popup onboarding UI | `extension/src/runtime/popup-ui.ts`, `extension/src/runtime/onboarding/ui.ts` |
 
-Otto uses a split runtime to separate durable transport concerns from command execution concerns. Background owns orchestration and browser APIs, while offscreen owns websocket continuity and heartbeat behavior.
+## Runtime composition
 
-| Area | Main Files | Responsibility |
-| --- | --- | --- |
-| Background orchestration | `extension/entrypoints/background.ts`, `extension/src/runtime/background-bootstrap.ts` | Startup, maintenance, dispatch, replay safety |
-| Transport | `extension/src/runtime/offscreen-client.ts` | Relay websocket auth, heartbeat, reconnect, outbound queueing |
-| Command execution | `extension/src/runtime/command-executor.ts`, `extension/src/runtime/command-runtime.ts` | Primitive actions, site command resolution, auth preflight |
-| Listener runtime | `extension/src/runtime/network-intercept-listener.ts`, `extension/src/runtime/listener-managers.ts` | Interception lifecycle and shared per-tab debugger state |
-| Command script helpers | `extension/src/runtime/page-dom-query.ts` | Deep Shadow DOM query helper install |
+Otto uses a split runtime to separate durable transport concerns from command execution concerns.
 
-## Pairing and Authentication Flow
+| Area | Files | Responsibility |
+|---|---|---|
+| Background orchestration | `background.ts`, `background-bootstrap.ts` | Startup, maintenance, dispatch, replay safety |
+| Transport | `offscreen-client.ts` | Relay WebSocket auth, heartbeat, reconnect, outbound queueing |
+| Command execution | `command-executor.ts`, `command-runtime.ts` | Primitive actions, site command resolution, auth preflight |
+| Listener runtime | `network-intercept/listener.ts`, `listener-managers.ts` | Interception lifecycle and shared per-tab debugger state |
+| DOM script helpers | `page-dom-query.ts` | Deep Shadow DOM query helper install |
 
-Background ensures a persistent node identity in extension storage, acquires pairing challenges when node credentials are missing, and keeps onboarding status synchronized for popup/options surfaces. Once pairing is approved by a controller workflow, node tokens are stored and offscreen authenticates the websocket session to relay.
+## Pairing and authentication flow
 
-The onboarding status model is deterministic and intended for both UI and diagnostics.
+Background ensures a persistent node identity in extension storage, acquires pairing challenges when node credentials are missing, and keeps onboarding status synchronized for popup and options surfaces. Once pairing is approved by a controller workflow, node tokens are stored and offscreen authenticates the WebSocket session to relay.
+
+```mermaid
+flowchart TD
+    A[Extension loads] --> B{Relay URL set?}
+    B -- No --> C[needs_relay_url]
+    B -- Yes --> D{Node tokens exist?}
+    D -- No --> E[requesting_pairing_code]
+    E --> F[waiting_for_pair_approval]
+    F --> G{Approved?}
+    G -- Yes --> H[authenticated_connecting]
+    G -- No --> I[error]
+    D -- Yes --> H
+    H --> J[authenticated_connected]
+    J --> K[Command transport active]
+```
 
 | Status | Meaning |
-| --- | --- |
+|---|---|
 | `needs_relay_url` | Relay URL is missing or invalid |
 | `requesting_pairing_code` | Waiting to obtain challenge |
 | `waiting_for_pair_approval` | Challenge exists, waiting for CLI approval |
-| `authenticated_connecting` | Tokens exist, websocket not fully ready |
+| `authenticated_connecting` | Tokens exist, WebSocket not fully ready |
 | `authenticated_connected` | Auth acknowledged, command transport active |
-| `error` | Latest auth/socket failure surfaced for recovery |
+| `error` | Latest auth or socket failure surfaced for recovery |
 
-Refresh actions in popup/options wait for keep-warm maintenance completion before reporting success. That maintenance includes pairing reconciliation, offscreen ensure, and badge sync. During this window, stored credentials are revalidated and stale tokens are automatically cleared when refresh is rejected.
+Refresh actions in popup or options wait for keep-warm maintenance completion before reporting success. That maintenance includes pairing reconciliation, offscreen ensure, and badge sync. Stale tokens are automatically cleared when refresh is rejected.
 
-## Command Execution Path
+## Command execution path
 
-When relay sends a `command` frame, offscreen forwards it to background, background executes, and a terminal envelope returns through offscreen back to relay. If websocket connectivity drops mid-flight, offscreen buffers outbound terminal envelopes and flushes after reconnect authentication.
+When relay sends a `command` frame, offscreen forwards it to background, background executes, and a terminal envelope returns through offscreen back to relay. If WebSocket connectivity drops mid-flight, offscreen buffers outbound terminal envelopes and flushes after reconnect authentication.
 
-Replay safety is enforced by background-level dedupe keyed by `idempotencyKey` (or `requestId` fallback), so retried frames return cached terminal results instead of rerunning side effects.
-
-### Distillation library loading
-
-Content extraction primitives (`primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown`) load third-party distillation libraries as packaged extension assets via `chrome.scripting.executeScript({ files: [...] })` in page context.
-
-This replaced prior eval-string injection to avoid scope instability between script executions and to keep library loading deterministic across tabs. Distillation failures now include explicit mode-specific details (for example readability constructor unavailable, empty parse output, or script execution error) to improve operator debugging in CLI and relay logs.
-
-Page screenshot primitive (`primitive.page.screenshot`) also follows extraction-style tab targeting (`tabSessionId` or `url`) with temporary-tab cleanup in `finally`. Viewport mode uses tab capture APIs, while full-page mode uses CDP `Page.captureScreenshot` against computed layout metrics and returns terminal base64 payload plus dimensions/byte metadata. Oversized captures run bounded quality/scale reduction before returning deterministic `screenshot_too_large` errors.
+Replay safety is enforced by background-level deduplication keyed by `idempotencyKey` (or `requestId` fallback), so retried frames return cached terminal results instead of rerunning side effects.
 
 ### Site command orchestration
 
-Site command execution follows one consistent order so failures remain deterministic:
+Commands fail at the earliest possible point so failures stay deterministic:
 
 1. Resolve site bundle and command metadata.
-2. Wait briefly for committed tab URL when needed, then validate site match.
+2. Wait briefly for committed tab URL, then validate site match.
 3. Validate and sanitize declared input metadata (`inputFields`, `inputAtLeastOneOf`) when present.
 4. Run auth preflight when command requires auth and `authMode` allows checks.
 5. If unauthenticated in auto mode, run login navigation handoff and return `manual_login_required`.
@@ -63,59 +87,58 @@ Site command execution follows one consistent order so failures remain determini
 
 `tab_url_not_ready`, `site_mismatch`, and `preload_host_mismatch` are deliberate early-failure signals that protect command handlers from running against invalid page context.
 
-## Listener Infrastructure
+### Content extraction primitives
 
-Listener lifecycle is generic at runtime level: subscribe/unsubscribe behave like terminal commands, while asynchronous updates are emitted later and correlated by the original subscribe request id. Runtime currently ships `network.http_intercept` backed by `chrome.debugger` CDP domains.
+`primitive.dom.extract_distilled_html` and `primitive.dom.extract_markdown` load distillation libraries as packaged extension assets via `chrome.scripting.executeScript({ files: [...] })`. This avoids scope instability between script executions and keeps library loading deterministic across tabs.
 
-Network interception supports `network`, `fetch`, and `hybrid` capture modes. Hybrid mode includes bounded cross-source duplicate suppression, sensitive headers are redacted before update emission, and paused Fetch requests are always continued by runtime to avoid deadlocking tab traffic.
+`primitive.page.screenshot` supports `mode=viewport` (tab capture APIs) and `mode=full_page` (CDP `Page.captureScreenshot`). Both modes return terminal base64 payload plus dimensions and byte metadata. Oversized captures run bounded quality reduction before returning a deterministic `screenshot_too_large` error.
 
-Command modules own stream parsing policy. Runtime can route raw listener updates through command-owned adapters (for example `streamAdapter=reddit.chat.v1`) before forwarding updates to relay, which keeps site-specific logic out of transport infrastructure.
+## Listener infrastructure
 
-### Command-started interception
+Listener lifecycle is generic: subscribe and unsubscribe behave like terminal commands, while asynchronous updates are emitted later and correlated by the original subscribe `requestId`. Runtime ships `network.http_intercept` backed by `chrome.debugger` CDP domains.
 
-Command runtime also exposes `startNetworkInterception(options?)` for local command execution probes. These handles are command-scoped, not relay-streamed, and are always torn down in `finally` to keep lifecycle deterministic even when command execution throws.
+Network interception supports `network`, `fetch`, and `hybrid` capture modes. Hybrid mode includes bounded cross-source duplicate suppression. Sensitive headers are redacted before update emission. Paused Fetch requests are always continued by runtime to avoid deadlocking tab traffic.
 
-## MV3 Resilience and Transport Behavior
+Command modules own stream parsing policy. Runtime can route raw listener updates through command-owned adapters (for example `streamAdapter=reddit.chat.v1`) before forwarding updates to relay, keeping site-specific logic out of transport infrastructure.
 
-MV3 service-worker lifetime is inherently intermittent, so Otto relies on offscreen websocket ownership plus keep-warm maintenance. Offscreen creation is single-flight guarded and tolerates benign duplicate-create races; reconnect uses bounded exponential backoff with jitter.
+Command-started interceptions use `ctx.startNetworkInterception(options?)`. These handles are command-scoped, not relay-streamed, and are always torn down in `finally` to keep lifecycle deterministic even when command execution throws.
 
-Background maintenance work is serialized to prevent overlapping startup and keep-warm jobs, and outbound queues are bounded so temporary relay outages do not cause unbounded memory growth.
+## MV3 resilience and transport behavior
 
-## Local Development Log Streaming
+MV3 service-worker lifetime is inherently intermittent. Otto relies on offscreen WebSocket ownership plus keep-warm maintenance:
 
-Local dev log streaming is opt-in through extension settings. When enabled, extension events are queued as structured node logs, flushed after websocket auth, and then streamed live through relay log APIs as `source=node`. Sensitive values remain subject to ingress redaction and extension emitters must not include credentials.
+- Offscreen creation is single-flight guarded and tolerates benign duplicate-create races.
+- Reconnect uses bounded exponential backoff with jitter.
+- Background maintenance work is serialized to prevent overlapping startup and keep-warm jobs.
+- Outbound queues are bounded so temporary relay outages do not cause unbounded memory growth.
+
+## Focus emulation
+
+Commands opt in to debugger focus emulation via `requiresDebuggerFocus: true`. Runtime enables focus emulation only after site validation succeeds. Certain command flows stall in background tabs when callback cadence is throttled; focus emulation is a targeted mitigation that improves progress reliability without forcing all commands into debugger mode.
+
+Activation errors: `debugger_focus_unavailable`, `debugger_focus_conflict`, `debugger_focus_permission_denied`, `debugger_focus_attach_failed`, `debugger_focus_command_failed`.
+
+When interception is active on the same tab, runtime reuses existing debugger attachment rather than requiring a second attach. Detach is owner-scoped so shared paths do not break sibling features. If external DevTools owns attachment, activation fails with a deterministic conflict-style error.
+
+## Local development log streaming
+
+When `localDevLogStreamingEnabled` is set in extension storage, extension events are queued as structured node logs, flushed after WebSocket auth, and streamed live through relay log APIs as `source=node`. Sensitive values remain subject to ingress redaction; extension emitters must not include credentials.
 
 Debug-log transport is intentionally separated from listener-update transport. Under backpressure, debug flushing can throttle or drop while listener updates continue on the data-plane path.
 
-## Storage and Ownership Boundaries
-
-Extension relay URL, pairing state, and node tokens live in `chrome.storage.*`. Controller setup state lives in `~/.otto/config.json`. These stores are intentionally independent and role-scoped, even when both point to the same relay host.
-
-Managed tab mappings are persisted by `tabSessionId`, and controller ownership metadata for relay-created tabs is tracked in session storage for deterministic owner-scoped cleanup behavior.
-- Tab group state is tracked with `automationGroupId`.
-- Automation group initialization is single-flight guarded to avoid duplicate group creation under concurrent `primitive.tab.open` calls.
-
-Compatibility behavior keeps older command payload shapes usable without weakening runtime safety. Runtime accepts `tabSessionId` from command top-level field or nested payload field, prunes stale mappings when tab lookup fails, and ensures `primitive.tab.close_owned` only closes sessions owned by the provided `controllerClientId` while cleaning stale ownership entries.
-
-Debugger focus emulation behavior:
-
-Commands opt in via `requiresDebuggerFocus=true`. Runtime enables focus emulation only after site validation succeeds, and activation failures stay deterministic and command-scoped (`debugger_focus_unavailable`, `debugger_focus_conflict`, `debugger_focus_permission_denied`, `debugger_focus_attach_failed`, `debugger_focus_command_failed`). When interception is active on the same tab, runtime reuses existing debugger attachment state rather than requiring a second attach.
-
-Why this runtime path was added:
-
-Certain command flows can stall in background tabs when callback cadence is throttled. Focus emulation is a targeted mitigation that improves progress reliability without forcing all commands into debugger mode, and metadata opt-in keeps that behavior explicit and reviewable.
-
-Shared debugger-session ownership model:
-
-Runtime tracks debugger-session ownership per feature path. If another Otto feature path already owns attachment, runtime attempts reuse; detach is owner-scoped so shared paths do not break sibling features. This is most important when focus emulation and interception run together on the same tab.
-
-Operational notes:
-
-If external DevTools owns attachment and runtime cannot issue required commands, activation fails with deterministic conflict-style errors. Reuse and ownership decisions are logged as structured node debug events to support live troubleshooting (`otto logs follow --source node`).
-
-Persistence notes:
+## Storage and ownership boundaries
 
 | Storage scope | Runtime data |
-| --- | --- |
-| `chrome.storage.local` | Durable node state across browser restarts (`nodeId`, relay URL, node tokens, pairing metadata) |
-| `chrome.storage.session` | Reconstructable runtime state (`tabSessions`, `tabSessionOwners`, automation group id, replay ledger), reconciled during bootstrap |
+|---|---|
+| `chrome.storage.local` | Durable node state across browser restarts: `nodeId`, relay URL, node tokens, pairing metadata |
+| `chrome.storage.session` | Reconstructable runtime state: `tabSessions`, `tabSessionOwners`, automation group id, replay ledger — reconciled during bootstrap |
+
+Managed tab mappings are persisted by `tabSessionId`. Controller ownership metadata for relay-created tabs is tracked in session storage for deterministic owner-scoped cleanup. Automation group initialization is single-flight guarded to avoid duplicate group creation under concurrent `primitive.tab.open` calls.
+
+Compatibility behavior: runtime accepts `tabSessionId` from command top-level field or nested payload field, prunes stale mappings when tab lookup fails, and ensures `primitive.tab.close_owned` only closes sessions owned by the provided `controllerClientId`.
+
+## Next steps
+
+- [Commands Reference](./commands.md) — action surface and execution contract.
+- [Listener Development](./listener-development.md) — stream-capable command integration.
+- [Pairing and Auth](./pairing-auth.md) — node identity and token lifecycle.

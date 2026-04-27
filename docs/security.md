@@ -1,15 +1,24 @@
+---
+title: Security
+sidebar_position: 1
+description: Otto security controls, threat model, and operational security checklist. Covers token auth, scope enforcement, replay protection, interception scoping, and deployment guidance.
+keywords:
+  - security
+  - threat model
+  - token auth
+  - replay protection
+  - ACL
+---
+
 # Security
 
-Last Updated: 2026-04-10
-Owner: Security
+## Source-of-truth code paths
 
-## Source-of-Truth Code Paths
-
-- Relay authn/authz and rate limiting: `packages/relay/src/index.ts`
-- Protocol-level auth/error schemas: `packages/shared-protocol/src/index.ts`
+- Relay auth and rate limiting: `packages/relay/src/index.ts`
+- Protocol-level auth and error schemas: `packages/shared-protocol/src/index.ts`
 - Relay security integration tests: `packages/relay/test/integration.test.mjs`
 
-Baseline controls:
+## Baseline controls
 
 - Token-first WebSocket authentication
 - Role-based command authorization
@@ -33,7 +42,7 @@ Baseline controls:
 - Interception header emission redacts sensitive fields (`Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`)
 - Setup-time extension artifact checksum verification before extraction
 
-## Command Security Model
+## Command security model
 
 Threat boundaries:
 
@@ -48,7 +57,7 @@ Current controls:
 - Explicit manual handoff for website login (`manual_login_required`).
 - No automatic credential entry or scraping of secret fields.
 
-## Abuse and Failure Guardrails
+## Abuse and failure guardrails
 
 - Pairing approval is first-wins; repeat approval attempts return deterministic `pairing_not_pending`.
 - Controller clients registered via `/api/controller/token` are denied node command routing until node-owned ACL grants access (`acl_missing_node_grant`).
@@ -63,7 +72,7 @@ Current controls:
 - Fetch-domain interception always continues paused requests to avoid traffic deadlock if body retrieval fails.
 - Hybrid interception duplicate suppression bounds equivalent cross-source response replay, reducing repeated payload forwarding surfaces.
 
-## Operational Security Checklist
+## Operational security checklist
 
 1. Keep `OTTO_TOKEN_SECRET` out of source control and rotate regularly.
 2. Set `OTTO_EXTENSION_ORIGIN` in production to restrict browser node upgrades.

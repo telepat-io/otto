@@ -57,13 +57,18 @@ const config = {
           label: 'Docs'
         },
         {
-          to: '/cli-reference',
+          to: '/cli',
           label: 'CLI Reference',
           position: 'left'
         },
         {
           to: '/security',
           label: 'Technical',
+          position: 'left'
+        },
+        {
+          to: '/for-agents',
+          label: 'For Agents',
           position: 'left'
         },
         {
@@ -85,7 +90,7 @@ const config = {
             },
             {
               label: 'CLI Reference',
-              to: '/cli-reference'
+              to: '/cli'
             }
           ]
         },

@@ -1,54 +1,106 @@
+---
+title: requestId Correlation Runbook
+sidebar_position: 10
+description: Trace a failing Otto workflow across controller, relay, and extension node using requestId. Step-by-step procedure for log collection, stream path checks, and incident documentation.
+keywords:
+  - requestId
+  - log correlation
+  - debugging runbook
+  - otto logs
+  - incident response
+---
+
 # requestId Correlation Runbook
 
-Last Updated: 2026-04-14
-Owner: Platform
+Use this runbook to trace a failing workflow across controller, relay, and extension node by correlating on `requestId`. A single request ID spans all three components and is the most reliable way to isolate failure layer.
 
-Trace a failing workflow across controller, relay, and node by request id.
+## Before you start
+
+- Otto relay running and accessible.
+- Local dev log streaming enabled in extension options (for extension-originated events).
 
 ## Procedure
 
-1. Start all-source log follow.
+### Step 1: Start live log capture
 
 ```bash
 otto logs follow --source all
 ```
 
-2. Reproduce once and capture request id.
-3. Query recent logs and filter timeline for that id.
-4. Classify failure layer:
-- controller construction/retry behavior
-- relay auth/routing/queue decisions
-- node execution/listener behavior
+Leave this running in a separate terminal before reproducing the failure.
 
-## Stream path checks
+### Step 2: Reproduce the failure
 
-1. capture subscribe request id
-2. verify listener_update events correlate to subscribe id
-3. verify unsubscribe or command_cancel teardown
-
-## Incident summary template
-
-- request id
-- action + site command
-- target node + tab session
-- failing layer
-- error code
-- retryability
-- immediate fix
-- prevention follow-up
-
-## Quick commands
+Run the failing command. Use `--json` for machine-readable output:
 
 ```bash
-otto logs follow --source all
-otto logs follow --source node
+otto test reddit.com getChatMessages --json 2>&1 | tee /tmp/otto-test-output.txt
+```
+
+Capture the `requestId` from the output (look for `"requestId": "req_..."` in the result or error envelope).
+
+### Step 3: Query scoped log timeline
+
+```bash
+# Full timeline for this request across all sources
+otto logs list --request-id <requestId> --source all
+
+# Extension-side events only
 otto logs list --source node --latest 300
+```
+
+### Step 4: Classify the failure layer
+
+| Layer | Signals to look for |
+|---|---|
+| **Controller** | Request never left controller; token error before WebSocket auth |
+| **Relay** | `auth`, routing, ACL, or lock event in relay logs before node receives command |
+| **Node** | Command received by node; execution, site mismatch, or auth preflight failure |
+| **Stream** | Subscribe succeeded but no `listener_update` events; or teardown missing |
+
+### Stream path checks
+
+For stream failures specifically:
+
+1. Capture the **subscribe** `requestId` (separate from the stream command `requestId`).
+2. Verify `listener_update` events correlate to the subscribe `requestId`.
+3. Verify teardown was explicit: `listener.unsubscribe` or `command_cancel`.
+
+## Quick reference commands
+
+```bash
+# Live follow all sources
+otto logs follow --source all
+
+# Live follow extension-side only
+otto logs follow --source node
+
+# Bounded node evidence
+otto logs list --source node --latest 300
+
+# Stream test with follow window
 otto test reddit.com getChatMessages --stream-follow-ms 45000 --json
 ```
 
-## Related Docs
+## Incident summary template
 
-- docs/troubleshooting-advanced.md
-- docs/controller-troubleshooting-decision-tree.md
-- docs/error-codes.md
-- docs/snippets.md
+Fill this in before escalating:
+
+```
+requestId:         req_...
+action:            command.run / command.test
+site + command:    reddit.com / getChatMessages
+targetNodeId:      node_local_1
+tabSessionId:      ts_...
+failing layer:     relay / node / stream
+error code:        tab_busy / acl_missing_node_grant / ...
+retryable:         yes / no
+immediate fix:     retry with backoff / re-pair / refresh tokens
+prevention:        add bounded wait policy / fix token refresh lifecycle
+```
+
+## Next steps
+
+- [Advanced Troubleshooting](./troubleshooting-advanced.md) — error-to-action table.
+- [Controller Troubleshooting Decision Tree](./controller-troubleshooting-decision-tree.md) — layer-by-layer decision path.
+- [Error Codes](./error-codes.md) — full error code reference.

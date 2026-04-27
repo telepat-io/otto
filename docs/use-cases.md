@@ -1,35 +1,62 @@
+---
+title: Practical Use Cases
+sidebar_position: 7
+description: Common Otto automation workflows mapped to reliable command paths. Covers fresh setup, new command validation, stream testing, ACL grants, log correlation, and screenshots.
+keywords:
+  - use cases
+  - automation workflows
+  - command examples
+  - otto test
+  - stream testing
+---
+
 # Practical Use Cases
 
-Last Updated: 2026-04-14
-Owner: Platform
+This page maps common Otto automation workflows to the fastest reliable command paths. Use the scenario matrix to pick your flow, then follow the matching runbook.
 
-This page maps common Otto workflows to the fastest reliable command paths. Use the decision table first, then follow the scenario runbook section that matches your task.
+## Scenario matrix
 
-## Scenario Matrix
-
-| Scenario | Primary goal | First command |
-| --- | --- | --- |
+| Scenario | Primary goal | Starting command |
+|---|---|---|
 | First command on fresh setup | Confirm end-to-end connectivity | `otto commands list` |
 | Add and validate a new command | Verify metadata, execution, and tests | `otto test <site> <command>` |
 | Stream test and teardown | Confirm listener correlation and cancellation | `otto test <site> <streamCommand> --stream-follow-ms <ms> --json` |
 | ACL grant for controller client | Authorize node-targeted routing | `otto client register` + node grant flow |
 | requestId correlation | Trace one execution across all components | `otto logs list --request-id <id> --source all` |
+| Capture page screenshots | Get visual artifact from a managed tab | `otto cmd --action primitive.page.screenshot` |
 
-## 1) First Command on Fresh Setup
+## Use case 1: First command on fresh setup
 
-Use this flow when extension and relay are paired but you have not run a command yet. The sequence below validates pairing, command discovery, tab open, and site command execution.
+**Goal:** Validate end-to-end connectivity after installing Otto for the first time.
 
 ```bash
+# Confirm pending pairing codes from extension
 otto authcode
-otto pair <PAIRING_CODE>
+
+# Approve pairing code
+otto pair 123-456
+
+# Confirm node is connected and commands are visible
 otto commands list
+
+# Open a managed tab
 otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}'
-otto cmd --action command.run --payload '{"site":"reddit.com","command":"getFeed"}' --tab-session <TAB_SESSION_ID>
+
+# Run a site command (use tabSessionId from tab.open result)
+otto cmd --action command.run \
+  --payload '{"site":"reddit.com","command":"getFeed"}' \
+  --tab-session <tabSessionId>
 ```
 
-## 2) Add and Validate New Command
+**Verify:** `commands list` returns a JSON array. `command.run` returns `messageType: result` and exits with code `0`.
 
-Implement command module plus metadata, register it in the site bundle, then add tests for validation/auth/fallback behavior before running workspace checks.
+## Use case 2: Add and validate a new command
+
+**Goal:** Implement a new site command and confirm it passes all validation gates.
+
+1. Create the command module (see [Command Authoring](./command-authoring.md)).
+2. Register it in the site bundle index.
+3. Run workspace validation:
 
 ```bash
 npm run check
@@ -38,55 +65,87 @@ npm run build
 npm run -ws --if-present test
 ```
 
-## 3) Stream Test and Teardown
+4. Verify discovery and execution:
 
-Use this when validating listener manifests, stream follow behavior, and cancellation teardown semantics.
+```bash
+otto commands list --site example.com
+otto test example.com getItems
+otto test example.com getItems --payload '{"limit": 5}'
+```
+
+## Use case 3: Stream test and teardown
+
+**Goal:** Validate listener manifests, stream follow behavior, and cancellation teardown semantics.
 
 ```bash
 otto test reddit.com getChatMessages --stream-follow-ms 45000 --json
 ```
 
-Expected: listener updates correlate by subscribe request id; Ctrl+C triggers stream cancel and cleanup.
+**Expected:** Listener updates correlate by subscribe `requestId`. Ctrl+C triggers `command_cancel` and closes the auto-opened tab.
 
-## 4) ACL Grant for Controller Client
-
-Controller registration and token exchange can succeed without node routing access. Node-owned ACL grant is the final gate for node-targeted commands.
-
-HTTP order is:
-
-1. POST /api/controller/register
-2. POST /api/controller/token
-3. POST /api/controller/access
-
-Without grant, command routing fails with `acl_missing_node_grant`.
-
-## 5) requestId Log Correlation
-
-For cross-component debugging, capture one request id and stay scoped to that id before widening to global logs.
+For raw listener validation before debugging command plumbing:
 
 ```bash
+otto listener subscribe-network \
+  --tab-session <tabSessionId> \
+  --site reddit.com \
+  --pattern 'https://matrix.redditspace.com/_matrix/client/v3/*' \
+  --mode network \
+  --max-body-bytes 200000
+```
+
+## Use case 4: ACL grant for a controller client
+
+**Goal:** Authorize a registered controller client to route commands to a node.
+
+Controller registration and token exchange succeed before node routing access is granted. The node-owned ACL grant is the final gate for node-targeted commands.
+
+```bash
+# 1. Register client
+otto client register --name "automation-worker"
+
+# 2. Issue tokens
+otto client login
+
+# 3. Grant from node via relay ACL endpoint
+# POST /api/controller/access  (node bearer token required)
+```
+
+Without the grant, command routing fails with `acl_missing_node_grant`.
+
+## Use case 5: requestId log correlation
+
+**Goal:** Trace a failing request across controller, relay, and extension node.
+
+```bash
+# Start live log follow for all sources
 otto logs follow --source all
+
+# In another terminal, reproduce the failure
+otto test reddit.com getChatMessages --json 2>&1 | grep requestId
+
+# Query bounded node evidence scoped to that requestId
 otto logs list --source node --latest 300
 ```
 
-Use one request id to trace controller, relay, and node behavior.
+See [requestId Correlation Runbook](./requestid-correlation-runbook.md) for a step-by-step procedure.
 
-## 6) Capture Page Screenshots
+## Use case 6: Capture page screenshots
 
-Use primitive screenshot actions when controllers need a visual artifact in a terminal result payload.
+**Goal:** Get a visual artifact from a managed tab as part of an automation workflow.
 
 ```bash
-otto cmd --action primitive.page.screenshot --payload '{"tabSessionId":"<TAB_SESSION_ID>","mode":"viewport","format":"png"}'
-otto cmd --action primitive.page.screenshot --payload '{"url":"https://example.com","mode":"full_page","format":"jpeg","quality":85,"maxBytes":1200000}'
+# Screenshot of current viewport
+otto cmd --action primitive.page.screenshot \
+  --payload '{"tabSessionId":"<tabSessionId>","mode":"viewport","format":"png"}'
+
+# Full-page screenshot from a URL (auto-opens and closes a background tab)
+otto cmd --action primitive.page.screenshot \
+  --payload '{"url":"https://example.com","mode":"full_page","format":"jpeg","quality":85,"maxBytes":1200000}'
 ```
 
-`mode=full_page` uses CDP capture; URL-targeted requests auto-open and auto-close a temporary background tab.
+## Next steps
 
-## Related Docs
-
-- docs/command-authoring.md
-- docs/controller-implementation.md
-- docs/agent-automation.md
-- docs/listener-development.md
-- docs/troubleshooting-advanced.md
-- docs/snippets.md
+- [Command Authoring](./command-authoring.md) — add a new site command.
+- [Advanced Troubleshooting](./troubleshooting-advanced.md) — debug failures across components.
+- [Reusable Snippets](./snippets.md) — copy-paste curl and WebSocket examples.

@@ -1,6 +1,12 @@
 ---
 title: Releasing and Docs Deploy
 sidebar_position: 2
+description: How to build and deploy the Otto docs site, release packages via Release Please, and deploy extension assets.
+keywords:
+  - releasing
+  - docs deploy
+  - release please
+  - GitHub Pages
 ---
 
 ## Build docs locally

@@ -15,13 +15,12 @@ module.exports = {
         'architecture',
         'pairing-auth',
         'command-authoring',
+        'command-authoring-templates',
         'controller-implementation',
-        'agent-automation',
         'listener-development',
         'use-cases',
         'troubleshooting-advanced',
         'controller-troubleshooting-decision-tree',
-        'command-authoring-templates',
         'requestid-correlation-runbook'
       ]
     },
@@ -29,11 +28,26 @@ module.exports = {
       type: 'category',
       label: 'Reference',
       items: [
-        'cli-reference',
+        {
+          type: 'category',
+          label: 'CLI Reference',
+          collapsed: false,
+          items: [
+            'cli/index',
+            'cli/start',
+            'cli/setup',
+            'cli/config',
+            'cli/extension',
+            'cli/pairing',
+            'cli/client',
+            'cli/commands',
+            'cli/logs',
+            'cli/listener'
+          ]
+        },
         'error-codes',
         'configuration',
         'relay-api',
-        'snippets',
         'protocol',
         'commands',
         'extension-runtime',
@@ -41,6 +55,7 @@ module.exports = {
         'logging-debugging',
         'tab-lock-model',
         'tab-management',
+        'snippets',
         'faq'
       ]
     },
@@ -53,6 +68,14 @@ module.exports = {
       type: 'category',
       label: 'Contributing',
       items: ['development', 'releasing-and-docs-deploy']
+    },
+    {
+      type: 'category',
+      label: 'For Agents',
+      items: [
+        'for-agents/index',
+        'for-agents/automation-guide'
+      ]
     }
   ]
 };

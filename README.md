@@ -1,10 +1,31 @@
-# Otto - Secure Browser Automation
+# Otto
 
-Otto is a secure remote browser automation platform with three runtime components:
+[![npm](https://img.shields.io/npm/v/@telepat/otto)](https://www.npmjs.com/package/@telepat/otto)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/telepat-io/otto/actions/workflows/ci.yml/badge.svg)](https://github.com/telepat-io/otto/actions/workflows/ci.yml)
 
-- `@telepat/otto` CLI controller
-- `@telepat/otto-relay` relay daemon
-- `@telepat/otto-extension` browser node (Chrome extension via WXT)
+Secure, debuggable remote browser automation — relay daemon, Chrome extension node, and CLI controller in one monorepo.
+
+## How it works
+
+```
+Controller (otto CLI / script)
+        |  WebSocket (authenticated)
+        v
+  Relay daemon  (:8787)
+        |  WebSocket (authenticated, node)
+        v
+  Extension node (Chrome)
+        |  chrome.tabs / chrome.scripting
+        v
+  Browser tab (managed, site-scoped)
+```
+
+Three runtime components:
+
+- `@telepat/otto` — CLI controller
+- `@telepat/otto-relay` — relay daemon
+- `@telepat/otto-extension` — browser node (Chrome extension via WXT)
 
 ## Architecture
 
