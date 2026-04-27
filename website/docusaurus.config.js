@@ -16,6 +16,14 @@ const config = {
   deploymentBranch: process.env.GH_PAGES_BRANCH || 'gh-pages',
   trailingSlash: false,
   onBrokenLinks: 'throw',
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en', 'zh-CN'],
+    localeConfigs: {
+      en: { label: 'English' },
+      'zh-CN': { label: '简体中文' }
+    }
+  },
   markdown: {
     hooks: {
       onBrokenMarkdownLinks: 'throw'
@@ -74,6 +82,10 @@ const config = {
         {
           href: `https://github.com/${githubOwner}/${githubRepo}`,
           label: 'GitHub',
+          position: 'right'
+        },
+        {
+          type: 'localeDropdown',
           position: 'right'
         }
       ]
