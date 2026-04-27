@@ -1,6 +1,6 @@
 # Otto
 
-**[English](README.md) | [简体中文](README.zh-CN.md)**
+**�🇸 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md)**
 
 [![npm](https://img.shields.io/npm/v/@telepat/otto)](https://www.npmjs.com/package/@telepat/otto)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -29,7 +29,7 @@
 - `@telepat/otto-relay` — 中继守护进程
 - `@telepat/otto-extension` — 浏览器节点（通过 WXT 构建的 Chrome 扩展）
 
-## 架构
+## [架构](https://docs.telepat.io/otto/overview)
 
 1. 控制器通过 WebSocket 向中继发送命令信封。
 2. 中继进行身份验证、按操作范围授权，并根据 `targetNodeId` 进行路由。
@@ -44,6 +44,8 @@
 - 敏感字段在日志持久化和流传输前会被脱敏处理。
 
 ## 快速开始
+
+> 📖 [安装指南](https://docs.telepat.io/otto/installation) · [快速入门](https://docs.telepat.io/otto/quickstart)
 
 ### 全局安装路径（终端用户）
 
@@ -216,6 +218,8 @@ node packages/cli/dist/index.js logs follow
 
 ## 安装与设置命令
 
+完整 CLI 参考：[docs.telepat.io/otto/cli](https://docs.telepat.io/otto/cli)
+
 - `otto start`
   - 未运行时以守护进程模式启动中继。
   - 若中继已在运行，打印现有 pid 和日志路径。
@@ -279,7 +283,7 @@ CI/CD 与发布渠道：
 
 - npm 发布无需密钥。发布工作流通过 GitHub Actions OIDC（`id-token: write`）使用 npm 可信发布，因此包发布在 npm 端授权，而非通过仓库令牌。
 
-## 命令框架
+## [命令框架](https://docs.telepat.io/otto/commands)
 
 命令模型：
 
@@ -327,7 +331,7 @@ npm run -ws --if-present test
 
 ## 文档站点
 
-Otto 文档站使用位于 `website/` 的 Docusaurus，读取仓库根目录 `docs/` 中的规范内容。
+Otto 文档在线地址：[docs.telepat.io/otto](https://docs.telepat.io/otto/)。站点使用位于 `website/` 的 Docusaurus，读取仓库根目录 `docs/` 中的规范内容。
 
 本地运行：
 
@@ -351,11 +355,14 @@ npm run docs:serve
 
 ## 参考文档
 
-- 架构：`docs/overview.md`
-- 协议：`docs/protocol.md`
-- 配对与认证：`docs/pairing-auth.md`
-- 扩展运行时：`docs/extension-runtime.md`
-- 命令：`docs/commands.md`
-- 中继运维：`docs/relay-operations.md`
-- 安全：`docs/security.md`
-- 测试：`docs/testing.md`
+- [架构](https://docs.telepat.io/otto/overview)
+- [协议](https://docs.telepat.io/otto/protocol)
+- [配对与认证](https://docs.telepat.io/otto/pairing-auth)
+- [扩展运行时](https://docs.telepat.io/otto/extension-runtime)
+- [命令](https://docs.telepat.io/otto/commands)
+- [中继运维](https://docs.telepat.io/otto/relay-operations)
+- [安全](https://docs.telepat.io/otto/security)
+- [测试](https://docs.telepat.io/otto/testing)
+- [CLI 参考](https://docs.telepat.io/otto/cli)
+- [配置](https://docs.telepat.io/otto/configuration)
+- [开发指南](https://docs.telepat.io/otto/development)

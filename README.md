@@ -1,6 +1,6 @@
 # Otto
 
-**[English](README.md) | [简体中文](README.zh-CN.md)**
+**�🇸 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md)**
 
 [![npm](https://img.shields.io/npm/v/@telepat/otto)](https://www.npmjs.com/package/@telepat/otto)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -29,7 +29,7 @@ Three runtime components:
 - `@telepat/otto-relay` — relay daemon
 - `@telepat/otto-extension` — browser node (Chrome extension via WXT)
 
-## Architecture
+## [Architecture](https://docs.telepat.io/otto/overview)
 
 1. Controller sends command envelopes over WebSocket to relay.
 2. Relay authenticates, authorizes by action scope, and routes by `targetNodeId`.
@@ -44,6 +44,8 @@ Execution guarantees:
 - Sensitive fields are redacted before log persistence and streaming.
 
 ## Quick Start
+
+> 📖 [Installation guide](https://docs.telepat.io/otto/installation) · [Quickstart walkthrough](https://docs.telepat.io/otto/quickstart)
 
 ### Global Install Path (End Users)
 
@@ -216,6 +218,8 @@ node packages/cli/dist/index.js logs follow
 
 ## Setup and Settings Commands
 
+Full CLI reference: [docs.telepat.io/otto/cli](https://docs.telepat.io/otto/cli)
+
 - `otto start`
 - Starts relay in daemon mode when not already running.
 - If relay is already running, prints the existing pid and log path.
@@ -279,7 +283,7 @@ Required repository secrets:
 
 - None for npm publish. The release workflow uses npm trusted publishing via GitHub Actions OIDC (`id-token: write`), so package publishing is authorized in npm rather than by a repository token.
 
-## Command Framework
+## [Command Framework](https://docs.telepat.io/otto/commands)
 
 Command model:
 
@@ -327,7 +331,7 @@ npm run -ws --if-present test
 
 ## Docs Site
 
-Otto docs site uses Docusaurus in `website/` and reads canonical content from `docs/` at repository root.
+Otto docs live at [docs.telepat.io/otto](https://docs.telepat.io/otto/). The site uses Docusaurus in `website/` and reads canonical content from `docs/` at repository root.
 
 Run locally:
 
@@ -351,11 +355,14 @@ Deployment defaults:
 
 ## Reference Docs
 
-- Architecture: `docs/overview.md`
-- Protocol: `docs/protocol.md`
-- Pairing and auth: `docs/pairing-auth.md`
-- Extension runtime: `docs/extension-runtime.md`
-- Commands: `docs/commands.md`
-- Relay ops: `docs/relay-operations.md`
-- Security: `docs/security.md`
-- Testing: `docs/testing.md`
+- [Architecture](https://docs.telepat.io/otto/overview)
+- [Protocol](https://docs.telepat.io/otto/protocol)
+- [Pairing and auth](https://docs.telepat.io/otto/pairing-auth)
+- [Extension runtime](https://docs.telepat.io/otto/extension-runtime)
+- [Commands](https://docs.telepat.io/otto/commands)
+- [Relay operations](https://docs.telepat.io/otto/relay-operations)
+- [Security](https://docs.telepat.io/otto/security)
+- [Testing](https://docs.telepat.io/otto/testing)
+- [CLI reference](https://docs.telepat.io/otto/cli)
+- [Configuration](https://docs.telepat.io/otto/configuration)
+- [Development](https://docs.telepat.io/otto/development)
