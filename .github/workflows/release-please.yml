@@ -129,6 +129,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build shared protocol
+        run: npm run --workspace @telepat/otto-protocol build
+
       - name: Extension quality gates
         run: |
           npm run --workspace @telepat/otto-extension check
