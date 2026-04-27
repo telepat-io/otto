@@ -1,6 +1,6 @@
 # Otto
 
-**�🇸 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md)**
+**🇺🇸 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md)**
 
 [![npm](https://img.shields.io/npm/v/@telepat/otto)](https://www.npmjs.com/package/@telepat/otto)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
