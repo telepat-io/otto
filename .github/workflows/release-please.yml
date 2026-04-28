@@ -47,6 +47,7 @@ jobs:
           set -uo pipefail
 
           REPO="${{ github.repository }}"
+          RECONCILED_TAG=""
 
           echo "::group::Find merged autorelease: pending PRs"
           PENDING_PRS=$(gh pr list \
@@ -63,7 +64,7 @@ jobs:
             exit 0
           fi
 
-          echo "$PENDING_PRS" | while read -r pr_info; do
+          while IFS= read -r pr_info; do
             if [ -z "$pr_info" ]; then
               continue
             fi
@@ -97,7 +98,7 @@ jobs:
               echo "  GitHub release for $TAG already exists"
             else
               echo "  Creating GitHub release for $TAG"
-              BODY=$(git show "$MERGE_SHA:CHANGELOG.md" 2>/dev/null | sed -n "/^\#\# \[${EXTRACTED_VERSION}\]/,/^\#\# \[/p" | head -n -1 || echo "Release ${TAG}")
+              BODY=$(git show "$MERGE_SHA:CHANGELOG.md" 2>/dev/null | awk "/^## \[${EXTRACTED_VERSION}\]/{found=1} found && /^## \[/{if(!first){first=1; next}} found{print}" | awk 'NR>1' || echo "Release ${TAG}")
               gh release create "$TAG" --repo "$REPO" --target "$MERGE_SHA" --title "$TAG" --notes "$BODY"
               echo "  GitHub release for $TAG created"
             fi
@@ -107,8 +108,10 @@ jobs:
             echo "  Adding autorelease: tagged label to PR #$PR_NUMBER"
             gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label 'autorelease: tagged' || true
 
-            echo "tag_name=$TAG" >> "$GITHUB_OUTPUT"
-          done
+            RECONCILED_TAG="$TAG"
+          done <<< "$PENDING_PRS"
+
+          echo "tag_name=$RECONCILED_TAG" >> "$GITHUB_OUTPUT"
 
   determine-release-tag:
     name: Determine release tag for downstream jobs
