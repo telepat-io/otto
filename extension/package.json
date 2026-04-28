@@ -1,6 +1,6 @@
 {
   "name": "@telepat/otto-extension",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "private": true,
   "type": "module",
@@ -22,7 +22,7 @@
     "lint": "eslint \"entrypoints/**/*.ts\" \"src/**/*.ts\" \"test/**/*.ts\" \"wxt.config.ts\" --max-warnings 0"
   },
   "dependencies": {
-    "@telepat/otto-protocol": "0.8.2",
+    "@telepat/otto-protocol": "0.8.3",
     "nanoid": "^5.1.6"
   },
   "devDependencies": {

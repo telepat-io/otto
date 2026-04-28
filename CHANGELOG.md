@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.3](https://github.com/telepat-io/otto/compare/v0.8.2...v0.8.3) (2026-04-28)
+
+
+### Bug Fixes
+
+* add release reconciliation step to ensure merged release PRs always get tagged ([ce8588c](https://github.com/telepat-io/otto/commit/ce8588cce880f24b3b5aa963dd05013a718e2c60))
+* use heredoc loop in reconcile step to preserve GITHUB_OUTPUT ([ac8c118](https://github.com/telepat-io/otto/commit/ac8c118e293c583e1262dac62aa494892f59f62f))
+
 ## [0.8.2](https://github.com/telepat-io/otto/compare/v0.8.1...v0.8.2) (2026-04-28)
 
 
