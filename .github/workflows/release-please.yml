@@ -54,7 +54,7 @@ jobs:
             --repo "$REPO" \
             --state merged \
             --label 'autorelease: pending' \
-            --json number,title,mergeCommit \
+            --json number,title,body,mergeCommit \
             --jq '.[]' 2>/dev/null || true)
           echo "::endgroup::"
 
@@ -71,13 +71,17 @@ jobs:
 
             PR_NUMBER=$(echo "$pr_info" | jq -r '.number')
             PR_TITLE=$(echo "$pr_info" | jq -r '.title')
+            PR_BODY=$(echo "$pr_info" | jq -r '.body // empty')
             MERGE_SHA=$(echo "$pr_info" | jq -r '.mergeCommit.oid // .mergeCommit // empty')
 
             echo "Processing PR #$PR_NUMBER: $PR_TITLE (merge: ${MERGE_SHA:0:12})"
 
             EXTRACTED_VERSION=$(echo "$PR_TITLE" | grep -oP '\d+\.\d+\.\d+' | head -1 || true)
             if [ -z "$EXTRACTED_VERSION" ]; then
-              echo "  Could not extract version from PR title, skipping"
+              EXTRACTED_VERSION=$(echo "$PR_BODY" | grep -oP '\d+\.\d+\.\d+' | head -1 || true)
+            fi
+            if [ -z "$EXTRACTED_VERSION" ]; then
+              echo "  Could not extract version from PR title or body, skipping"
               continue
             fi
 
@@ -98,7 +102,7 @@ jobs:
               echo "  GitHub release for $TAG already exists"
             else
               echo "  Creating GitHub release for $TAG"
-              BODY=$(git show "$MERGE_SHA:CHANGELOG.md" 2>/dev/null | awk "/^## \[${EXTRACTED_VERSION}\]/{found=1} found && /^## \[/{if(!first){first=1; next}} found{print}" | awk 'NR>1' || echo "Release ${TAG}")
+              BODY=$(git show "$MERGE_SHA:CHANGELOG.md" 2>/dev/null | awk "/^## \\[${EXTRACTED_VERSION}\]/{found=1} found{print}" | awk 'NR>1 && /^## \[/{exit} {print}' || echo "Release ${TAG}")
               gh release create "$TAG" --repo "$REPO" --target "$MERGE_SHA" --title "$TAG" --notes "$BODY"
               echo "  GitHub release for $TAG created"
             fi
