@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/telepat-io/otto/compare/v0.8.1...v0.8.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* read CLI version from package.json instead of hardcoded 0.2.0 ([c91a703](https://github.com/telepat-io/otto/commit/c91a7030dcaea8d343c76c2a638ec8b86fedabf5))
+
 ## [0.8.1](https://github.com/telepat-io/otto/compare/v0.8.0...v0.8.1) (2026-04-28)
 
 
