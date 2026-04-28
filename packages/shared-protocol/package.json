@@ -1,6 +1,6 @@
 {
   "name": "@telepat/otto-protocol",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "type": "module",
   "main": "dist/index.js",

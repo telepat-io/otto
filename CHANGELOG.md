@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/telepat-io/otto/compare/v0.8.3...v0.8.4) (2026-04-28)
+
+
+### Bug Fixes
+
+* extract version from release PR body when title lacks semver ([e74121d](https://github.com/telepat-io/otto/commit/e74121d39dcd23690e777c8a9214c03a58feed6e))
+
 ## [0.8.3](https://github.com/telepat-io/otto/compare/v0.8.2...v0.8.3) (2026-04-28)
 
 
