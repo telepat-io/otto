@@ -1,4 +1,8 @@
-# Otto**🇺🇸 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md)**
+<p align="center"><img src="./otto.webp" width="128" alt="Otto"></p>
+<h1 align="center">Otto</h1>
+<p align="center"><em>The hands that move the web.</em></p>
+
+🇺🇸 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md)
 
 [![npm](https://img.shields.io/npm/v/@telepat/otto)](https://www.npmjs.com/package/@telepat/otto)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
