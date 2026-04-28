@@ -110,7 +110,6 @@ jobs:
     if: needs.release-please.outputs.cli_release_created == 'true'
     needs:
       - release-please
-      - publish-packages
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -153,13 +152,14 @@ jobs:
           ZIP_NAME="otto-extension-${VERSION}-chrome-mv3.zip"
           CHECKSUM_NAME="${ZIP_NAME}.sha256"
 
-          mapfile -t ZIP_FILES < <(find extension -type f -name '*.zip')
-          if [ "${#ZIP_FILES[@]}" -eq 0 ]; then
-            echo "No extension zip artifact found after wxt zip"
+          mapfile -t ZIP_FILES < <(find extension/output -type f -name '*.zip' | head -1)
+          if [ "${#ZIP_FILES[@]}" -eq 0 ] || [ -z "${ZIP_FILES[0]}" ]; then
+            echo "No extension zip artifact found in extension/output after wxt zip"
             exit 1
           fi
 
           cp "${ZIP_FILES[0]}" "$ZIP_NAME"
+          echo "Copied source zip: ${ZIP_FILES[0]} → ${ZIP_NAME}"
           shasum -a 256 "$ZIP_NAME" > "$CHECKSUM_NAME"
 
           echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
@@ -174,3 +174,24 @@ jobs:
             "${{ steps.prep.outputs.zip_name }}" \
             "${{ steps.prep.outputs.checksum_name }}" \
             --clobber
+
+      - name: Verify assets attached
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.cli_tag_name }}
+        run: |
+          ASSETS_JSON=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+          echo "Release assets:"
+          echo "$ASSETS_JSON"
+
+          if ! echo "$ASSETS_JSON" | grep -qF "${{ steps.prep.outputs.zip_name }}"; then
+            echo "FAIL: extension zip not found in release assets"
+            exit 1
+          fi
+
+          if ! echo "$ASSETS_JSON" | grep -qF "${{ steps.prep.outputs.checksum_name }}"; then
+            echo "FAIL: extension checksum not found in release assets"
+            exit 1
+          fi
+
+          echo "Both extension assets confirmed in release"
