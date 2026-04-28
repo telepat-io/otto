@@ -69,15 +69,14 @@ jobs:
           RELAY_VERSION=$(node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('packages/relay/package.json','utf8')); process.stdout.write(pkg.version);")
           PROTOCOL_VERSION=$(node -e "const fs=require('node:fs'); const pkg=JSON.parse(fs.readFileSync('packages/shared-protocol/package.json','utf8')); process.stdout.write(pkg.version);")
 
-          if [ "$CLI_VERSION" != "$RELEASE_VERSION" ]; then
-            echo "CLI package version ($CLI_VERSION) does not match release tag version ($RELEASE_VERSION)"
-            exit 1
-          fi
+          for pkg in CLI RELAY PROTOCOL; do
+            ver_var="${pkg}_VERSION"
+            if [ "${!ver_var}" != "$RELEASE_VERSION" ]; then
+              echo "$pkg package version (${!ver_var}) does not match release tag version ($RELEASE_VERSION)"
+              exit 1
+            fi
+          done
 
-          # Relay and protocol may legitimately be ahead of the CLI tag version when
-          # the linked-versions plugin bumps them independently (e.g. a minor-only
-          # change in relay while CLI only has a patch fix). Log them for transparency
-          # but do not fail the release - each package publishes its own declared version.
           echo "Release tag: $RELEASE_TAG (CLI: $CLI_VERSION, relay: $RELAY_VERSION, protocol: $PROTOCOL_VERSION)"
 
       - name: Install dependencies
