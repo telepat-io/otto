@@ -1,6 +1,6 @@
 {
   "name": "@telepat/otto-relay",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "type": "module",
   "main": "dist/index.js",
