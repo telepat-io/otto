@@ -91,17 +91,14 @@ jobs:
             if git tag -l "$TAG" | grep -q .; then
               echo "  Tag $TAG already exists"
             else
-              echo "  Tag $TAG not found, creating on merge commit $MERGE_SHA"
-              git tag -a "$TAG" "$MERGE_SHA" -m "$TAG"
-              git push origin "$TAG"
-              echo "  Tag $TAG created and pushed"
+              echo "  Tag $TAG not found, will be created by GitHub release"
             fi
 
             RELEASE_EXISTS=$(gh release view "$TAG" --repo "$REPO" --json tagName --jq '.tagName' 2>/dev/null || true)
             if [ "$RELEASE_EXISTS" = "$TAG" ]; then
               echo "  GitHub release for $TAG already exists"
             else
-              echo "  Creating GitHub release for $TAG"
+              echo "  Creating GitHub release for $TAG (creates tag automatically)"
               BODY=$(git show "$MERGE_SHA:CHANGELOG.md" 2>/dev/null | awk "/^## \\[${EXTRACTED_VERSION}\]/{found=1} found{print}" | awk 'NR>1 && /^## \[/{exit} {print}' || echo "Release ${TAG}")
               gh release create "$TAG" --repo "$REPO" --target "$MERGE_SHA" --title "$TAG" --notes "$BODY"
               echo "  GitHub release for $TAG created"
