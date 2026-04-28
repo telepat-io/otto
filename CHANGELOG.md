@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.5](https://github.com/telepat-io/otto/compare/v0.8.4...v0.8.5) (2026-04-28)
+
+
+### Bug Fixes
+
+* determine-release-tag falls back to manifest version when release-please skips creation ([64076fa](https://github.com/telepat-io/otto/commit/64076fa6809c4e3e69186e011e3fabc72ddb73fe))
+* use gh release create for tag creation instead of git tag in reconcile ([84e5a9a](https://github.com/telepat-io/otto/commit/84e5a9a56b835990ce19deda1c7f804b9aed7411))
+
 ## [0.8.4](https://github.com/telepat-io/otto/compare/v0.8.3...v0.8.4) (2026-04-28)
 
 
