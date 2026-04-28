@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { Command } from 'commander';
@@ -1093,8 +1094,10 @@ async function subscribeNetworkListenerAndFollow(
   });
 }
 
+const cliRequire = createRequire(import.meta.url);
+const cliPkg = cliRequire('../package.json') as { version: string };
 const program = new Command();
-program.name('otto').description('Otto CLI').version('0.2.0');
+program.name('otto').description('Otto CLI').version(cliPkg.version);
 
 program
   .command('start')
@@ -1204,7 +1207,7 @@ program
   .option('--non-interactive', 'Skip interactive prompts and emit deterministic output', false)
   .action(async (opts) => {
     const config = loadConfig();
-    const cliVersion = program.version() ?? '0.2.0';
+    const cliVersion = program.version()!;
     const interactiveAllowed = process.stdout.isTTY && process.stdin.isTTY;
     const explicitNonInteractive = Boolean(opts.nonInteractive);
     const nonInteractive = shouldRunSetupNonInteractive(interactiveAllowed, explicitNonInteractive);
@@ -1326,7 +1329,7 @@ extension
   .option('--download-timeout-ms <ms>', 'Download timeout in milliseconds')
   .action(async (opts) => {
     const config = loadConfig();
-    const cliVersion = program.version() ?? '0.2.0';
+    const cliVersion = program.version()!;
 
     const install = await installExtensionArtifact({
       version: cliVersion,

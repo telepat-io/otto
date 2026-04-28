@@ -159,7 +159,7 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
     .option('--non-interactive', 'Skip interactive prompts and emit deterministic output', false)
     .action(async (opts) => {
       const config = deps.loadConfig();
-      const cliVersion = program.version() ?? '0.2.0';
+      const cliVersion = program.version()!;
       const interactiveAllowed = process.stdout.isTTY && process.stdin.isTTY;
       const explicitNonInteractive = Boolean(opts.nonInteractive);
       const nonInteractive = deps.shouldRunSetupNonInteractive(interactiveAllowed, explicitNonInteractive);
@@ -281,7 +281,7 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
     .option('--download-timeout-ms <ms>', 'Download timeout in milliseconds')
     .action(async (opts) => {
       const config = deps.loadConfig();
-      const cliVersion = program.version() ?? '0.2.0';
+      const cliVersion = program.version()!;
 
       const install = await deps.installExtensionArtifact({
         version: cliVersion,
