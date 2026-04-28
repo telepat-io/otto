@@ -4,7 +4,6 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "component": "otto",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
       "extra-files": [
