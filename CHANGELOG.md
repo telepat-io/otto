@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/telepat-io/otto/compare/v0.8.0...v0.8.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* add internal dep versions to extra-files and use npm install in release jobs ([b7de6f7](https://github.com/telepat-io/otto/commit/b7de6f76db24cf8a3e7a366b196309201d6388fc))
+* trim leading whitespace in README ([65df894](https://github.com/telepat-io/otto/commit/65df89440eb07d2af58a503345221795bc9ae3f5))
+
 ## [0.8.0](https://github.com/telepat-io/otto/compare/v0.7.0...v0.8.0) (2026-04-28)
 
 

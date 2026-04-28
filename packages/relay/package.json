@@ -1,6 +1,6 @@
 {
   "name": "@telepat/otto-relay",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "type": "module",
   "main": "dist/index.js",
@@ -26,7 +26,7 @@
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.mjs\" \"scripts/**/*.mjs\" --max-warnings 0"
   },
   "dependencies": {
-    "@telepat/otto-protocol": "0.7.0",
+    "@telepat/otto-protocol": "0.8.1",
     "jose": "^5.9.6",
     "nanoid": "^5.1.6",
     "ws": "^8.18.3",
