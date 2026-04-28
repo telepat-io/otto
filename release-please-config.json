@@ -9,13 +9,13 @@
       "include-component-in-tag": false,
       "include-v-in-tag": true,
       "extra-files": [
-        "packages/cli/.version",
-        "packages/relay/.version",
-        "packages/shared-protocol/.version",
-        "extension/.version",
-        {"type": "json", "path": "packages/relay/package.json", "jsonpath": "$.version"},
-        {"type": "json", "path": "packages/shared-protocol/package.json", "jsonpath": "$.version"},
-        {"type": "json", "path": "extension/package.json", "jsonpath": "$.version"}
+        ".version",
+        "../relay/.version",
+        "../shared-protocol/.version",
+        "../../extension/.version",
+        {"type": "json", "path": "../relay/package.json", "jsonpath": "$.version"},
+        {"type": "json", "path": "../shared-protocol/package.json", "jsonpath": "$.version"},
+        {"type": "json", "path": "../../extension/package.json", "jsonpath": "$.version"}
       ]
     }
   }
