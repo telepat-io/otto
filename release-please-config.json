@@ -2,20 +2,20 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "separate-pull-requests": false,
   "packages": {
-    "packages/cli": {
+    ".": {
       "release-type": "node",
-      "package-name": "@telepat/otto",
-      "component": "cli",
+      "component": "otto",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
       "extra-files": [
-        ".version",
-        "../relay/.version",
-        "../shared-protocol/.version",
-        "../../extension/.version",
-        {"type": "json", "path": "../relay/package.json", "jsonpath": "$.version"},
-        {"type": "json", "path": "../shared-protocol/package.json", "jsonpath": "$.version"},
-        {"type": "json", "path": "../../extension/package.json", "jsonpath": "$.version"}
+        {"type": "json", "path": "packages/cli/package.json", "jsonpath": "$.version"},
+        {"type": "json", "path": "packages/relay/package.json", "jsonpath": "$.version"},
+        {"type": "json", "path": "packages/shared-protocol/package.json", "jsonpath": "$.version"},
+        {"type": "json", "path": "extension/package.json", "jsonpath": "$.version"},
+        "packages/cli/.version",
+        "packages/relay/.version",
+        "packages/shared-protocol/.version",
+        "extension/.version"
       ]
     }
   }

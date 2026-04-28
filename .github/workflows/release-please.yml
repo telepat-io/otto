@@ -22,8 +22,8 @@ jobs:
       pull-requests: write
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
-      cli_release_created: ${{ steps.release.outputs['packages/cli--release_created'] }}
-      cli_tag_name: ${{ steps.release.outputs['packages/cli--tag_name'] }}
+      cli_release_created: ${{ steps.release.outputs['.--release_created'] }}
+      cli_tag_name: ${{ steps.release.outputs['.--tag_name'] }}
     steps:
       - id: release
         name: Run release-please
