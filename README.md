@@ -1,5 +1,6 @@
 <p align="center"><img src="./otto-logo.webp" width="128" alt="Otto"></p>
 <h1 align="center">Otto</h1>
+<hr>
 <p align="center"><em>The hands that move the web.</em></p>
 
 <p align="center">
@@ -9,15 +10,66 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/telepat-io/otto/actions/workflows/ci.yml"><img src="https://github.com/telepat-io/otto/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/telepat-io/otto/actions/workflows/ci.yml"><img src="https://github.com/telepat-io/otto/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build"></a>
   <a href="https://codecov.io/gh/telepat-io/otto"><img src="https://codecov.io/gh/telepat-io/otto/graph/badge.svg" alt="Codecov"></a>
   <a href="https://www.npmjs.com/package/@telepat/otto"><img src="https://img.shields.io/npm/v/@telepat/otto" alt="npm"></a>
   <a href="https://github.com/telepat-io/otto/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License"></a>
 </p>
 
-Secure, debuggable remote browser automation — relay daemon, Chrome extension node, and CLI controller in one monorepo.
+Otto is secure, debuggable remote browser automation. A controller sends commands over WebSocket to a relay daemon, which routes them to a browser extension node that executes actions on real tabs.
 
-## How it works
+## What It Solves
+
+Otto lets you automate and test web workflows without hosting your own browser farm.
+
+- Run commands on real browser tabs from a local CLI or script.
+- Scale from one-off tasks to scheduled monitoring with the same interface.
+- Debug via live logs and replay-protected execution.
+- Build site-scoped command bundles for repeatable automation on any domain.
+
+Typical use cases include end-to-end testing, social listening, content moderation, and any workflow that needs a real browser context.
+
+## Quick Start
+
+Requirements: Node.js 20+, Chrome, and an npm installation.
+
+1. Install the CLI globally:
+
+```bash
+npm install -g @telepat/otto
+```
+
+2. Run guided setup:
+
+```bash
+otto setup
+```
+
+3. Load the unpacked extension into Chrome (the exact path is printed by `otto setup`).
+
+4. Register a controller identity:
+
+```bash
+otto client register --name "my-laptop" --description "Local controller"
+otto client login
+```
+
+5. Verify the stack:
+
+```bash
+otto commands list
+```
+
+For the full walkthrough, see the [Installation](https://docs.telepat.io/otto/installation) and [Quickstart](https://docs.telepat.io/otto/quickstart) guides.
+
+## Requirements
+
+- Node.js 20+
+- npm 10+
+- Chrome (latest stable)
+- macOS, Linux, or Windows
+
+## How It Works
 
 ```
 Controller (otto CLI / script)
@@ -32,14 +84,6 @@ Controller (otto CLI / script)
   Browser tab (managed, site-scoped)
 ```
 
-Three runtime components:
-
-- `@telepat/otto` — CLI controller
-- `@telepat/otto-relay` — relay daemon
-- `@telepat/otto-extension` — browser node (Chrome extension via WXT)
-
-## [Architecture](https://docs.telepat.io/otto/overview)
-
 1. Controller sends command envelopes over WebSocket to relay.
 2. Relay authenticates, authorizes by action scope, and routes by `targetNodeId`.
 3. Node executes the action and returns terminal `result` or `error`.
@@ -52,301 +96,44 @@ Execution guarantees:
 - Replay protection is enforced (`replayNonce` plus timestamp window).
 - Sensitive fields are redacted before log persistence and streaming.
 
-## Quick Start
+## Using With AI Agents
 
-> 📖 [Installation guide](https://docs.telepat.io/otto/installation) · [Quickstart walkthrough](https://docs.telepat.io/otto/quickstart)
+Otto is designed for headless automation and agent-driven workflows:
 
-### Global Install Path (End Users)
+- **Non-interactive setup** — `otto setup --non-interactive` emits deterministic JSON output with no TTY prompts.
+- **Machine-readable output** — Append `--json` to most CLI commands (`otto commands list`, `otto test`, `otto logs list`) for structured consumption.
+- **Programmatic API** — The relay exposes HTTP and WebSocket endpoints for direct integration. See the [Protocol](https://docs.telepat.io/otto/protocol) docs for message schemas.
+- **Live log streaming** — `otto logs follow --source all` streams structured events by `requestId` for real-time agent debugging.
+- **Agent docs** — [For Agents](https://docs.telepat.io/otto/for-agents) provides automation runbooks, command development guides, and curl snippets.
 
-1. Install Otto CLI globally:
+## Security And Trust
 
-```bash
-npm install -g @telepat/otto
-```
+- Controller authentication uses client-secret token exchange; secrets are stored in the OS keychain when available.
+- Node-side ACL grants are required before a controller can route commands to a given node.
+- Replay protection and timestamp windows prevent command replay.
+- Sensitive fields are redacted from logs and streams before persistence.
+- Otto never automates credential submission; users authenticate manually and rerun.
 
-The CLI package includes relay runtime dependencies, so daemon commands (`otto start`, `otto stop`, `otto status`) do not require a separate relay install.
+To report a security issue, open a private report through the repository security flow.
 
-2. Run guided setup:
+## Documentation And Support
 
-```bash
-otto setup
-```
-
-Setup now focuses on quick-start essentials:
-
-- Extension artifacts are always downloaded from Otto release assets with checksum verification.
-- Relay URL defaults are reused instead of prompting through full controller settings.
-- Relay daemon readiness is now part of setup: setup starts the relay daemon when needed and reuses it when already running on the same port.
-- Interactive setup prompt flow uses Ink with `@inkjs/ui` components for setup confirmation.
-
-Setup downloads an extension zip from Otto releases, verifies checksum, extracts it locally, and prints the exact path for Chrome `Load unpacked`.
-
-If a relay daemon is already running on a different port than your selected setup relay URL, setup fails with explicit instructions to stop and restart on the intended port.
-
-Setup behavior reference:
-
-- Interactive TTY `otto setup`:
-	- ensures relay daemon readiness;
-	- prints setup summary plus Chrome load-unpacked instructions;
-	- prints extension artifact source/path details.
-- Explicit non-interactive `otto setup --non-interactive` (or non-TTY):
-	- emits deterministic JSON-only output;
-	- includes `relayDaemon` state (`status`, `pid`, `port`, `logPath`, `startedAt`);
-	- omits human-readable Chrome handoff block.
-- Daemon readiness policy:
-	- starts daemon when not running;
-	- reuses daemon when running on matching setup relay URL port;
-	- fails setup on daemon port mismatch to avoid implicit port drift.
-
-3. Load extension into Chrome:
-
-```text
-1) Open chrome://extensions
-2) Enable Developer mode
-3) Click Load unpacked
-4) Select the folder printed by otto setup (contains manifest.json)
-```
-
-4. Open extension options and configure node relay URL if needed:
-
-```text
-Default extension relay URL is ws://127.0.0.1:8787?role=node
-```
-
-5. Preferred: register a persistent controller identity (client-secret auth):
-
-```bash
-otto client register --name "my-laptop" --description "Persistent controller for local testing"
-otto client login
-```
-
-Notes:
-
-- `otto client register` returns a one-time client secret and stores it in OS keychain when available.
-- If keychain is unavailable, set `OTTO_CONTROLLER_CLIENT_SECRET` (or pass `--client-secret`) and rerun `otto client login`.
-- Client secret is used for token exchange (`otto client login`); runtime commands use bearer token scopes plus node ACL grants.
-- Newly registered controller clients must be granted node access in extension popup/options under Controller Access.
-
-6. Pair controller and node (secondary onboarding path):
-
-```bash
-otto authcode
-otto pair <code>
-```
-
-7. Smoke test:
-
-```bash
-otto commands list
-```
-
-### Monorepo Dev Path
-
-1. Install dependencies:
-
-```bash
-npm install
-```
-
-2. Build all workspaces:
-
-```bash
-npm run build
-```
-
-3. Start relay:
-
-```bash
-otto start
-```
-
-For local development with foreground logs:
-
-```bash
-otto start --attached
-```
-
-Run the CLI from source in local dev context:
-
-```bash
-npm run dev -- setup
-```
-
-Argument pass-through supports any CLI command, for example:
-
-```bash
-npm run dev -- commands list
-```
-
-4. Configure CLI:
-
-```bash
-node packages/cli/dist/index.js config --relay-url 'ws://127.0.0.1:8787?role=controller'
-```
-
-5. Start extension dev runtime:
-
-```bash
-npm run dev:ext
-```
-
-Contributor local-load path (development only):
-
-```bash
-npm run --workspace @telepat/otto-extension build
-```
-
-Then open `chrome://extensions`, click `Load unpacked`, and select `extension/output/chrome-mv3`.
-
-6. Pair node and controller:
-
-```bash
-node packages/cli/dist/index.js authcode
-node packages/cli/dist/index.js pair 123-456
-```
-
-7. Run a primitive command:
-
-```bash
-node packages/cli/dist/index.js cmd --action primitive.tab.query --node-id <nodeId>
-```
-
-8. Discover and run commands:
-
-```bash
-node packages/cli/dist/index.js commands list
-node packages/cli/dist/index.js test reddit.com getFeed
-```
-
-9. Read relay logs:
-
-```bash
-node packages/cli/dist/index.js logs list --since 2026-04-03T00:00:00Z
-node packages/cli/dist/index.js logs follow
-```
-
-## Setup and Settings Commands
-
-Full CLI reference: [docs.telepat.io/otto/cli](https://docs.telepat.io/otto/cli)
-
-| Command | Description |
-|---|---|
-| `otto start` | Start relay in daemon mode. Prints existing pid/log path if already running. |
-| `otto start --attached` | Start relay in foreground mode with logs in current terminal (dev). |
-| `otto stop` | Stop relay daemon. |
-| `otto status` | Show whether relay daemon is running. |
-| `otto setup` | Interactive guided setup (TTY). Flags: `--non-interactive` for JSON output, `--yes` to accept defaults, `--force` to reinstall extension artifact. |
-| `otto extension update` | Download release extension artifact for current CLI version and update cached unpacked files. |
-| `otto extension info` | Show installed extension artifact metadata from `~/.otto/config.json`. |
-| `otto settings` | Open controller-global settings TUI. Navigate: ↑/↓ to select, Enter to open options, `s` to save, `q`/Esc to exit. |
-
-Settings ownership boundary:
-
-- CLI controller settings live in `~/.otto/config.json`.
-- Extension node settings live in `chrome.storage.*` and are configured via extension options.
-- Extension runtime does not depend on CLI config files.
-
-Release artifact contract used by setup:
-
-- Release base URL default: `https://github.com/telepat-io/otto/releases/download`
-- Expected tag segment: `v<cli-version>`
-- Expected zip asset: `otto-extension-<version>-chrome-mv3.zip`
-- Expected checksum asset: `otto-extension-<version>-chrome-mv3.zip.sha256`
-- Checksum file can be `sha256sum` style (`<hash> <filename>`) or OpenSSL style (`SHA256(...) = <hash>`)
-
-CI/CD and release channels:
-
-- Pull requests and `main` commits run package-scoped quality gates in parallel for CLI, relay, shared protocol, and extension (`check`, `lint`, `build`, `test` where present).
-- Docs site deploys to GitHub Pages on `main` when docs/site paths change.
-- Release Please manages linked version bumps for CLI, relay, and protocol packages from `packages/cli`, `packages/relay`, and `packages/shared-protocol`.
-- Release tags include `v<version>` for CLI and component-prefixed tags for relay/protocol (`relay-v<version>`, `protocol-v<version>`).
-- CLI npm publishing runs only from published semver releases (`v<version>`) and verifies tag/package version alignment before publish.
-- Extension artifacts are published only on semver CLI releases (`v<version>`) as `otto-extension-<version>-chrome-mv3.zip` plus checksum, so `otto setup` download mode remains compatible.
-
-Required repository secrets:
-
-- None for npm publish. The release workflow uses npm trusted publishing via GitHub Actions OIDC (`id-token: write`), so package publishing is authorized in npm rather than by a repository token.
-
-## [Command Framework](https://docs.telepat.io/otto/commands)
-
-Command model:
-
-- Site-scoped bundles live in `extension/src/commands/<site>/`.
-- Each site bundle provides built-ins `checkLogin` and `gotoLogin`.
-- Main runtime actions are `command.list`, `command.run`, and `command.test`.
-- Legacy alias `command.reddit_feed` is still supported for migration.
-
-Command metadata and validation:
-
-- Commands can declare `inputFields` for strict type/required validation.
-- Commands can declare `inputAtLeastOneOf` for conditional contracts (for example `username` or `roomId`).
-- Commands can declare `preloadHost`; runtime auto-navigates to that host before `execute` when needed.
-- `otto test` auto-opens `preloadHost` when available from `command.list`, then runs `command.test` (with fallback to `execute` when no test hook exists).
-
-Streaming architecture (current):
-
-- Runtime listener transport remains generic (`network.http_intercept`).
-- Site modules own stream parsing and fallback strategy (for example Reddit Matrix sync parsing in `extension/src/commands/reddit.com/chat-stream.ts`).
-- Command test hooks can return `stream.listeners` with command-owned adapter hints (`options.streamAdapter`, optional `options.selfUserId`).
-- Background runtime applies adapter mapping before relay emission, so controller/CLI receive shared domain objects (`chat.message`, `chat.typing`, `chat.participant`, `chat.message_deleted`) instead of raw site-specific payloads.
-
-Duplicate suppression model:
-
-- Transport-level suppression: hybrid interception now suppresses equivalent duplicate response updates observed across both CDP sources (`Network` plus `Fetch`) in a short bounded window.
-- Domain-level suppression: command adapters dedupe repeated semantic events from replayed sync payloads before forwarding mapped objects.
-- `otto test` prints human-readable stream output by default to make command events easier to follow; add `--json` to see full raw envelope objects.
-
-Auth-aware behavior:
-
-- Commands can declare `requiresAuth` in metadata.
-- In `authMode=auto`, runtime checks login and navigates to login page if needed.
-- Automation never submits credentials; users authenticate manually and rerun.
-
-## Validation Commands
-
-Run after any code update:
-
-```bash
-npm run check
-npm run lint
-npm run build
-npm run -ws --if-present test
-```
-
-## Docs Site
-
-Otto docs live at [docs.telepat.io/otto](https://docs.telepat.io/otto/). The site uses Docusaurus in `website/` and reads canonical content from `docs/` at repository root.
-
-Run locally:
-
-```bash
-npm run docs:start
-```
-
-Build and serve production output:
-
-```bash
-npm run docs:build
-npm run docs:serve
-```
-
-Deployment defaults:
-
-- `DOCS_URL=https://docs.telepat.io`
-- `DOCS_BASE_URL=/otto/`
-- `GITHUB_OWNER=telepat-io`
-- `GITHUB_REPO=otto`
-
-## Reference Docs
-
+- [Documentation site](https://docs.telepat.io/otto)
+- [Installation](https://docs.telepat.io/otto/installation)
+- [Quickstart](https://docs.telepat.io/otto/quickstart)
 - [Architecture](https://docs.telepat.io/otto/overview)
 - [Protocol](https://docs.telepat.io/otto/protocol)
-- [Pairing and auth](https://docs.telepat.io/otto/pairing-auth)
-- [Extension runtime](https://docs.telepat.io/otto/extension-runtime)
-- [Commands](https://docs.telepat.io/otto/commands)
-- [Relay operations](https://docs.telepat.io/otto/relay-operations)
-- [Security](https://docs.telepat.io/otto/security)
-- [Testing](https://docs.telepat.io/otto/testing)
 - [CLI reference](https://docs.telepat.io/otto/cli)
-- [Configuration](https://docs.telepat.io/otto/configuration)
-- [Development](https://docs.telepat.io/otto/development)
+- [Security](https://docs.telepat.io/otto/security)
+- [For Agents](https://docs.telepat.io/otto/for-agents)
+- Language support: English and Simplified Chinese
+- [Repository](https://github.com/telepat-io/otto)
+- [npm package](https://www.npmjs.com/package/@telepat/otto)
+
+## Contributing
+
+Contributions are welcome. See [Development](https://docs.telepat.io/otto/development) for local setup, build commands, and test workflows.
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
