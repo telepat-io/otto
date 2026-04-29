@@ -37,6 +37,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Build docs site: `npm run docs:build`
 
 ## CI and Release Workflows
+- Use Conventional Commits (`fix:`, `feat:`, `docs:`, etc.) so release-please can generate changelogs and version bumps correctly.
 - CI package quality gates live in `.github/workflows/ci.yml` and should keep per-package checks independent.
 - Release Please plus publish/asset automation lives in `.github/workflows/release-please.yml` and `release-please-config.json`.
 - The release-please workflow includes a reconcile step that ensures merged release PRs always get their git tags and GitHub releases, even when release-please-action v4 skips tag creation. If a merged PR still has `autorelease: pending`, the reconcile step creates the tag and release and relabels the PR to `autorelease: tagged`.
