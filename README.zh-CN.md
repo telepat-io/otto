@@ -125,7 +125,6 @@ Otto 专为无界面自动化和智能体驱动的工作流设计：
 - [CLI 参考](https://docs.telepat.io/otto/cli)
 - [安全](https://docs.telepat.io/otto/security)
 - [For Agents](https://docs.telepat.io/otto/for-agents)
-- 语言支持：English 与 简体中文
 - [仓库](https://github.com/telepat-io/otto)
 - [npm 包](https://www.npmjs.com/package/@telepat/otto)
 

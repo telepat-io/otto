@@ -125,7 +125,6 @@ To report a security issue, open a private report through the repository securit
 - [CLI reference](https://docs.telepat.io/otto/cli)
 - [Security](https://docs.telepat.io/otto/security)
 - [For Agents](https://docs.telepat.io/otto/for-agents)
-- Language support: English and Simplified Chinese
 - [Repository](https://github.com/telepat-io/otto)
 - [npm package](https://www.npmjs.com/package/@telepat/otto)
 
