@@ -17,6 +17,8 @@ jobs:
   quality-gates:
     name: ${{ matrix.label }} quality
     runs-on: ubuntu-latest
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -24,15 +26,21 @@ jobs:
           - label: cli
             workspace: '@telepat/otto'
             hasTests: true
+            coverageFlag: otto-cli
+            coverageFile: packages/cli/coverage/lcov.info
           - label: relay
             workspace: '@telepat/otto-relay'
             hasTests: true
+            coverageFlag: otto-relay
+            coverageFile: packages/relay/coverage/lcov.info
           - label: shared-protocol
             workspace: '@telepat/otto-protocol'
             hasTests: false
           - label: extension
             workspace: '@telepat/otto-extension'
             hasTests: true
+            coverageFlag: otto-extension
+            coverageFile: extension/coverage/lcov.info
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,6 +67,17 @@ jobs:
       - name: Build
         run: npm run --workspace "${{ matrix.workspace }}" build
 
-      - name: Test
+      - name: Test with coverage
         if: matrix.hasTests
-        run: npm run --workspace "${{ matrix.workspace }}" test
+        run: npm run --workspace "${{ matrix.workspace }}" test:coverage
+
+      - name: Upload coverage to Codecov
+        if: ${{ matrix.hasTests && env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: ${{ matrix.coverageFile }}
+          flags: ${{ matrix.coverageFlag }}
+          fail_ci_if_error: false
+          disable_search: true
+          verbose: true

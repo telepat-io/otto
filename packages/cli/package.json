@@ -30,6 +30,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "tsx --test test/**/*.test.ts",
+    "test:coverage": "c8 --reporter=lcov --reporter=text-summary --report-dir coverage tsx --test test/**/*.test.ts",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"test/**/*.ts\" --max-warnings 0"
   },
   "dependencies": {

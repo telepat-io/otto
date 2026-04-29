@@ -19,6 +19,7 @@
     "zip": "wxt zip",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test test/**/*.test.ts src/**/*.test.ts",
+    "test:coverage": "c8 --reporter=lcov --reporter=text-summary --report-dir coverage tsx --test test/**/*.test.ts src/**/*.test.ts",
     "lint": "eslint \"entrypoints/**/*.ts\" \"src/**/*.ts\" \"test/**/*.ts\" \"wxt.config.ts\" --max-warnings 0"
   },
   "dependencies": {
