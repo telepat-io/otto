@@ -1,12 +1,20 @@
 <p align="center"><img src="./otto-logo.webp" width="128" alt="Otto"></p>
 <h1 align="center">Otto</h1>
+<hr>
 <p align="center"><em>The hands that move the web.</em></p>
 
-🇺🇸 [English](README.md) | 🇨🇳 [简体中文](README.zh-CN.md)
+<p align="center">
+  <a href="https://docs.telepat.io/otto">📖 Docs</a>
+  · <a href="./README.md">🇺🇸 English</a>
+  · <a href="./README.zh-CN.md">🇨🇳 简体中文</a>
+</p>
 
-[![npm](https://img.shields.io/npm/v/@telepat/otto)](https://www.npmjs.com/package/@telepat/otto)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/telepat-io/otto/actions/workflows/ci.yml/badge.svg)](https://github.com/telepat-io/otto/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/telepat-io/otto/actions/workflows/ci.yml"><img src="https://github.com/telepat-io/otto/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
+  <a href="https://codecov.io/gh/telepat-io/otto"><img src="https://codecov.io/gh/telepat-io/otto/graph/badge.svg" alt="Codecov"></a>
+  <a href="https://www.npmjs.com/package/@telepat/otto"><img src="https://img.shields.io/npm/v/@telepat/otto" alt="npm"></a>
+  <a href="https://github.com/telepat-io/otto/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License"></a>
+</p>
 
 Secure, debuggable remote browser automation — relay daemon, Chrome extension node, and CLI controller in one monorepo.
 
