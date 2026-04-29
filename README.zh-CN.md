@@ -1,6 +1,5 @@
 <p align="center"><img src="./otto-logo.webp" width="128" alt="Otto"></p>
 <h1 align="center">Otto</h1>
-<hr>
 <p align="center"><em>驱动网络的手。</em></p>
 
 <p align="center">
