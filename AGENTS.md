@@ -40,7 +40,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - CI package quality gates live in `.github/workflows/ci.yml` and should keep per-package checks independent.
 - Release Please plus publish/asset automation lives in `.github/workflows/release-please.yml` and `release-please-config.json`.
 - The release-please workflow includes a reconcile step that ensures merged release PRs always get their git tags and GitHub releases, even when release-please-action v4 skips tag creation. If a merged PR still has `autorelease: pending`, the reconcile step creates the tag and release and relabels the PR to `autorelease: tagged`.
-- Publish and extension asset upload jobs use a `determine-release-tag` passthrough so they trigger from both release-please-created releases and reconciled (recovered) releases.
+- Publish and extension asset upload jobs use a `determine-release-tag` passthrough so they trigger from both release-please-created releases and reconciled (recovered) releases. The gate outputs an empty `release_tag` on ordinary pushes to main (no new release), which causes publish and upload jobs to skip. This prevents spurious publishes on non-release pushes.
 - Keep semver-tagged extension assets attached to `v<version>` releases from the consolidated release workflow so `otto setup` download contract remains valid.
 - Docs site deploy to GitHub Pages on docs path changes lives in `.github/workflows/docs-pages.yml`.
 
