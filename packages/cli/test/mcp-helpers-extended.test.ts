@@ -48,7 +48,7 @@ function createMockWs(overrides: Record<string, unknown> = {}): any {
 
 test('requestJson returns parsed JSON on success', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"ok":true,"status":"running"}', { status: 200 })));
+  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"ok":true,"status":"running"}', { status: 200 }))) as typeof globalThis.fetch;
   try {
     const result = await requestJson('https://example.com/api/status');
     assert.deepEqual(result, { ok: true, status: 'running' });
@@ -59,7 +59,7 @@ test('requestJson returns parsed JSON on success', async () => {
 
 test('requestJson returns empty object for empty response body', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('', { status: 200 })));
+  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('', { status: 200 }))) as typeof globalThis.fetch;
   try {
     const result = await requestJson('https://example.com/api/status');
     assert.deepEqual(result, {});
@@ -70,7 +70,7 @@ test('requestJson returns empty object for empty response body', async () => {
 
 test('requestJson returns raw text for invalid JSON', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('not json', { status: 200 })));
+  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('not json', { status: 200 }))) as typeof globalThis.fetch;
   try {
     const result = await requestJson('https://example.com/api/status') as Record<string, unknown>;
     assert.equal(result.raw, 'not json');
@@ -81,7 +81,7 @@ test('requestJson returns raw text for invalid JSON', async () => {
 
 test('requestJson throws on non-ok status', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"error":"not found"}', { status: 404 })));
+  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"error":"not found"}', { status: 404 }))) as typeof globalThis.fetch;
   try {
     await assert.rejects(
       requestJson('https://example.com/api/missing'),
@@ -98,7 +98,7 @@ test('requestJson sends POST with correct headers', async () => {
   globalThis.fetch = mock.fn((url: string, init?: RequestInit) => {
     calls.push({ url, init });
     return Promise.resolve(new Response('{"registered":true}', { status: 200 }));
-  });
+  }) as typeof globalThis.fetch;
   try {
     await requestJson('https://example.com/api/register', {
       method: 'POST',
@@ -415,7 +415,7 @@ test('removeControllerClientAtRelay sends remove request', async () => {
   };
 
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"ok":true}', { status: 200 })));
+  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"ok":true}', { status: 200 }))) as typeof globalThis.fetch;
 
   try {
     await removeControllerClientAtRelay(config, 'client-1');
@@ -432,7 +432,7 @@ test('removeControllerClientAtRelay ignores client_not_found errors', async () =
   };
 
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"error":"client_not_found"}', { status: 404 })));
+  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"error":"client_not_found"}', { status: 404 }))) as typeof globalThis.fetch;
 
   try {
     await removeControllerClientAtRelay(config, 'nonexistent-client');
@@ -449,7 +449,7 @@ test('removeControllerClientAtRelay throws on other errors', async () => {
   };
 
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"error":"internal"}', { status: 500 })));
+  globalThis.fetch = mock.fn(() => Promise.resolve(new Response('{"error":"internal"}', { status: 500 }))) as typeof globalThis.fetch;
 
   try {
     await assert.rejects(
