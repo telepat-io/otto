@@ -30,7 +30,7 @@ const config = {
       onBrokenMarkdownLinks: 'throw'
     }
   },
-  favicon: 'img/favicon.svg',
+  favicon: 'img/otto-favicon.png',
   presets: [
     [
       'classic',
