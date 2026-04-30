@@ -22,6 +22,9 @@ This section covers:
 - Which sources are canonical
 - What constraints apply during automation
 - How to handle failures deterministically
+- How to use the MCP server for programmatic access
+- How to register Otto with agent frameworks
+- How to use Otto skill packages
 
 For the end-to-end automation runbook, see the [Automation Guide](./automation-guide.md).
 
@@ -113,6 +116,9 @@ otto setup --non-interactive
 ## Related pages
 
 - [Automation Guide](./automation-guide.md) — end-to-end agent runbook with code examples.
+- [MCP Server](./mcp-server.md) — MCP server documentation and tool list.
+- [Agent Setup](./agent-setup.md) — register Otto with agent frameworks.
+- [Skills](./skills.md) — Otto skill packages for agent workflows.
 - [Error Codes](../error-codes.md) — complete error code catalog.
 - [Snippets](../snippets.md) — runnable code examples for common agent patterns.
 - [llms.txt](/llms.txt) — machine-readable project summary for LLM context windows.

@@ -116,3 +116,24 @@ Monorepo builds require all packages to build without TypeScript errors. Run `np
 - [Quickstart](./quickstart.md) — start relay, pair node, run first command.
 - [otto setup command reference](./cli/setup.md) — full setup options and non-interactive mode.
 - [Development guide](./development.md) — local dev workflow and validation sequence.
+
+## Agent integration
+
+After installing Otto, you can register it with AI agent frameworks for programmatic browser automation via MCP:
+
+```bash
+# Register with Claude Code, Cursor, VS Code, etc.
+otto agent install claude
+otto agent install cursor
+otto agent install vscode
+
+# Check registration status
+otto agent status
+
+# Start MCP server directly (for custom integrations)
+otto mcp
+```
+
+Supported frameworks: Claude Code, Claude Desktop, ChatGPT Desktop, Gemini CLI, Codex, Cursor, VS Code, OpenCode.
+
+For full setup instructions, see [Agent Setup](./for-agents/agent-setup.md).

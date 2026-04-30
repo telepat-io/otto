@@ -29,6 +29,9 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Start relay daemon: `otto start`
 - Start relay attached with logs (dev): `otto start --attached`
 - Stop relay daemon: `otto stop`
+- Start MCP server: `otto mcp`
+- Register with agent framework: `otto agent install <runtime>`
+- Agent framework status: `otto agent status`
 - Manual E2E harness: `npm run e2e:manual`
 - Run relay dev: `npm run dev:relay`
 - Run CLI dev: `npm run dev:cli`
@@ -141,3 +144,8 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Testing matrix: `docs/testing.md`
 - Security controls: `docs/security.md`
 - Docusaurus docs home source: `docs/index.md`
+
+## MCP and Agent Integration Sync Policy
+- When MCP tool surface changes, update in the same change: `packages/cli/src/mcp/tools.ts`, `packages/cli/src/mcp/server.ts`, `docs/for-agents/mcp-server.md`, and `otto-cli-skill/SKILL.md`.
+- When agent install targets change, update `packages/cli/src/agent/install.ts`, `docs/for-agents/agent-setup.md`, and `otto-cli-skill/SKILL.md`.
+- Keep `otto-cli-skill/references/command-catalog.md` synchronized with actual CLI command surface.

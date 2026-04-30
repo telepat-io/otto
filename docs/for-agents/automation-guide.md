@@ -150,6 +150,55 @@ When relay, browser node, and controller are on different machines:
 ## Related pages
 
 - [For Agents](./index.md) — constraints, decision flow, and failure handling reference.
+- [MCP Server](./mcp-server.md) — MCP server documentation and tool list.
+- [Agent Setup](./agent-setup.md) — register Otto with agent frameworks.
 - [Controller Implementation Guide](../controller-implementation.md) — WebSocket controller integration.
 - [Use Cases](../use-cases.md) — runnable examples for common automation patterns.
 - [Troubleshooting Advanced](../troubleshooting-advanced.md) — stream and routing diagnostics.
+
+## MCP server usage
+
+For agents using Otto via MCP instead of CLI commands:
+
+### Start MCP server
+
+```bash
+otto mcp
+```
+
+### Register with agent framework
+
+```bash
+otto agent install claude  # or cursor, vscode, etc.
+```
+
+### MCP workflow
+
+1. Call `otto_status` to verify relay is running.
+2. Call `otto_commands_list` to discover available commands.
+3. Call `otto_cmd` with `action: "primitive.tab.open"` to open a tab.
+4. Call `otto_cmd` with `action: "command.run"` to execute site commands.
+5. Handle `manual_login_required` by asking user to log in.
+6. Handle `acl_missing_node_grant` by asking user to approve access.
+
+### Example MCP tool calls
+
+**Check status:**
+```json
+{ "name": "otto_status", "arguments": {} }
+```
+
+**List commands:**
+```json
+{ "name": "otto_commands_list", "arguments": { "nodeId": "node_123" } }
+```
+
+**Open a tab:**
+```json
+{ "name": "otto_cmd", "arguments": { "action": "primitive.tab.open", "payload": "{\"url\":\"https://www.reddit.com\"}" } }
+```
+
+**Run a site command:**
+```json
+{ "name": "otto_cmd", "arguments": { "action": "command.run", "tabSession": "tab_abc", "payload": "{\"site\":\"reddit.com\",\"command\":\"getFeed\"}" } }
+```

@@ -2448,6 +2448,52 @@ program
     }
   });
 
+program
+  .command('mcp')
+  .description('Start the MCP server on stdio for agent access')
+  .action(async () => {
+    const { startOttoMcpServer } = await import('./mcp/server.js');
+    await startOttoMcpServer();
+  });
+
+const agentCmd = program.command('agent').description('Manage agent framework integrations');
+
+agentCmd
+  .command('install')
+  .description('Register Otto MCP server in an agent framework')
+  .argument('<runtime>', 'Agent runtime (claude, claude-desktop, chatgpt, gemini, codex, cursor, vscode, opencode, generic-mcp)')
+  .action(async (runtime: string) => {
+    const { agentInstall } = await import('./agent/install.js');
+    await agentInstall(runtime);
+  });
+
+agentCmd
+  .command('uninstall')
+  .description('Remove Otto MCP server from an agent framework')
+  .argument('<runtime>', 'Agent runtime')
+  .action(async (runtime: string) => {
+    const { agentUninstall } = await import('./agent/install.js');
+    await agentUninstall(runtime);
+  });
+
+agentCmd
+  .command('status')
+  .description('Show agent framework integration status')
+  .option('--json', 'JSON output')
+  .action(async (opts: { json?: boolean }) => {
+    const { agentStatus } = await import('./agent/install.js');
+    const result = await agentStatus();
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      console.log('[otto] Agent framework integration status:');
+      for (const entry of result.runtimes) {
+        const status = entry.installed ? `installed (${entry.configPath})` : 'not installed';
+        console.log(`  ${entry.runtime}: ${status}`);
+      }
+    }
+  });
+
 program.parseAsync().catch((err) => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
