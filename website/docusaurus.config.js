@@ -57,7 +57,7 @@ const config = {
       title: 'Otto',
       logo: {
         alt: 'Otto Logo',
-        src: 'img/logo.svg'
+        src: 'img/otto-avatar.webp'
       },
       items: [
         {
