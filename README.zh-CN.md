@@ -1,4 +1,4 @@
-<p align="center"><img src="./otto-logo.webp" width="128" alt="Otto"></p>
+<p align="center"><img src="./assets/avatar/otto-logo.webp" width="128" alt="Otto"></p>
 <h1 align="center">Otto</h1>
 <p align="center"><em>驱动网络的手。</em></p>
 
