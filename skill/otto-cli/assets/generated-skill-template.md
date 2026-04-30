@@ -5,7 +5,7 @@ Reusable scaffold for Otto-related skills.
 ## File tree
 
 ```text
-otto-cli-skill/
+skill/otto-cli/
 ├── SKILL.md
 ├── references/
 │   ├── command-catalog.md
@@ -22,13 +22,13 @@ This skill package is designed to be installed in agent frameworks that support 
 ### Installation locations
 
 Project scope:
-- `.agents/skills/otto-cli-skill/`
-- `.github/skills/otto-cli-skill/`
-- `.cursor/skills/otto-cli-skill/`
+- `.agents/skills/otto-cli/`
+- `.github/skills/otto-cli/`
+- `.cursor/skills/otto-cli/`
 
 User scope:
-- `~/.agents/skills/otto-cli-skill/`
-- `~/.copilot/skills/otto-cli-skill/`
+- `~/.agents/skills/otto-cli/`
+- `~/.copilot/skills/otto-cli/`
 
 ### MCP integration
 

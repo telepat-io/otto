@@ -146,6 +146,6 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Docusaurus docs home source: `docs/index.md`
 
 ## MCP and Agent Integration Sync Policy
-- When MCP tool surface changes, update in the same change: `packages/cli/src/mcp/tools.ts`, `packages/cli/src/mcp/server.ts`, `docs/for-agents/mcp-server.md`, and `otto-cli-skill/SKILL.md`.
-- When agent install targets change, update `packages/cli/src/agent/install.ts`, `docs/for-agents/agent-setup.md`, and `otto-cli-skill/SKILL.md`.
-- Keep `otto-cli-skill/references/command-catalog.md` synchronized with actual CLI command surface.
+- When MCP tool surface changes, update in the same change: `packages/cli/src/mcp/tools.ts`, `packages/cli/src/mcp/server.ts`, `docs/for-agents/mcp-server.md`, and `skill/otto-cli/SKILL.md`.
+- When agent install targets change, update `packages/cli/src/agent/install.ts`, `docs/for-agents/agent-setup.md`, and `skill/otto-cli/SKILL.md`.
+- Keep `skill/otto-cli/references/command-catalog.md` synchronized with actual CLI command surface.

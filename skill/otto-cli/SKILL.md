@@ -1,5 +1,5 @@
 ---
-name: otto-cli-skill
+name: otto-cli
 description: Use this skill when users need to install, configure, run, automate, debug, and troubleshoot the Otto CLI for remote browser automation (including MCP server and agent framework registration) from zero context.
 ---
 

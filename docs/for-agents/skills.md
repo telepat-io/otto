@@ -15,9 +15,9 @@ Otto ships a skill package that provides AI agents with zero-context workflow gu
 
 ## Primary skill package
 
-The `otto-cli-skill/` package is the installable skill bundle for Otto.
+The `skill/otto-cli/` package is the installable skill bundle for Otto.
 
-- **Location**: `otto-cli-skill/SKILL.md` (repository root)
+- **Location**: `skill/otto-cli/SKILL.md` (repository root)
 - **Purpose**: Guides agents through install, setup, command execution, debugging, and MCP integration
 - **Format**: Agent Skills specification compliant
 
@@ -31,7 +31,7 @@ The `otto-cli-skill/` package is the installable skill bundle for Otto.
 
 ### Core file
 
-`otto-cli-skill/SKILL.md` contains:
+`skill/otto-cli/SKILL.md` contains:
 
 - Installation and setup instructions
 - Deterministic workflow for all operations
@@ -51,21 +51,21 @@ The `otto-cli-skill/` package is the installable skill bundle for Otto.
 
 ### Project scope
 
-- `.agents/skills/otto-cli-skill/`
-- `.github/skills/otto-cli-skill/`
-- `.cursor/skills/otto-cli-skill/`
+- `.agents/skills/otto-cli/`
+- `.github/skills/otto-cli/`
+- `.cursor/skills/otto-cli/`
 
 ### User scope
 
-- `~/.agents/skills/otto-cli-skill/`
-- `~/.copilot/skills/otto-cli-skill/`
-- `~/.claude/skills/otto-cli-skill/`
+- `~/.agents/skills/otto-cli/`
+- `~/.copilot/skills/otto-cli/`
+- `~/.claude/skills/otto-cli/`
 
 ## Required skill contract
 
 Each shipped skill must document:
 
-1. **Name**: `otto-cli-skill` (kebab-case, matches directory)
+1. **Name**: `otto-cli` (kebab-case, matches directory)
 2. **Inputs**: relay URL, site, command, node ID, tab session, auth mode
 3. **Guardrails**: never automate credential submission, always require ACL approval
 4. **Outputs**: command results, log entries, screenshots
@@ -86,13 +86,13 @@ When MCP tool surface changes, update in the same change:
 1. `packages/cli/src/mcp/tools.ts` (schemas and contracts)
 2. `packages/cli/src/mcp/server.ts` (handlers)
 3. `docs/for-agents/mcp-server.md` (MCP docs)
-4. `otto-cli-skill/SKILL.md` (skill docs)
+4. `skill/otto-cli/SKILL.md` (skill docs)
 
 When agent install targets change, update:
 
 1. `packages/cli/src/agent/install.ts` (install logic)
 2. `docs/for-agents/agent-setup.md` (setup docs)
-3. `otto-cli-skill/SKILL.md` (skill docs)
+3. `skill/otto-cli/SKILL.md` (skill docs)
 
 ## Related pages
 
