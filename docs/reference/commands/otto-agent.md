@@ -98,4 +98,4 @@ otto agent uninstall claude
 
 - [Agent Setup](../../for-agents/agent-setup.md)
 - [MCP Server](../../for-agents/mcp-server.md)
-- [For Agents](../../for-agents/index.md)
+- [For Agents](/for-agents/)

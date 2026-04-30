@@ -62,4 +62,4 @@ The server exposes 24 tools:
 
 - [MCP Server documentation](../../for-agents/mcp-server.md)
 - [Agent Setup](../../for-agents/agent-setup.md)
-- [For Agents](../../for-agents/index.md)
+- [For Agents](/for-agents/)

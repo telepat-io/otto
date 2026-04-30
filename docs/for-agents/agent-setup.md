@@ -178,5 +178,5 @@ For VS Code:
 
 - [MCP Server](./mcp-server.md) — MCP server documentation and tool list
 - [Skills](./skills.md) — Otto skill packages
-- [For Agents](./index.md) — agent constraints and decision flow
+- [For Agents](/for-agents/) — agent constraints and decision flow
 - [otto agent command reference](../reference/commands/otto-agent.md)

@@ -162,5 +162,5 @@ Common error codes:
 
 - [Agent Setup](./agent-setup.md) — register Otto with agent frameworks
 - [Skills](./skills.md) — Otto skill packages for agent workflows
-- [For Agents](./index.md) — agent constraints and decision flow
+- [For Agents](/for-agents/) — agent constraints and decision flow
 - [otto mcp command reference](../reference/commands/otto-mcp.md)

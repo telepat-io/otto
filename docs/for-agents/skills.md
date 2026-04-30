@@ -98,4 +98,4 @@ When agent install targets change, update:
 
 - [MCP Server](./mcp-server.md) — MCP server documentation
 - [Agent Setup](./agent-setup.md) — framework registration instructions
-- [For Agents](./index.md) — agent constraints and decision flow
+- [For Agents](/for-agents/) — agent constraints and decision flow
