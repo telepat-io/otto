@@ -1,6 +1,6 @@
 <p align="center"><img src="./assets/avatar/otto-logo.webp" width="128" alt="Otto"></p>
 <h1 align="center">Otto</h1>
-<p align="center"><em>The hands that move the web.</em></p>
+<p align="center"><em>Automate web workflows on real browser tabs without hosting a browser farm.</em></p>
 
 <p align="center">
   <a href="https://docs.telepat.io/otto">📖 Docs</a>
@@ -15,18 +15,20 @@
   <a href="https://github.com/telepat-io/otto/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="License"></a>
 </p>
 
-Otto is secure, debuggable remote browser automation. A controller sends commands over WebSocket to a relay daemon, which routes them to a browser extension node that executes actions on real tabs.
+Otto is a secure remote browser automation platform that lets you control real browser tabs from your CLI or scripts — no browser farm, no infrastructure overhead. Send commands over WebSocket to a relay daemon, which routes them to a Chrome extension that executes actions on live tabs.
 
-## What It Solves
+Built for developers and automation teams who need real browser context for testing, monitoring, and agent-driven workflows without managing headless infrastructure.
 
-Otto lets you automate and test web workflows without hosting your own browser farm.
+## Features
 
-- Run commands on real browser tabs from a local CLI or script.
-- Scale from one-off tasks to scheduled monitoring with the same interface.
-- Debug via live logs and replay-protected execution.
-- Build site-scoped command bundles for repeatable automation on any domain.
-
-Typical use cases include end-to-end testing, social listening, content moderation, and any workflow that needs a real browser context.
+- **Real browser tabs, not headless farms** — Execute commands on live Chrome tabs via a lightweight extension node. No Docker, no Puppeteer farm, no cloud browser rental.
+- **Remote CLI control** — Send commands from your laptop to a browser running anywhere. The relay handles routing and auth so controller and node don't need to be on the same host.
+- **Code drives the browser. The LLM just decides what to do.** — Otto handles clicks, typing, navigation, and DOM interaction with deterministic code. Your agent only burns tokens on strategy, not on every interaction.
+- **Secure by default** — Token auth, replay protection, per-node ACL grants, and pre-ingress log redaction. Secrets stored in OS keychain.
+- **Live debugging** — Stream logs by `requestId` with `otto logs follow --source all`. Correlate relay, controller, and node events in real time.
+- **Network interception** — Subscribe to HTTP traffic from managed browser tabs. Stream responses back for inspection, validation, or data extraction.
+- **Site-scoped command bundles** — Author custom, reusable commands for any domain that run inside the extension. Versioned, shareable, testable.
+- **Agent and CI ready** — Non-interactive setup, `--json` output, MCP server, streaming test harness, and agent runtime registration.
 
 ## Quick Start
 

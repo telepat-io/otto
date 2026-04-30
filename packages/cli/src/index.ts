@@ -1097,7 +1097,7 @@ async function subscribeNetworkListenerAndFollow(
 const cliRequire = createRequire(import.meta.url);
 const cliPkg = cliRequire('../package.json') as { version: string };
 const program = new Command();
-program.name('otto').description('Otto CLI').version(cliPkg.version);
+program.name('otto').description('Automate web workflows on real browser tabs without hosting a browser farm.').version(cliPkg.version);
 
 program
   .command('start')

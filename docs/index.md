@@ -25,11 +25,11 @@ Commands flow from controller → relay → node. Results and stream updates flo
 
 ## What you can do with Otto
 
-- Automate site-specific workflows from the command line against a remote or local browser.
-- Stream real-time network interception events from a managed browser tab.
-- Build custom controllers over the relay WebSocket protocol.
-- Author new site commands that run inside the browser extension.
-- Run autonomous agent workflows using the documented For Agents patterns.
+- Automate web workflows on real browser tabs from your CLI or scripts — testing, monitoring, data extraction, and more.
+- Stream real-time network interception events from a managed browser tab for inspection and validation.
+- Build custom controllers over the relay WebSocket protocol for specialized automation scenarios.
+- Author site-scoped commands that run inside the browser extension — reusable, testable, versioned.
+- Run autonomous agent workflows with non-interactive mode, JSON output, and MCP server integration.
 
 ## Explore the documentation
 

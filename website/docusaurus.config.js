@@ -8,7 +8,7 @@ const baseUrl = localMode ? '/' : process.env.DOCS_BASE_URL || '/otto/';
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Otto Docs',
-  tagline: 'Secure remote browser automation for controller, relay, and extension node.',
+  tagline: 'Automate web workflows on real browser tabs without hosting a browser farm.',
   url,
   baseUrl,
   organizationName: githubOwner,
