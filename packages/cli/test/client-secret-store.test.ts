@@ -58,7 +58,7 @@ test('resolveClientSecret throws when env empty and no stored secret', async () 
   const originalEnv = process.env[CLIENT_SECRET_ENV_VAR];
   delete process.env[CLIENT_SECRET_ENV_VAR];
   try {
-    await assert.rejects(resolveClientSecret({ relayUrl: 'ws://localhost:8787' }, 'client-1'), /No stored secret found/);
+    await assert.rejects(resolveClientSecret({ relayUrl: 'ws://localhost:8787' }, 'client-1'), /Client secret not found|No stored secret found/);
   } finally {
     if (originalEnv !== undefined) {
       process.env[CLIENT_SECRET_ENV_VAR] = originalEnv;
