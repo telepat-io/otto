@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/telepat-io/otto/compare/v0.8.5...v0.9.0) (2026-04-30)
+
+
+### Features
+
+* add new icon images for extension in various sizes ([b366d94](https://github.com/telepat-io/otto/commit/b366d94ce23b322b0d7c9750e6ecd9b6386f7b49))
+* add otto mcp and skill ([74c1909](https://github.com/telepat-io/otto/commit/74c1909756fa358bb91cb3b7f9fcae46eba1d5dd))
+* add unit tests for various utility functions and schemas ([0f269ff](https://github.com/telepat-io/otto/commit/0f269ffc9145afb552c9e92cffc985490bfe4042))
+
+
+### Bug Fixes
+
+* **ci:** remove spurious publish trigger on every push to main ([59393c1](https://github.com/telepat-io/otto/commit/59393c15928daca40126f346471e73c5ab8468a2))
+
 ## [0.8.5](https://github.com/telepat-io/otto/compare/v0.8.4...v0.8.5) (2026-04-28)
 
 
