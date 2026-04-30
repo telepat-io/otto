@@ -75,7 +75,10 @@ module.exports = {
       items: [
         'for-agents/index',
         'for-agents/automation-guide',
-        'for-agents/command-development'
+        'for-agents/command-development',
+        'for-agents/mcp-server',
+        'for-agents/agent-setup',
+        'for-agents/skills'
       ]
     }
   ]

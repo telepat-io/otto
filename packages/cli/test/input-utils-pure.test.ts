@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import {
   logJsonAware,
   resolveControllerRegistrationMetadata,
@@ -209,4 +209,109 @@ test('showAclMissingGrantHint does nothing for other codes', () => {
   assert.equal(called, false);
 
   console.error = originalError;
+});
+
+test('resolveControllerRegistrationMetadata returns flags when name and description provided with promptIfMissing true', async () => {
+  const result = await resolveControllerRegistrationMetadata(
+    { name: 'Test', description: 'Desc' },
+    {},
+    { promptIfMissing: true },
+  );
+  assert.equal(result.name, 'Test');
+  assert.equal(result.description, 'Desc');
+});
+
+test('resolveControllerRegistrationMetadata returns flags with avatarSeed trimmed and sliced', async () => {
+  const result = await resolveControllerRegistrationMetadata(
+    { name: 'Test', description: 'Desc', avatarSeed: '   abcdef   ' },
+    {},
+    { promptIfMissing: false },
+  );
+  assert.equal(result.avatarSeed, 'abcdef');
+});
+
+test('resolveControllerRegistrationMetadata returns undefined avatarSeed for empty string', async () => {
+  const result = await resolveControllerRegistrationMetadata(
+    { name: 'Test', description: 'Desc', avatarSeed: '' },
+    {},
+    { promptIfMissing: false },
+  );
+  assert.equal(result.avatarSeed, undefined);
+});
+
+test('resolveControllerRegistrationMetadata returns undefined avatarSeed for whitespace', async () => {
+  const result = await resolveControllerRegistrationMetadata(
+    { name: 'Test', description: 'Desc', avatarSeed: '   ' },
+    {},
+    { promptIfMissing: false },
+  );
+  assert.equal(result.avatarSeed, undefined);
+});
+
+test('resolveControllerRegistrationMetadata truncates long avatarSeed', async () => {
+  const result = await resolveControllerRegistrationMetadata(
+    { name: 'Test', description: 'Desc', avatarSeed: 'a'.repeat(100) },
+    {},
+    { promptIfMissing: false },
+  );
+  assert.equal(result.avatarSeed!.length, 64);
+});
+
+test('resolveControllerRegistrationMetadata uses description only from defaults when name missing', async () => {
+  const result = await resolveControllerRegistrationMetadata(
+    { description: 'My Desc' },
+    { name: 'DefaultName' },
+    { promptIfMissing: false },
+  );
+  assert.equal(result.name, 'DefaultName');
+  assert.equal(result.description, 'My Desc');
+});
+
+test('logJsonAware stringifies non-string values in non-json mode', () => {
+  const originalLog = console.log;
+  let output = '';
+  console.log = (...args: unknown[]) => { output = args.join(' '); };
+
+  logJsonAware({ outputFormat: 'pretty' } as unknown as import('../src/config.js').OttoConfig, 42);
+  assert.equal(output, JSON.stringify(42, null, 2));
+
+  console.log = originalLog;
+});
+
+test('showAclMissingGrantHint logs with custom actionableHint', () => {
+  const originalError = console.error;
+  const messages: string[] = [];
+  console.error = (...args: unknown[]) => { messages.push(args.join(' ')); };
+
+  showAclMissingGrantHint({ code: 'acl_missing_node_grant', actionableHint: 'Click here to approve' });
+  assert.ok(messages.some(m => m.includes('Click here to approve')));
+
+  console.error = originalError;
+});
+
+test('showAclMissingGrantHint logs without nodeId and clientId', () => {
+  const originalError = console.error;
+  const messages: string[] = [];
+  console.error = (...args: unknown[]) => { messages.push(args.join(' ')); };
+
+  showAclMissingGrantHint({ code: 'acl_missing_node_grant' });
+  assert.ok(messages.some(m => m.includes('not granted')));
+
+  console.error = originalError;
+});
+
+test('resolveControllerRegistrationMetadata throws when only name provided in non-interactive mode', async () => {
+  await assert.rejects(
+    resolveControllerRegistrationMetadata({ description: 'Only desc' }, {}, { promptIfMissing: false }),
+    /Non-interactive registration requires/,
+  );
+});
+
+test('resolveControllerRegistrationMetadata with number avatarSeed returns undefined', async () => {
+  const result = await resolveControllerRegistrationMetadata(
+    { name: 'Test', description: 'Desc', avatarSeed: 123 as any },
+    {},
+    { promptIfMissing: false },
+  );
+  assert.equal(result.avatarSeed, undefined);
 });

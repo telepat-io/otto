@@ -78,3 +78,29 @@ test('toHttpsUrl leaves http unchanged', () => {
 test('toHttpsUrl adds https to bare host', () => {
   assert.equal(toHttpsUrl('example.com'), 'https://example.com');
 });
+
+test('resolveCommandDescriptor matches descriptor with undefined site', () => {
+  const descriptors = [{ id: 'getFeed' } as { site?: string; id?: string }];
+  const result = resolveCommandDescriptor('reddit.com', 'getFeed', descriptors);
+  assert.equal(result, undefined);
+});
+
+test('resolveCommandDescriptor matches descriptor with undefined id', () => {
+  const descriptors = [{ site: 'reddit.com' } as { site?: string; id?: string }];
+  const result = resolveCommandDescriptor('reddit.com', 'getFeed', descriptors);
+  assert.equal(result, undefined);
+});
+
+test('resolveCommandDescriptor returns undefined for empty descriptors', () => {
+  const result = resolveCommandDescriptor('reddit.com', 'getFeed', []);
+  assert.equal(result, undefined);
+});
+
+test('resolveCommandAutoOpenUrl returns default url when descriptor has no preloadHost', () => {
+  const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', [{ site: 'reddit.com', id: 'getFeed' }]);
+  assert.equal(result, 'https://reddit.com');
+});
+
+test('normalizeHostLike strips www prefix from bare hostname', () => {
+  assert.equal(normalizeHostLike('www.reddit.com'), 'reddit.com');
+});

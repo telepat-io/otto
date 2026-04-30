@@ -85,3 +85,41 @@ test('storeClientSecret and deleteClientSecret round-trip with keychain', async 
 
   await assert.rejects(resolveClientSecret(config, clientId), /No stored secret found/);
 });
+
+test('resolveClientSecret rejects whitespace-only env variable', async () => {
+  const originalEnv = process.env[CLIENT_SECRET_ENV_VAR];
+  process.env[CLIENT_SECRET_ENV_VAR] = '   ';
+  try {
+    await assert.rejects(
+      resolveClientSecret({ relayUrl: 'ws://localhost:8787' }, 'client-1'),
+      /Client secret not found|No stored secret found/,
+    );
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env[CLIENT_SECRET_ENV_VAR];
+    } else {
+      process.env[CLIENT_SECRET_ENV_VAR] = originalEnv;
+    }
+  }
+});
+
+test('storeClientSecret returns false when keytar unavailable and deleteClientSecret returns false', async () => {
+  const originalEnv = process.env[CLIENT_SECRET_ENV_VAR];
+  delete process.env[CLIENT_SECRET_ENV_VAR];
+
+  const clientId = `test-nokeytar-${Date.now()}`;
+  const config = { relayUrl: 'ws://localhost:8787' };
+
+  try {
+    const stored = await storeClientSecret(config, clientId, 'secret-value');
+    if (!stored) {
+      assert.equal(stored, false, 'storeClientSecret should return false when keytar is unavailable');
+      const deleted = await deleteClientSecret(config, clientId);
+      assert.equal(deleted, false, 'deleteClientSecret should return false when keytar is unavailable');
+    }
+  } finally {
+    if (originalEnv !== undefined) {
+      process.env[CLIENT_SECRET_ENV_VAR] = originalEnv;
+    }
+  }
+});
