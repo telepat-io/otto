@@ -11,30 +11,39 @@ import {
 } from '../src/mcp/otto-mcp-helpers.js';
 import type { OttoConfig } from '../src/config.js';
 
-function createMockWs(overrides: Record<string, unknown> = {}): any {
-  const listeners: Record<string, Set<Function>> = {};
-  const onceListeners: Record<string, Map<Function, boolean>> = {};
+type MockHandler = (...args: unknown[]) => void;
+
+function createMockWs(overrides: Record<string, unknown> = {}): {
+  readyState: number;
+  send: ReturnType<typeof mock.fn>;
+  close: ReturnType<typeof mock.fn>;
+  on: ReturnType<typeof mock.fn>;
+  once: ReturnType<typeof mock.fn>;
+  off: ReturnType<typeof mock.fn>;
+  emit: (event: string, data?: Buffer) => void;
+  [key: string]: unknown;
+} {
+  const listeners: Record<string, Set<MockHandler>> = {};
+  const onceListeners: Record<string, Map<MockHandler, boolean>> = {};
   const ws = {
     readyState: 1,
     send: mock.fn(),
     close: mock.fn(),
-    on: mock.fn((event: string, handler: Function) => {
+    on: mock.fn((event: string, handler: MockHandler) => {
       if (!listeners[event]) listeners[event] = new Set();
       listeners[event].add(handler);
     }),
-    once: mock.fn((event: string, handler: Function) => {
+    once: mock.fn((event: string, handler: MockHandler) => {
       if (!onceListeners[event]) onceListeners[event] = new Map();
       onceListeners[event].set(handler, true);
     }),
-    off: mock.fn((event: string, handler: Function) => {
+    off: mock.fn((event: string, handler: MockHandler) => {
       if (listeners[event]) listeners[event].delete(handler);
       if (onceListeners[event]) onceListeners[event].delete(handler);
     }),
-    emit: (event: string, data?: any) => {
+    emit: (event: string, data?: Buffer) => {
       if (onceListeners[event]) {
-        for (const [fn] of onceListeners[event]) {
-          fn(data);
-        }
+        for (const [fn] of onceListeners[event]) fn(data);
         delete onceListeners[event];
       }
       if (listeners[event]) {
@@ -117,12 +126,12 @@ test('startControllerHeartbeat sends ping at interval and returns stop function'
   const ws = createMockWs();
   let intervalCb: (() => void) | undefined;
   const originalSetInterval = globalThis.setInterval;
-  globalThis.setInterval = ((cb: () => void) => { intervalCb = cb; return 999 as any; }) as any;
+  globalThis.setInterval = ((cb: () => void) => { intervalCb = cb; return 999; }) as typeof globalThis.setInterval;
   const originalClearInterval = globalThis.clearInterval;
   let cleared = false;
-  globalThis.clearInterval = ((_: any) => { cleared = true; }) as any;
+  globalThis.clearInterval = (() => { cleared = true; }) as typeof globalThis.clearInterval;
   try {
-    const stop = startControllerHeartbeat(ws);
+    const stop = startControllerHeartbeat(ws as never);
     assert.equal(typeof stop, 'function');
     assert.ok(intervalCb !== undefined);
     ws.readyState = 1;
@@ -142,11 +151,11 @@ test('startControllerHeartbeat skips send when socket not open', async () => {
   const ws = createMockWs();
   let intervalCb: (() => void) | undefined;
   const originalSetInterval = globalThis.setInterval;
-  globalThis.setInterval = ((cb: () => void) => { intervalCb = cb; return 998 as any; }) as any;
+  globalThis.setInterval = ((cb: () => void) => { intervalCb = cb; return 998; }) as typeof globalThis.setInterval;
   const originalClearInterval = globalThis.clearInterval;
-  globalThis.clearInterval = (() => {}) as any;
+  globalThis.clearInterval = (() => {}) as typeof globalThis.clearInterval;
   try {
-    const stop = startControllerHeartbeat(ws);
+    const stop = startControllerHeartbeat(ws as never);
     ws.readyState = 3;
     intervalCb!();
     assert.equal(ws.send.mock.calls.length, 0);
@@ -159,19 +168,18 @@ test('startControllerHeartbeat skips send when socket not open', async () => {
 
 test('startControllerHeartbeat clears interval on socket close', async () => {
   const ws = createMockWs();
-  let closeHandler: Function | undefined;
-  ws.once = mock.fn((event: string, handler: Function) => {
+  let closeHandler: MockHandler | undefined;
+  ws.once = mock.fn((event: string, handler: MockHandler) => {
     if (event === 'close') closeHandler = handler;
   });
-  let intervalCb: (() => void) | undefined;
   const originalSetInterval = globalThis.setInterval;
-  globalThis.setInterval = ((cb: () => void) => { intervalCb = cb; return 777 as any; }) as any;
+  globalThis.setInterval = (() => 777) as unknown as typeof globalThis.setInterval;
   let clearedTimer = false;
   const originalClearInterval = globalThis.clearInterval;
-  globalThis.clearInterval = ((id: any) => { if (id === 777) clearedTimer = true; }) as any;
+  globalThis.clearInterval = ((id: NodeJS.Timeout) => { if (Number(id) === 777) clearedTimer = true; }) as typeof globalThis.clearInterval;
 
   try {
-    startControllerHeartbeat(ws);
+    startControllerHeartbeat(ws as never);
     assert.ok(closeHandler !== undefined);
     closeHandler!();
     assert.ok(clearedTimer);
@@ -183,7 +191,7 @@ test('startControllerHeartbeat clears interval on socket close', async () => {
 
 test('sendCommandWithSocket sends envelope and resolves on matching result', async () => {
   const ws = createMockWs();
-  const result = sendCommandWithSocket(ws, 'node-1', {
+  const result = sendCommandWithSocket(ws as never, 'node-1', {
     action: 'primitive.tab.open',
     payload: { url: 'https://example.com' },
     timeoutMs: 5000,
@@ -210,7 +218,7 @@ test('sendCommandWithSocket rejects on abort signal', async () => {
   const controller = new AbortController();
   controller.abort();
 
-  const result = sendCommandWithSocket(ws, 'node-1', {
+  const result = sendCommandWithSocket(ws as never, 'node-1', {
     action: 'test',
     payload: {},
     signal: controller.signal,
@@ -220,14 +228,11 @@ test('sendCommandWithSocket rejects on abort signal', async () => {
 });
 
 test('sendCommandWithSocket rejects on socket close event', async () => {
-  const pendingResolve: Array<(data: Buffer) => void> = [];
-  const onceSetup: Array<{ event: string; handler: Function }> = [];
-  const handlers: Record<string, Function[]> = {};
+  const handlers: Record<string, MockHandler[]> = {};
 
   const ws = {
     readyState: 1,
-    send: mock.fn((data: string) => {
-      const envelope = JSON.parse(data);
+    send: mock.fn(() => {
       setTimeout(() => {
         if (handlers['close']) {
           for (const fn of handlers['close']) fn();
@@ -235,12 +240,11 @@ test('sendCommandWithSocket rejects on socket close event', async () => {
       }, 0);
     }),
     close: mock.fn(),
-    on: mock.fn((event: string, handler: Function) => {
+    on: mock.fn((event: string, handler: MockHandler) => {
       if (!handlers[event]) handlers[event] = [];
       handlers[event].push(handler);
     }),
-    once: mock.fn((event: string, handler: Function) => {
-      onceSetup.push({ event, handler });
+    once: mock.fn((event: string, handler: MockHandler) => {
       if (event === 'close') {
         setTimeout(() => handler(), 10);
       }
@@ -248,7 +252,7 @@ test('sendCommandWithSocket rejects on socket close event', async () => {
     off: mock.fn(),
   };
 
-  const result = sendCommandWithSocket(ws as any, 'node-1', {
+  const result = sendCommandWithSocket(ws as never, 'node-1', {
     action: 'test',
     payload: {},
     timeoutMs: 30000,
@@ -259,7 +263,7 @@ test('sendCommandWithSocket rejects on socket close event', async () => {
 
 test('sendCommandWithSocket ignores non-matching requestIds', async () => {
   const ws = createMockWs();
-  const result = sendCommandWithSocket(ws, 'node-1', {
+  const result = sendCommandWithSocket(ws as never, 'node-1', {
     action: 'test',
     payload: {},
     timeoutMs: 30000,
@@ -285,7 +289,7 @@ test('sendCommandWithSocket ignores non-matching requestIds', async () => {
 
 test('sendCommandWithSocket resolves on error message type', async () => {
   const ws = createMockWs();
-  const result = sendCommandWithSocket(ws, 'node-1', {
+  const result = sendCommandWithSocket(ws as never, 'node-1', {
     action: 'test',
     payload: {},
     timeoutMs: 30000,
@@ -305,7 +309,7 @@ test('sendCommandWithSocket resolves on error message type', async () => {
 
 test('runCommandWithSocket delegates to sendCommandWithSocket', async () => {
   const ws = createMockWs();
-  const promise = runCommandWithSocket(ws, 'node-1', {
+  const promise = runCommandWithSocket(ws as never, 'node-1', {
     action: 'test',
     payload: {},
     timeoutMs: 30000,
@@ -327,7 +331,7 @@ test('sendCommandCancelWithSocket sends cancel and resolves', async () => {
   const ws = createMockWs();
   ws.readyState = 1;
 
-  const cancelPromise = sendCommandCancelWithSocket(ws, 'req-123', 100);
+  const cancelPromise = sendCommandCancelWithSocket(ws as never, 'req-123', 100);
 
   assert.ok(ws.send.mock.calls.length >= 1);
   const sentEnvelope = JSON.parse(ws.send.mock.calls[0].arguments[0] as string);
@@ -347,14 +351,14 @@ test('sendCommandCancelWithSocket skips when socket not open', async () => {
   const ws = createMockWs();
   ws.readyState = 3;
 
-  await sendCommandCancelWithSocket(ws, 'req-123', 100);
+  await sendCommandCancelWithSocket(ws as never, 'req-123', 100);
   assert.equal(ws.send.mock.calls.length, 0);
 });
 
 test('sendCommandCancelWithSocket ignores non-matching requestIds and times out', async () => {
   const ws = createMockWs();
   ws.readyState = 1;
-  ws.on = mock.fn((event: string, handler: Function) => {
+  ws.on = mock.fn((event: string, handler: MockHandler) => {
     if (event === 'message') {
       setTimeout(() => {
         handler(Buffer.from(JSON.stringify({
@@ -366,14 +370,14 @@ test('sendCommandCancelWithSocket ignores non-matching requestIds and times out'
     }
   });
 
-  await sendCommandCancelWithSocket(ws, 'req-456', 50);
+  await sendCommandCancelWithSocket(ws as never, 'req-456', 50);
 });
 
 test('sendCommandCancelWithSocket resolves on matching event', async () => {
   const ws = createMockWs();
   ws.readyState = 1;
 
-  const cancelPromise = sendCommandCancelWithSocket(ws, 'req-789', 2000);
+  const cancelPromise = sendCommandCancelWithSocket(ws as never, 'req-789', 2000);
 
   const sentEnvelope = JSON.parse(ws.send.mock.calls[0].arguments[0] as string);
 
@@ -465,7 +469,7 @@ test('sendCommandWithSocket handles abort signal listener correctly', async () =
   const ws = createMockWs();
   const controller = new AbortController();
 
-  const result = sendCommandWithSocket(ws, 'node-1', {
+  const result = sendCommandWithSocket(ws as never, 'node-1', {
     action: 'test',
     payload: {},
     timeoutMs: 30000,
@@ -479,7 +483,7 @@ test('sendCommandWithSocket handles abort signal listener correctly', async () =
 
 test('sendCommandWithSocket ignores non-result non-error messages', async () => {
   const ws = createMockWs();
-  const result = sendCommandWithSocket(ws, 'node-1', {
+  const result = sendCommandWithSocket(ws as never, 'node-1', {
     action: 'test',
     payload: {},
     timeoutMs: 30000,

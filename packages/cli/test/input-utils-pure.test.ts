@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { mock } from 'node:test';
+import test from 'node:test';
 import {
   logJsonAware,
   resolveControllerRegistrationMetadata,
@@ -309,7 +309,7 @@ test('resolveControllerRegistrationMetadata throws when only name provided in no
 
 test('resolveControllerRegistrationMetadata with number avatarSeed returns undefined', async () => {
   const result = await resolveControllerRegistrationMetadata(
-    { name: 'Test', description: 'Desc', avatarSeed: 123 as any },
+    { name: 'Test', description: 'Desc', avatarSeed: 123 as unknown as string },
     {},
     { promptIfMissing: false },
   );
