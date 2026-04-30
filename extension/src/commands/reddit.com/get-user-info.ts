@@ -6,7 +6,7 @@ type UserInfoInput = {
   id?: string;
 };
 
-function normalizeId(input: string): string {
+export function normalizeId(input: string): string {
   const trimmed = input.trim();
   if (trimmed.startsWith('t2_')) {
     return trimmed;
@@ -14,7 +14,7 @@ function normalizeId(input: string): string {
   return `t2_${trimmed}`;
 }
 
-function normalizeProfileUrl(value: unknown): string | undefined {
+export function normalizeProfileUrl(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
@@ -31,14 +31,14 @@ function normalizeProfileUrl(value: unknown): string | undefined {
   return undefined;
 }
 
-function toIsoUtc(seconds: unknown): string | undefined {
+export function toIsoUtc(seconds: unknown): string | undefined {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds)) {
     return undefined;
   }
   return new Date(seconds * 1_000).toISOString();
 }
 
-function pickString(...values: unknown[]): string | undefined {
+export function pickString(...values: unknown[]): string | undefined {
   for (const value of values) {
     if (typeof value !== 'string') {
       continue;
@@ -49,6 +49,61 @@ function pickString(...values: unknown[]): string | undefined {
     }
   }
   return undefined;
+}
+
+export function mapProfileToUser(
+  data: Record<string, unknown>,
+  username: string,
+  id: string,
+): UserProfile {
+  const subreddit = data.subreddit && typeof data.subreddit === 'object'
+    ? data.subreddit as Record<string, unknown>
+    : undefined;
+
+  const resolvedUsername = typeof data.name === 'string' ? data.name : username || undefined;
+  const resolvedIdRaw = typeof data.id === 'string' ? data.id : undefined;
+  const resolvedId = resolvedIdRaw ? normalizeId(resolvedIdRaw) : (id ? normalizeId(id) : undefined);
+
+  const flags: string[] = [];
+  if (data.is_employee === true) {
+    flags.push('employee');
+  }
+  if (data.is_mod === true) {
+    flags.push('moderator');
+  }
+  if (data.is_blocked === true) {
+    flags.push('blocked');
+  }
+  if (data.is_friend === true) {
+    flags.push('friend');
+  }
+
+  const user: UserProfile = {
+    kind: 'entity.user',
+    id: resolvedId ?? (resolvedUsername ? `reddit:${resolvedUsername}` : 'reddit:unknown'),
+    platform: 'reddit',
+    username: resolvedUsername,
+    displayName: pickString(subreddit?.title, subreddit?.display_name_prefixed),
+    profileUrl: normalizeProfileUrl(subreddit?.url),
+    avatarUrl: pickString(data.snoovatar_img, data.icon_img),
+    bio: pickString(subreddit?.public_description, subreddit?.description),
+    isVerified: data.verified === true,
+    createdAt: toIsoUtc(data.created_utc),
+    flags: flags.length > 0 ? flags : undefined,
+    stats: {
+      followers: typeof subreddit?.subscribers === 'number' ? subreddit.subscribers : undefined,
+      reputation: typeof data.total_karma === 'number'
+        ? data.total_karma
+        : (typeof data.link_karma === 'number' && typeof data.comment_karma === 'number'
+          ? data.link_karma + data.comment_karma
+          : undefined),
+      posts: typeof data.link_karma === 'number' ? data.link_karma : undefined,
+      comments: typeof data.comment_karma === 'number' ? data.comment_karma : undefined,
+    },
+    originalEntity: data,
+  };
+
+  return user;
 }
 
 export const getUserInfoCommand: SiteCommand = {
@@ -82,6 +137,7 @@ export const getUserInfoCommand: SiteCommand = {
     const resolveSelf = !username && !id;
 
     const profile = await ctx.executeScript(
+      /* c8 ignore start */
       async (targetUsername: string, targetId: string, shouldResolveSelf: boolean) => {
         if (shouldResolveSelf) {
           const response = await fetch('https://www.reddit.com/api/me.json', {
@@ -121,6 +177,7 @@ export const getUserInfoCommand: SiteCommand = {
         const body = await response.json() as Record<string, Record<string, unknown> | undefined>;
         return body[normalizedId] ?? null;
       },
+      /* c8 ignore stop */
       [username, id, resolveSelf],
     );
 
@@ -129,52 +186,7 @@ export const getUserInfoCommand: SiteCommand = {
       throw new Error('reddit_user_not_found');
     }
 
-    const subreddit = data.subreddit && typeof data.subreddit === 'object'
-      ? data.subreddit as Record<string, unknown>
-      : undefined;
-
-    const resolvedUsername = typeof data.name === 'string' ? data.name : username || undefined;
-    const resolvedIdRaw = typeof data.id === 'string' ? data.id : undefined;
-    const resolvedId = resolvedIdRaw ? normalizeId(resolvedIdRaw) : (id ? normalizeId(id) : undefined);
-
-    const flags: string[] = [];
-    if (data.is_employee === true) {
-      flags.push('employee');
-    }
-    if (data.is_mod === true) {
-      flags.push('moderator');
-    }
-    if (data.is_blocked === true) {
-      flags.push('blocked');
-    }
-    if (data.is_friend === true) {
-      flags.push('friend');
-    }
-
-    const user: UserProfile = {
-      kind: 'entity.user',
-      id: resolvedId ?? (resolvedUsername ? `reddit:${resolvedUsername}` : 'reddit:unknown'),
-      platform: 'reddit',
-      username: resolvedUsername,
-      displayName: pickString(subreddit?.title, subreddit?.display_name_prefixed),
-      profileUrl: normalizeProfileUrl(subreddit?.url),
-      avatarUrl: pickString(data.snoovatar_img, data.icon_img),
-      bio: pickString(subreddit?.public_description, subreddit?.description),
-      isVerified: data.verified === true,
-      createdAt: toIsoUtc(data.created_utc),
-      flags: flags.length > 0 ? flags : undefined,
-      stats: {
-        followers: typeof subreddit?.subscribers === 'number' ? subreddit.subscribers : undefined,
-        reputation: typeof data.total_karma === 'number'
-          ? data.total_karma
-          : (typeof data.link_karma === 'number' && typeof data.comment_karma === 'number'
-            ? data.link_karma + data.comment_karma
-            : undefined),
-        posts: typeof data.link_karma === 'number' ? data.link_karma : undefined,
-        comments: typeof data.comment_karma === 'number' ? data.comment_karma : undefined,
-      },
-      originalEntity: data,
-    };
+    const user = mapProfileToUser(data, username, id);
 
     return {
       user,

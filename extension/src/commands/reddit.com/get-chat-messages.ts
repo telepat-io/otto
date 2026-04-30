@@ -144,6 +144,7 @@ export const getChatMessagesCommand: SiteCommand = {
     const limit = clampLimit(typeof parsed.limit === 'number' ? parsed.limit : undefined);
 
     const payload = await ctx.executeScript(
+      /* c8 ignore start */
       async (targetRoomId: string, targetLimit: number) => {
         const tokenCandidates = ['chat:matrix-access-token', 'chat:access-token'];
 
@@ -319,6 +320,7 @@ export const getChatMessagesCommand: SiteCommand = {
       roomCount: rooms.length,
       rooms,
     };
+    /* c8 ignore stop */
   },
   async test(ctx, input, helpers) {
     const parsed = (input ?? {}) as Partial<GetChatMessagesInput>;
@@ -327,7 +329,9 @@ export const getChatMessagesCommand: SiteCommand = {
 
     await ctx.navigateTab('https://chat.reddit.com/threads');
 
-    const readiness = await ctx.executeScript(async () => {
+    const readiness = await ctx.executeScript(
+      /* c8 ignore start */
+      async () => {
       const tokenCandidates = ['chat:matrix-access-token', 'chat:access-token'];
 
       const hasToken = (): boolean => {
@@ -360,6 +364,7 @@ export const getChatMessagesCommand: SiteCommand = {
       return {
         ready: hasToken(),
       };
+      /* c8 ignore stop */
     }, []);
 
     const fallbackPlan = createPollingFallbackPlan(roomId || undefined);

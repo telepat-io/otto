@@ -1,41 +1,63 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createEnvelope } from '@telepat/otto-protocol';
-import type { Envelope } from '@telepat/otto-protocol';
 import { isListenerUpdateForSubscription } from '../src/stream-correlation.js';
 
-function envelope(messageType: Envelope['messageType'], requestId: string, payload: unknown): Envelope {
-  return createEnvelope(messageType, 'controller', requestId, payload);
-}
-
-test('matches listener_update events for subscribe request id', () => {
-  const event = envelope('event', 'subscribe-req-1', {
-    type: 'listener_update',
-    updateType: 'network.response',
-    data: { status: 200 },
-  });
-
-  assert.equal(isListenerUpdateForSubscription(event, 'subscribe-req-1'), true);
+test('isListenerUpdateForSubscription returns true for matching listener update', () => {
+  assert.equal(
+    isListenerUpdateForSubscription(
+      { messageType: 'event', requestId: 'sub-1', payload: { type: 'listener_update' } } as import('@telepat/otto-protocol').Envelope,
+      'sub-1',
+    ),
+    true,
+  );
 });
 
-test('does not match listener_update events tied to command.test request id', () => {
-  const event = envelope('event', 'command-test-req-1', {
-    type: 'listener_update',
-    updateType: 'network.response',
-    data: { status: 200 },
-  });
-
-  assert.equal(isListenerUpdateForSubscription(event, 'subscribe-req-1'), false);
+test('isListenerUpdateForSubscription returns false for non-event', () => {
+  assert.equal(
+    isListenerUpdateForSubscription(
+      { messageType: 'result', requestId: 'sub-1', payload: { type: 'listener_update' } } as import('@telepat/otto-protocol').Envelope,
+      'sub-1',
+    ),
+    false,
+  );
 });
 
-test('does not match non-event or non-listener_update envelopes', () => {
-  const resultFrame = envelope('result', 'subscribe-req-1', {
-    ok: true,
-  });
-  const otherEvent = envelope('event', 'subscribe-req-1', {
-    type: 'extension_log',
-  });
+test('isListenerUpdateForSubscription returns false for mismatched requestId', () => {
+  assert.equal(
+    isListenerUpdateForSubscription(
+      { messageType: 'event', requestId: 'sub-2', payload: { type: 'listener_update' } } as import('@telepat/otto-protocol').Envelope,
+      'sub-1',
+    ),
+    false,
+  );
+});
 
-  assert.equal(isListenerUpdateForSubscription(resultFrame, 'subscribe-req-1'), false);
-  assert.equal(isListenerUpdateForSubscription(otherEvent, 'subscribe-req-1'), false);
+test('isListenerUpdateForSubscription returns false for non-listener_update type', () => {
+  assert.equal(
+    isListenerUpdateForSubscription(
+      { messageType: 'event', requestId: 'sub-1', payload: { type: 'other' } } as import('@telepat/otto-protocol').Envelope,
+      'sub-1',
+    ),
+    false,
+  );
+});
+
+test('isListenerUpdateForSubscription handles missing payload type', () => {
+  assert.equal(
+    isListenerUpdateForSubscription(
+      { messageType: 'event', requestId: 'sub-1', payload: {} } as import('@telepat/otto-protocol').Envelope,
+      'sub-1',
+    ),
+    false,
+  );
+});
+
+test('isListenerUpdateForSubscription handles undefined payload', () => {
+  assert.equal(
+    isListenerUpdateForSubscription(
+      { messageType: 'event', requestId: 'sub-1' } as import('@telepat/otto-protocol').Envelope,
+      'sub-1',
+    ),
+    false,
+  );
 });

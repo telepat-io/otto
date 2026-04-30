@@ -41,6 +41,7 @@ export const getFeedCommand: SiteCommand = {
     );
 
     const result = await ctx.executeScript(
+      /* c8 ignore start */
       async (
         minPostUrlCount: number,
         maxPostUrlsToFetch: number,
@@ -427,6 +428,7 @@ export const getFeedCommand: SiteCommand = {
 
         return { posts: outputPosts };
       },
+      /* c8 ignore stop */
       [
         targetPostUrlCount,
         MAX_POST_URLS_TO_FETCH,

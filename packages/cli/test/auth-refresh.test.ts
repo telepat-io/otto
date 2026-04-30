@@ -95,3 +95,24 @@ test('refreshControllerAccessToken throws when response shape is invalid', async
     globalThis.fetch = originalFetch;
   }
 });
+
+test('refreshControllerAccessToken derives HTTP URL from relayUrl when relayHttpUrl missing', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ accessToken: 'token' }),
+    } as Response;
+  }) as typeof fetch;
+
+  try {
+    const tokens = await refreshControllerAccessToken({
+      relayUrl: 'ws://127.0.0.1:8787/?role=controller',
+      controllerRefreshToken: 'refresh_abc',
+    });
+    assert.equal(tokens?.accessToken, 'token');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

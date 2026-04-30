@@ -2,50 +2,26 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { shouldAttemptAccessTokenRefreshOnAuthError } from '../src/auth/retry.js';
 
-test('refresh retry is enabled for invalid_access_token auth payload', () => {
-  assert.equal(
-    shouldAttemptAccessTokenRefreshOnAuthError(new Error('x'), {
-      category: 'auth',
-      code: 'invalid_access_token',
-      message: 'Access token verification failed',
-    }),
-    true,
-  );
+test('shouldAttemptAccessTokenRefreshOnAuthError returns true for retryable payload codes', () => {
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(new Error('fail'), { category: 'auth', code: 'invalid_access_token' }), true);
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(new Error('fail'), { category: 'auth', code: 'token_expired' }), true);
 });
 
-test('refresh retry is enabled for token_expired auth payload', () => {
-  assert.equal(
-    shouldAttemptAccessTokenRefreshOnAuthError(new Error('x'), {
-      category: 'auth',
-      code: 'token_expired',
-      message: 'Token has expired',
-    }),
-    true,
-  );
+test('shouldAttemptAccessTokenRefreshOnAuthError returns false for non-retryable payload codes', () => {
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(new Error('fail'), { category: 'auth', code: 'unauthorized' }), false);
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(new Error('fail'), { category: 'routing', code: 'invalid_access_token' }), false);
 });
 
-test('refresh retry is disabled for non-retryable auth payload code', () => {
-  assert.equal(
-    shouldAttemptAccessTokenRefreshOnAuthError(new Error('x'), {
-      category: 'auth',
-      code: 'forbidden_action',
-      message: 'Controller token does not allow this action',
-    }),
-    false,
-  );
+test('shouldAttemptAccessTokenRefreshOnAuthError detects retryable codes in error message', () => {
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(new Error('{"code":"invalid_access_token"}')), true);
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(new Error('{"code":"token_expired"}')), true);
 });
 
-test('refresh retry uses error message fallback when payload is unavailable', () => {
-  const error = new Error('Auth failed: {"category":"auth","code":"invalid_access_token","message":"Access token verification failed"}');
-  assert.equal(
-    shouldAttemptAccessTokenRefreshOnAuthError(error),
-    true,
-  );
+test('shouldAttemptAccessTokenRefreshOnAuthError returns false for non-retryable messages', () => {
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(new Error('random error')), false);
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError('random error'), false);
 });
 
-test('refresh retry is disabled when neither payload nor message indicates token issue', () => {
-  assert.equal(
-    shouldAttemptAccessTokenRefreshOnAuthError(new Error('network timeout')),
-    false,
-  );
+test('shouldAttemptAccessTokenRefreshOnAuthError handles undefined error', () => {
+  assert.equal(shouldAttemptAccessTokenRefreshOnAuthError(undefined), false);
 });

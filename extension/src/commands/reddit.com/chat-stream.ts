@@ -47,7 +47,7 @@ export type RedditStreamDomainMapper = {
   mapNetworkUpdate: (updateType: string, data: unknown) => StreamDomainUpdate[];
 };
 
-function dedupeKey(event: RedditListenerEvent): string {
+export function dedupeKey(event: RedditListenerEvent): string {
   if (event.eventId && event.eventId.length > 0) {
     return `${event.kind}:${event.eventId}`;
   }
@@ -67,7 +67,7 @@ function dedupeKey(event: RedditListenerEvent): string {
   return `new_message:${event.roomId ?? 'unknown'}:${event.sender ?? 'unknown'}:${event.originServerTs ?? 0}:${event.text ?? ''}`;
 }
 
-function compactDeduper(seenKeys: Set<string>): void {
+export function compactDeduper(seenKeys: Set<string>): void {
   if (seenKeys.size <= MAX_DEDUPE_KEYS) {
     return;
   }
@@ -79,7 +79,7 @@ function compactDeduper(seenKeys: Set<string>): void {
   }
 }
 
-function domainDedupeKey(value: StreamDomainObject): string {
+export function domainDedupeKey(value: StreamDomainObject): string {
   if (value.kind === 'chat.message') {
     return [
       value.kind,
@@ -125,27 +125,27 @@ function domainDedupeKey(value: StreamDomainObject): string {
   return JSON.stringify(value);
 }
 
-function getUserId(matrixUserId: string | undefined): string | undefined {
+export function getUserId(matrixUserId: string | undefined): string | undefined {
   if (!matrixUserId) {
     return undefined;
   }
   return matrixUserId.replace('@t2_', '').replace(':reddit.com', '');
 }
 
-function decodeBase64Utf8(value: string): string {
+export function decodeBase64Utf8(value: string): string {
   const binary = atob(value);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 
-function toIsoDate(originServerTs: number | undefined, fallback: string): string {
+export function toIsoDate(originServerTs: number | undefined, fallback: string): string {
   if (typeof originServerTs === 'number' && Number.isFinite(originServerTs)) {
     return new Date(originServerTs).toISOString();
   }
   return fallback;
 }
 
-function toConversation(roomId: string | undefined, originalEntity?: unknown): ConversationRef {
+export function toConversation(roomId: string | undefined, originalEntity?: unknown): ConversationRef {
   return {
     id: roomId && roomId.length > 0 ? roomId : 'unknown_room',
     platform: 'reddit',
@@ -161,7 +161,7 @@ function createMeta(rawEventType: string): DomainMeta {
   };
 }
 
-function toUserRef(matrixUserId: string | undefined, displayName?: string, originalEntity?: unknown): UserRef | undefined {
+export function toUserRef(matrixUserId: string | undefined, displayName?: string, originalEntity?: unknown): UserRef | undefined {
   const id = getUserId(matrixUserId);
   if (!id) {
     return undefined;
@@ -176,7 +176,7 @@ function toUserRef(matrixUserId: string | undefined, displayName?: string, origi
   };
 }
 
-function upsertRoomParticipant(directory: ParticipantDirectory, roomId: string | undefined, participant: UserRef): void {
+export function upsertRoomParticipant(directory: ParticipantDirectory, roomId: string | undefined, participant: UserRef): void {
   if (!roomId || roomId.length === 0) {
     return;
   }
@@ -190,14 +190,14 @@ function upsertRoomParticipant(directory: ParticipantDirectory, roomId: string |
   directory.set(roomId, roomParticipants);
 }
 
-function getRoomParticipant(directory: ParticipantDirectory, roomId: string | undefined, userId: string | undefined): UserRef | undefined {
+export function getRoomParticipant(directory: ParticipantDirectory, roomId: string | undefined, userId: string | undefined): UserRef | undefined {
   if (!roomId || !userId) {
     return undefined;
   }
   return directory.get(roomId)?.get(userId);
 }
 
-function createFallbackUser(userId: string | undefined): UserRef {
+export function createFallbackUser(userId: string | undefined): UserRef {
   if (userId && userId.length > 0) {
     return {
       id: userId,
@@ -217,7 +217,7 @@ function createFallbackUser(userId: string | undefined): UserRef {
   };
 }
 
-function resolveRecipient(
+export function resolveRecipient(
   directory: ParticipantDirectory,
   roomId: string | undefined,
   senderId: string | undefined,
@@ -239,7 +239,7 @@ function resolveRecipient(
   return createFallbackUser(selfUserId);
 }
 
-function parseChunkedJson(body: string): Array<Record<string, unknown>> {
+export function parseChunkedJson(body: string): Array<Record<string, unknown>> {
   const parsed: Array<Record<string, unknown>> = [];
   let cursor = 0;
 

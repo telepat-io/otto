@@ -17,6 +17,7 @@ export const gotoLoginCommand: SiteCommand = {
     await ctx.navigateTab(REDDIT_LOGIN_URL);
 
     const cookieBannerDismissed = await ctx.executeScriptWithDomHelpers(
+      /* c8 ignore start */
       async () => {
         const wait = (ms: number) => new Promise((resolve) => {
           setTimeout(resolve, ms);
@@ -45,6 +46,7 @@ export const gotoLoginCommand: SiteCommand = {
 
         return false;
       },
+      /* c8 ignore stop */
       [],
     );
 

@@ -39,3 +39,16 @@ test('buildSocketCloseReasonSummary handles missing action', () => {
   assert.match(summary, /^Controller connection closed\./);
   assert.match(summary, /otto status/);
 });
+
+test('toSocketCloseAlertPayload returns undefined for non-error', () => {
+  assert.equal(toSocketCloseAlertPayload('string'), undefined);
+});
+
+test('toSocketCloseAlertPayload returns undefined for unrelated error', () => {
+  assert.equal(toSocketCloseAlertPayload(new Error('unrelated')), undefined);
+});
+
+test('toSocketCloseAlertPayload returns undefined for legacy message with empty action', () => {
+  const legacy = new Error('Socket closed while waiting for  response');
+  assert.equal(toSocketCloseAlertPayload(legacy), undefined);
+});

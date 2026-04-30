@@ -26,6 +26,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint \"src/**/*.ts\" --max-warnings 0"
+    "test": "tsx --test test/**/*.test.ts",
+    "test:coverage": "c8 --reporter=lcov --reporter=text-summary --report-dir coverage --check-coverage --lines 90 --branches 90 tsx --test test/**/*.test.ts",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\" --max-warnings 0"
   }
 }

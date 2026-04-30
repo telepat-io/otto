@@ -1,5 +1,22 @@
 import type { SiteCommand } from '../types.js';
 
+export function normalizeCheckLoginResult(authState: unknown): {
+  authenticated: boolean;
+  username: string | undefined;
+  id: string | undefined;
+  avatar: string | undefined;
+  source: string | undefined;
+} {
+  const result = authState && typeof authState === 'object' ? authState as Record<string, unknown> : {};
+  return {
+    authenticated: Boolean(result.authenticated),
+    username: typeof result.username === 'string' ? result.username : undefined,
+    id: typeof result.id === 'string' ? result.id : undefined,
+    avatar: typeof result.avatar === 'string' ? result.avatar : undefined,
+    source: typeof result.source === 'string' ? result.source : undefined,
+  };
+}
+
 export const checkLoginCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
@@ -12,6 +29,7 @@ export const checkLoginCommand: SiteCommand = {
   },
   async execute(ctx) {
     const authState = await ctx.executeScript(
+      /* c8 ignore start */
       async () => {
         const fallbackSelectors = [
           'a[href*="/logout"]',
@@ -63,16 +81,10 @@ export const checkLoginCommand: SiteCommand = {
           };
         }
       },
+      /* c8 ignore stop */
       [],
     );
 
-    const result = authState && typeof authState === 'object' ? authState as Record<string, unknown> : {};
-    return {
-      authenticated: Boolean(result.authenticated),
-      username: typeof result.username === 'string' ? result.username : undefined,
-      id: typeof result.id === 'string' ? result.id : undefined,
-      avatar: typeof result.avatar === 'string' ? result.avatar : undefined,
-      source: typeof result.source === 'string' ? result.source : undefined,
-    };
+    return normalizeCheckLoginResult(authState);
   },
 };

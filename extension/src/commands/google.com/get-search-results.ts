@@ -56,6 +56,7 @@ export const getSearchResultsCommand: SiteCommand = {
       const maxThisPage = Math.min(PAGE_SIZE, remaining);
 
       const pageResults = await ctx.executeScript(
+        /* c8 ignore start */
         (maxResults: number, rankOffset: number) => {
           function unwrapGoogleUrl(href: string): string | null {
             if (!href) return null;
@@ -171,6 +172,7 @@ export const getSearchResultsCommand: SiteCommand = {
 
           return results;
         },
+        /* c8 ignore stop */
         [maxThisPage, start],
       );
 

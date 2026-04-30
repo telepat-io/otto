@@ -65,6 +65,7 @@ export const sendChatMessageCommand: SiteCommand = {
     assertSendChatMessageInput({ username, roomId, message });
     const createRoomByUsername = async (targetUsername: string): Promise<string> => {
       const roomSeed = await ctx.executeScriptWithDomHelpers(
+        /* c8 ignore start */
         async (usernameValue: string, debugEnabled: boolean) => {
           const wait = (ms: number) => new Promise((resolve) => {
             setTimeout(resolve, ms);
@@ -225,6 +226,7 @@ export const sendChatMessageCommand: SiteCommand = {
             openedExistingRoom,
           };
         },
+        /* c8 ignore stop */
         [targetUsername, ctx.debug.enabled],
       );
 
@@ -262,6 +264,7 @@ export const sendChatMessageCommand: SiteCommand = {
     const sendInOpenRoom = async (outboundMessage: string, targetUsername: string): Promise<Record<string, unknown>> => {
       const runSendAttempt = async (): Promise<unknown> => {
         return await ctx.executeScriptWithDomHelpers(
+          /* c8 ignore start */
           async (messageValue: string, usernameValue: string) => {
           const wait = (ms: number) => new Promise((resolve) => {
             setTimeout(resolve, ms);
@@ -397,6 +400,7 @@ export const sendChatMessageCommand: SiteCommand = {
               attempts: 1,
             };
           },
+          /* c8 ignore stop */
           [outboundMessage, targetUsername],
         );
       };

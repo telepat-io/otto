@@ -9,7 +9,7 @@ type CommentOnPostInput = {
   commentBody?: string;
 };
 
-function normalizeCommentOnPostInput(input: Record<string, unknown> | undefined): {
+export function normalizeCommentOnPostInput(input: Record<string, unknown> | undefined): {
   postUrl: string;
   commentBody: string;
 } {
@@ -20,7 +20,7 @@ function normalizeCommentOnPostInput(input: Record<string, unknown> | undefined)
   };
 }
 
-function assertCommentOnPostInput(input: { postUrl: string; commentBody: string }): void {
+export function assertCommentOnPostInput(input: { postUrl: string; commentBody: string }): void {
   if (!input.postUrl) {
     throw new Error('commentOnPost requires input.postUrl');
   }
@@ -29,7 +29,7 @@ function assertCommentOnPostInput(input: { postUrl: string; commentBody: string 
   }
 }
 
-function normalizeRedditPostUrl(rawUrl: string): string {
+export function normalizeRedditPostUrl(rawUrl: string): string {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -84,6 +84,7 @@ export const commentOnPostCommand: SiteCommand = {
     await ctx.navigateTab(postUrl);
 
     const submitResult = await ctx.executeScriptWithDomHelpers(
+      /* c8 ignore start */
       async (commentValue: string) => {
         const pageWindow = window as Window & {
           __ottoDeepQuerySelector?: PageDeepQuerySelector;
@@ -334,6 +335,7 @@ export const commentOnPostCommand: SiteCommand = {
           return serializeScriptError(error, 'reddit_post_comment_script_failed');
         }
       },
+      /* c8 ignore stop */
       [commentBody],
     );
 

@@ -4,7 +4,7 @@ type CommandDescriptorLike = {
   preloadHost?: string;
 };
 
-function normalizeHostLike(value: string): string {
+export function normalizeHostLike(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
     return '';
@@ -18,7 +18,7 @@ function normalizeHostLike(value: string): string {
   }
 }
 
-function toHttpsUrl(value: string): string {
+export function toHttpsUrl(value: string): string {
   const trimmed = value.trim();
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed;

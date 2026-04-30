@@ -1,45 +1,80 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveCommandAutoOpenUrl } from '../src/command-open-url.js';
+import {
+  resolveCommandAutoOpenUrl,
+  resolveCommandDescriptor,
+  normalizeHostLike,
+  toHttpsUrl,
+} from '../src/command-open-url.js';
 
-test('resolveCommandAutoOpenUrl falls back to site URL when descriptor is missing', () => {
-  const url = resolveCommandAutoOpenUrl('reddit.com', 'getChatMessages', []);
-  assert.equal(url, 'https://reddit.com');
+test('resolveCommandAutoOpenUrl returns default https URL', () => {
+  const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', []);
+  assert.equal(result, 'https://reddit.com');
 });
 
-test('resolveCommandAutoOpenUrl uses preloadHost when descriptor matches site and command', () => {
-  const url = resolveCommandAutoOpenUrl('reddit.com', 'getChatMessages', [
-    {
-      site: 'reddit.com',
-      id: 'getChatMessages',
-      preloadHost: 'chat.reddit.com',
-    },
+test('resolveCommandAutoOpenUrl uses preloadHost when available', () => {
+  const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', [
+    { site: 'reddit.com', id: 'getFeed', preloadHost: 'old.reddit.com' },
   ]);
-
-  assert.equal(url, 'https://chat.reddit.com');
+  assert.equal(result, 'https://old.reddit.com');
 });
 
-test('resolveCommandAutoOpenUrl handles preloadHost already provided as full URL', () => {
-  const url = resolveCommandAutoOpenUrl('reddit.com', 'getChatMessages', [
-    {
-      site: 'reddit.com',
-      id: 'getChatMessages',
-      preloadHost: 'https://chat.reddit.com/threads',
-    },
-  ]);
-
-  assert.equal(url, 'https://chat.reddit.com/threads');
+test('resolveCommandAutoOpenUrl adds https to bare host', () => {
+  const result = resolveCommandAutoOpenUrl('example.com', 'test', []);
+  assert.equal(result, 'https://example.com');
 });
 
-test('resolveCommandAutoOpenUrl normalizes site host matching from URL arguments', () => {
-  const url = resolveCommandAutoOpenUrl('https://www.reddit.com', 'getChatMessages', [
-    {
-      site: 'reddit.com',
-      id: 'getChatMessages',
-      preloadHost: 'chat.reddit.com',
-    },
-  ]);
-
-  assert.equal(url, 'https://chat.reddit.com');
+test('resolveCommandDescriptor finds matching descriptor', () => {
+  const descriptors = [
+    { site: 'reddit.com', id: 'getFeed' },
+    { site: 'google.com', id: 'search' },
+  ];
+  const result = resolveCommandDescriptor('reddit.com', 'getFeed', descriptors);
+  assert.ok(result);
+  assert.equal(result?.site, 'reddit.com');
 });
 
+test('resolveCommandDescriptor normalizes www prefix', () => {
+  const descriptors = [{ site: 'reddit.com', id: 'getFeed' }];
+  const result = resolveCommandDescriptor('www.reddit.com', 'getFeed', descriptors);
+  assert.ok(result);
+});
+
+test('resolveCommandDescriptor returns undefined for missing command', () => {
+  const result = resolveCommandDescriptor('reddit.com', 'missing', []);
+  assert.equal(result, undefined);
+});
+
+test('resolveCommandDescriptor returns undefined when site matches but id does not', () => {
+  const descriptors = [{ site: 'reddit.com', id: 'getFeed' }];
+  const result = resolveCommandDescriptor('reddit.com', 'search', descriptors);
+  assert.equal(result, undefined);
+});
+
+test('normalizeHostLike returns empty for empty string', () => {
+  assert.equal(normalizeHostLike(''), '');
+});
+
+test('normalizeHostLike returns empty for whitespace', () => {
+  assert.equal(normalizeHostLike('   '), '');
+});
+
+test('normalizeHostLike normalizes URL hostname', () => {
+  assert.equal(normalizeHostLike('https://WWW.Example.COM'), 'example.com');
+});
+
+test('normalizeHostLike lowercases invalid URL', () => {
+  assert.equal(normalizeHostLike('NotAUrl'), 'notaurl');
+});
+
+test('toHttpsUrl leaves https unchanged', () => {
+  assert.equal(toHttpsUrl('https://example.com'), 'https://example.com');
+});
+
+test('toHttpsUrl leaves http unchanged', () => {
+  assert.equal(toHttpsUrl('http://example.com'), 'http://example.com');
+});
+
+test('toHttpsUrl adds https to bare host', () => {
+  assert.equal(toHttpsUrl('example.com'), 'https://example.com');
+});

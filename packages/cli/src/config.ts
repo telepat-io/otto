@@ -32,12 +32,12 @@ export type OttoConfig = {
 
 export const DEFAULT_CONTROLLER_RELAY_URL = 'ws://127.0.0.1:8787?role=controller';
 
-export function loadConfig(): OttoConfig {
-  if (!existsSync(CONFIG_PATH)) {
+export function loadConfig(configPath = CONFIG_PATH): OttoConfig {
+  if (!existsSync(configPath)) {
     return { relayUrl: DEFAULT_CONTROLLER_RELAY_URL };
   }
 
-  const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf8')) as unknown;
+  const raw = JSON.parse(readFileSync(configPath, 'utf8')) as unknown;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { relayUrl: DEFAULT_CONTROLLER_RELAY_URL };
   }
@@ -48,11 +48,11 @@ export function loadConfig(): OttoConfig {
   };
 }
 
-export function saveConfig(config: OttoConfig): void {
-  if (!existsSync(CONFIG_DIR)) {
-    mkdirSync(CONFIG_DIR, { recursive: true });
+export function saveConfig(config: OttoConfig, configPath = CONFIG_PATH, configDir = CONFIG_DIR): void {
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
   }
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
 export function deriveHttpUrl(relayUrl: string): string {

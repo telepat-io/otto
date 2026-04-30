@@ -13,6 +13,7 @@ export const getFrontPageCommand: SiteCommand = {
   },
   async execute(ctx) {
     const stories = await ctx.executeScript(
+      /* c8 ignore start */
       () => {
         const rows = Array.from(document.querySelectorAll('tr.athing')).slice(0, 30);
         return rows.map((row) => {
@@ -23,6 +24,7 @@ export const getFrontPageCommand: SiteCommand = {
           };
         });
       },
+      /* c8 ignore stop */
       [],
     );
 
