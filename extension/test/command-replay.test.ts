@@ -139,3 +139,54 @@ test('rememberReplayResponse compacts oversized responses to avoid quota failure
   assert.ok(firstPost);
   assert.equal(Object.prototype.hasOwnProperty.call(firstPost, 'originalEntity'), false);
 });
+
+test('compactForReplay preserves null and primitives', async () => {
+  const { storage } = createSessionStorageMock();
+  const cmd = buildCommand('req_compact');
+  const response = createEnvelope('result', 'node', 'req_compact', {
+    ok: true,
+    durationMs: 1,
+    action: 'primitive.tab.query',
+    data: {
+      nullValue: null,
+      undefinedValue: undefined,
+      numberValue: 42,
+      boolValue: true,
+    },
+  });
+
+  await rememberReplayResponse(storage, cmd, response, 1_000);
+  const replayed = await getReplayResponse(storage, buildCommand('req_compact'), 1_001);
+
+  assert.ok(replayed);
+  const data = replayed?.payload as { data?: Record<string, unknown> };
+  assert.equal(data.data?.nullValue, null);
+  assert.equal(data.data?.numberValue, 42);
+  assert.equal(data.data?.boolValue, true);
+});
+
+test('persistLedger falls back to tail on repeated quota failures', async () => {
+  const state: Record<string, unknown> = {};
+  const storage = {
+    async get(keys: string[]) {
+      const out: Record<string, unknown> = {};
+      for (const key of keys) out[key] = state[key];
+      return out;
+    },
+    async set() {
+      throw new Error('quota exceeded');
+    },
+  };
+
+  const cmd = buildCommand('req_quota', 'idem_quota');
+  const response = createEnvelope('result', 'node', 'req_quota', {
+    ok: true,
+    durationMs: 1,
+    action: 'primitive.tab.query',
+    data: {},
+  });
+
+  await assert.doesNotReject(async () => {
+    await rememberReplayResponse(storage, cmd, response, 1_000);
+  });
+});

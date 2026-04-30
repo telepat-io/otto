@@ -284,3 +284,74 @@ test('onDetach listener clears state and prevents extra detach on stopForTab', a
   const debugTypes = extractDebugTypes(mock.runtimeMessages);
   assert.ok(debugTypes.includes('debugger_focus.stop_skipped_not_attached'));
 });
+
+test('stopForTab handles unavailable debugger API', async () => {
+  const mock = createMockChrome({ disableDebugger: true });
+  const manager = createDebuggerFocusEmulationManager(mock.chromeApi);
+
+  await manager.ensureForTab(101).catch(() => undefined);
+  await manager.stopForTab(101);
+
+  const debugTypes = extractDebugTypes(mock.runtimeMessages);
+  assert.ok(debugTypes.includes('debugger_focus.stop_without_debugger_api'));
+});
+
+test('stopForTab ignores detach failures for closed tabs', async () => {
+  const mock = createMockChrome();
+  const manager = createDebuggerFocusEmulationManager(mock.chromeApi);
+
+  await manager.ensureForTab(101);
+
+  const originalDetach = (mock.chromeApi.debugger as unknown as {
+    detach: (target: chrome.debugger.Debuggee) => Promise<void>;
+  }).detach;
+
+  (mock.chromeApi.debugger as unknown as {
+    detach: (target: chrome.debugger.Debuggee) => Promise<void>;
+  }).detach = async () => {
+    throw new Error('detach failed');
+  };
+
+  await manager.stopForTab(101);
+
+  const debugTypes = extractDebugTypes(mock.runtimeMessages);
+  assert.ok(debugTypes.includes('debugger_focus.detach_skipped_shared_attachment') || debugTypes.includes('debugger_focus.stopped'));
+
+  (mock.chromeApi.debugger as unknown as {
+    detach: (target: chrome.debugger.Debuggee) => Promise<void>;
+  }).detach = originalDetach;
+});
+
+test('ensureForTab detaches owned attachment when focus command fails and detach also fails', async () => {
+  const mock = createMockChrome({
+    sendCommandErrorByMethod: {
+      'Emulation.setFocusEmulationEnabled': new Error('CDP command failed'),
+    },
+  });
+
+  const originalDetach = (mock.chromeApi.debugger as unknown as {
+    detach: (target: chrome.debugger.Debuggee) => Promise<void>;
+  }).detach;
+
+  (mock.chromeApi.debugger as unknown as {
+    detach: (target: chrome.debugger.Debuggee) => Promise<void>;
+  }).detach = async () => {
+    throw new Error('detach failed');
+  };
+
+  const manager = createDebuggerFocusEmulationManager(mock.chromeApi);
+
+  await assert.rejects(
+    () => manager.ensureForTab(101),
+    (error: unknown) => {
+      assert.ok(error instanceof DebuggerFocusEmulationError);
+      assert.equal(error.code, 'debugger_focus_command_failed');
+      return true;
+    },
+  );
+
+  // Restore detach for cleanup
+  (mock.chromeApi.debugger as unknown as {
+    detach: (target: chrome.debugger.Debuggee) => Promise<void>;
+  }).detach = originalDetach;
+});

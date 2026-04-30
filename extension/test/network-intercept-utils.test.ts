@@ -29,6 +29,25 @@ test('normalizePatterns deduplicates and filters empty', () => {
 test('normalizeHostAllowlist lowercases and deduplicates', () => {
   assert.deepEqual(normalizeHostAllowlist(['Reddit.COM', 'reddit.com', '']), ['reddit.com']);
   assert.deepEqual(normalizeHostAllowlist(undefined), []);
+  assert.deepEqual(normalizeHostAllowlist(['EXAMPLE.COM', 123 as unknown as string, 'example.com']), ['example.com']);
+});
+
+test('normalizeMimeTypes returns defaults for empty input', () => {
+  const defaults = normalizeMimeTypes(undefined);
+  assert.ok(defaults.includes('application/json'));
+  assert.deepEqual(normalizeMimeTypes(['text/plain', 'text/plain']), ['text/plain']);
+  assert.deepEqual(normalizeMimeTypes([123 as unknown as string, '']), defaults);
+});
+
+test('headerArrayToRecord converts header array', () => {
+  assert.deepEqual(headerArrayToRecord([{ name: 'Content-Type', value: 'application/json' }, { name: '', value: 'x' }]), {
+    'Content-Type': 'application/json',
+  });
+  assert.deepEqual(headerArrayToRecord(undefined), {});
+  assert.deepEqual(headerArrayToRecord([{ name: 'X-Custom', value: 42 as unknown as string }]), {
+    'X-Custom': '',
+  });
+  assert.deepEqual(headerArrayToRecord([{ value: 'no-name' } as { name?: string; value?: string }]), {});
 });
 
 test('normalizeMimeTypes returns defaults for empty input', () => {

@@ -616,3 +616,460 @@ test('network interception manager fails subscribe when shared attach cannot be 
   const unsubscribed = await manager.unsubscribe('sub_conflict');
   assert.equal(unsubscribed, false);
 });
+
+test('subscribe rejects site mismatch', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await assert.rejects(
+    () => manager.subscribe('sub_mismatch', {
+      tabSessionId: 'tab_alpha',
+      site: 'google.com',
+      mode: 'network',
+      includeBody: true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, 'network_listener_site_mismatch');
+      return true;
+    },
+  );
+});
+
+test('subscribe cleans up on ensureAttached failure', async () => {
+  const mock = createMockChrome();
+  mock.setAttachError(new Error('Cannot access a chrome:// URL'));
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await assert.rejects(
+    () => manager.subscribe('sub_attach_fail', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      mode: 'network',
+      includeBody: true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, 'network_listener_debugger_permission_denied');
+      return true;
+    },
+  );
+
+  const unsubscribed = await manager.unsubscribe('sub_attach_fail');
+  assert.equal(unsubscribed, false);
+});
+
+test('unsubscribeAll removes all subscriptions', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_a', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+  await manager.subscribe('sub_b', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+
+  await manager.unsubscribeAll();
+
+  assert.equal(await manager.unsubscribe('sub_a'), false);
+  assert.equal(await manager.unsubscribe('sub_b'), false);
+  assert.equal(mock.getDetachCount(), 1);
+});
+
+test('network interception manager ignores responseReceived with missing requestId', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_resp', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.responseReceived',
+    {
+      requestId: '',
+      response: { url: 'https://www.reddit.com/api/me.json', status: 200, mimeType: 'application/json' },
+    },
+  );
+
+  await flushMicrotasks();
+
+  const updates = mock.runtimeMessages.filter((entry) => entry.type === 'otto.listenerUpdate');
+  assert.equal(updates.length, 0);
+  await manager.unsubscribe('sub_resp');
+});
+
+test('network interception manager ignores loadingFinished when no metadata was stored', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_load', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.loadingFinished',
+    { requestId: 'req_unknown' },
+  );
+
+  await flushMicrotasks();
+
+  const updates = mock.runtimeMessages.filter((entry) => entry.type === 'otto.listenerUpdate');
+  assert.equal(updates.length, 0);
+  await manager.unsubscribe('sub_load');
+});
+
+test('fetch mode continues request when no subscriptions match', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_fetch_nomatch', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'fetch',
+    includeBody: true,
+    urlPatterns: ['https://other.com/*'],
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Fetch.requestPaused',
+    {
+      requestId: 'fetch_no_match',
+      request: { url: 'https://www.reddit.com/api/v1/me', method: 'GET' },
+      responseStatusCode: 200,
+      responseHeaders: [{ name: 'content-type', value: 'application/json' }],
+    },
+  );
+
+  await flushMicrotasks();
+
+  const commandMethods = mock.getDebuggerCommands().map((entry) => entry.method);
+  assert.ok(commandMethods.includes('Fetch.continueRequest'));
+  assert.ok(!commandMethods.includes('Fetch.getResponseBody'));
+
+  const updates = mock.runtimeMessages.filter((entry) => entry.type === 'otto.listenerUpdate');
+  assert.equal(updates.length, 0);
+  await manager.unsubscribe('sub_fetch_nomatch');
+});
+
+test('network interception manager handles webSocketCreated and webSocketClosed', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_ws_lifecycle', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+    urlPatterns: ['wss://ws.reddit.com/*'],
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketCreated',
+    { requestId: 'ws_req_2', url: 'wss://ws.reddit.com/realtime' },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketClosed',
+    { requestId: 'ws_req_2' },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketFrameReceived',
+    { requestId: 'ws_req_2', response: { opcode: 1, payloadData: 'should be ignored' } },
+  );
+
+  await flushMicrotasks();
+
+  const updates = mock.runtimeMessages.filter((entry) => entry.type === 'otto.listenerUpdate');
+  assert.equal(updates.length, 0);
+  await manager.unsubscribe('sub_ws_lifecycle');
+});
+
+test('network interception manager ignores webSocketFrameReceived when wsMeta is missing', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_ws_nometa', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+    urlPatterns: ['wss://ws.reddit.com/*'],
+  });
+
+  // Skip webSocketCreated so wsMeta is missing
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketFrameReceived',
+    { requestId: 'ws_req_3', response: { opcode: 1, payloadData: 'no meta' } },
+  );
+
+  await flushMicrotasks();
+
+  const updates = mock.runtimeMessages.filter((entry) => entry.type === 'otto.listenerUpdate');
+  assert.equal(updates.length, 0);
+  await manager.unsubscribe('sub_ws_nometa');
+});
+
+test('network interception manager skips detach when subscriptions remain', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_shared_a', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+  await manager.subscribe('sub_shared_b', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+
+  await manager.unsubscribe('sub_shared_a');
+  assert.equal(mock.getDetachCount(), 0);
+
+  await manager.unsubscribe('sub_shared_b');
+  assert.equal(mock.getDetachCount(), 1);
+});
+
+test('subscribe rejects duplicate requestId', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_dup', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+
+  await assert.rejects(
+    () => manager.subscribe('sub_dup', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      mode: 'network',
+      includeBody: true,
+    }),
+    /network_listener_already_subscribed/,
+  );
+});
+
+test('subscribe rejects missing tabSessionId', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await assert.rejects(
+    () => manager.subscribe('sub_no_tab', {
+      tabSessionId: '',
+      site: 'reddit.com',
+      mode: 'network',
+      includeBody: true,
+    }),
+    /network_listener_missing_tab_session/,
+  );
+});
+
+test('subscribe rejects missing site', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await assert.rejects(
+    () => manager.subscribe('sub_no_site', {
+      tabSessionId: 'tab_alpha',
+      site: '',
+      mode: 'network',
+      includeBody: true,
+    }),
+    /network_listener_missing_site/,
+  );
+});
+
+test('network interception manager tolerates sendMessage errors for debug logs', async () => {
+  const mock = createMockChrome();
+  let shouldThrow = true;
+  const originalSendMessage = mock.chromeApi.runtime.sendMessage.bind(mock.chromeApi.runtime);
+  (mock.chromeApi.runtime as unknown as { sendMessage: unknown }).sendMessage = async (message: unknown) => {
+    if (shouldThrow) {
+      shouldThrow = false;
+      throw new Error('sendMessage failed');
+    }
+    return originalSendMessage(message as Parameters<typeof chrome.runtime.sendMessage>[0]);
+  };
+
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+  await manager.subscribe('sub_debug_log', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+  });
+
+  await manager.unsubscribe('sub_debug_log');
+});
+
+test('network interception manager emits websocket frame without opcode and payloadData', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_ws_minimal', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: true,
+    urlPatterns: ['wss://ws.reddit.com/*'],
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketCreated',
+    { requestId: 'ws_req_min', url: 'wss://ws.reddit.com/realtime' },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketFrameReceived',
+    { requestId: 'ws_req_min', response: {} },
+  );
+
+  await flushMicrotasks();
+
+  const updateMessage = mock.runtimeMessages.find(
+    (entry) => entry.type === 'otto.listenerUpdate'
+      && ((entry.payload as { updateType?: string }).updateType === 'network.websocket_frame'),
+  );
+  assert.ok(updateMessage);
+  const payload = (updateMessage?.payload ?? {}) as {
+    data?: { responseHeaders?: Record<string, string>; body?: string };
+  };
+  assert.equal(payload.data?.responseHeaders, undefined);
+  assert.equal(payload.data?.body, undefined);
+
+  await manager.unsubscribe('sub_ws_minimal');
+});
+
+test('network interception manager omits websocket body when includeBody is false', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_ws_nobody', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'network',
+    includeBody: false,
+    urlPatterns: ['wss://ws.reddit.com/*'],
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketCreated',
+    { requestId: 'ws_req_nobody', url: 'wss://ws.reddit.com/realtime' },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.webSocketFrameReceived',
+    { requestId: 'ws_req_nobody', response: { opcode: 1, payloadData: 'secret' } },
+  );
+
+  await flushMicrotasks();
+
+  const updateMessage = mock.runtimeMessages.find(
+    (entry) => entry.type === 'otto.listenerUpdate'
+      && ((entry.payload as { updateType?: string }).updateType === 'network.websocket_frame'),
+  );
+  assert.ok(updateMessage);
+  const payload = (updateMessage?.payload ?? {}) as {
+    data?: { body?: string };
+  };
+  assert.equal(payload.data?.body, undefined);
+
+  await manager.unsubscribe('sub_ws_nobody');
+});
+
+test('hybrid mode suppresses network response when fetch signature exists', async () => {
+  const mock = createMockChrome();
+  const manager = createNetworkInterceptListenerManager(mock.chromeApi);
+
+  await manager.subscribe('sub_hybrid_fetch_sig', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    mode: 'hybrid',
+    includeBody: true,
+    urlPatterns: ['https://www.reddit.com/api/*'],
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Fetch.requestPaused',
+    {
+      requestId: 'fetch_sig_1',
+      request: { url: 'https://www.reddit.com/api/v1/me', method: 'GET' },
+      responseStatusCode: 200,
+      responseHeaders: [{ name: 'content-type', value: 'application/json' }],
+    },
+  );
+
+  await flushMicrotasks();
+
+  mock.setNetworkBody('req_sig_1', {
+    body: '{"ok":true}',
+    base64Encoded: false,
+  });
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.responseReceived',
+    {
+      requestId: 'req_sig_1',
+      request: { method: 'GET' },
+      response: {
+        url: 'https://www.reddit.com/api/v1/me',
+        status: 200,
+        mimeType: 'application/json',
+      },
+    },
+  );
+
+  mock.debuggerEventEmitter.emit(
+    { tabId: 101 },
+    'Network.loadingFinished',
+    { requestId: 'req_sig_1' },
+  );
+
+  await flushMicrotasks();
+
+  const updates = mock.runtimeMessages.filter((entry) => {
+    if (entry.type !== 'otto.listenerUpdate') return false;
+    const p = (entry.payload ?? {}) as { requestId?: string; updateType?: string };
+    return p.requestId === 'sub_hybrid_fetch_sig' && p.updateType === 'network.response';
+  });
+
+  assert.equal(updates.length, 1);
+  const payload = (updates[0]?.payload ?? {}) as { data?: { captureSource?: string } };
+  assert.equal(payload.data?.captureSource, 'fetch');
+
+  await manager.unsubscribe('sub_hybrid_fetch_sig');
+});

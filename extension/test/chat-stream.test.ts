@@ -637,3 +637,258 @@ test('resolveRecipient returns fallback with selfUserId when only sender exists 
   const recipient = resolveRecipient(directory, 'room1', 'self', 'self');
   assert.equal(recipient.id, 'self');
 });
+
+test('reddit chat stream mapper dedupes participant events', async () => {
+  const mapper = createRedditStreamDomainMapper('self');
+
+  const sync = {
+    rooms: {
+      join: {
+        '!room:reddit.com': {
+          state: {
+            events: [
+              {
+                type: 'm.room.member',
+                event_id: 'member_peer',
+                state_key: '@t2_peer:reddit.com',
+                content: { displayname: 'Peer User' },
+              },
+            ],
+          },
+          timeline: { events: [] },
+          ephemeral: { events: [] },
+        },
+      },
+    },
+  };
+
+  const first = mapper.mapNetworkUpdate('network.response', { body: JSON.stringify(sync), base64Encoded: false });
+  assert.equal(first.length, 1);
+
+  const second = mapper.mapNetworkUpdate('network.response', { body: JSON.stringify(sync), base64Encoded: false });
+  assert.equal(second.length, 0);
+});
+
+test('reddit chat stream mapper uses fallback user when sender cannot be resolved', async () => {
+  const mapper = createRedditStreamDomainMapper('self');
+
+  const sync = {
+    rooms: {
+      join: {
+        '!room:reddit.com': {
+          state: { events: [] },
+          timeline: {
+            events: [
+              {
+                type: 'm.room.message',
+                event_id: 'evt_1',
+                sender: undefined,
+                origin_server_ts: 1710000000000,
+                content: { body: 'hello' },
+              },
+            ],
+          },
+          ephemeral: { events: [] },
+        },
+      },
+    },
+  };
+
+  const mapped = mapper.mapNetworkUpdate('network.response', { body: JSON.stringify(sync), base64Encoded: false });
+  assert.equal(mapped.length, 1);
+  const message = mapped[0]?.data as { from?: { id: string } };
+  assert.equal(message.from?.id, 'unknown');
+});
+
+test('reddit chat stream mapper dedupes typing events', async () => {
+  const mapper = createRedditStreamDomainMapper('self');
+
+  const sync = {
+    rooms: {
+      join: {
+        '!room:reddit.com': {
+          state: { events: [] },
+          timeline: { events: [] },
+          ephemeral: {
+            events: [
+              {
+                type: 'm.typing',
+                event_id: 'evt_typing',
+                content: { user_ids: ['@t2_peer:reddit.com'] },
+                origin_server_ts: 1710000000000,
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+
+  const first = mapper.mapNetworkUpdate('network.response', { body: JSON.stringify(sync), base64Encoded: false });
+  assert.equal(first.length, 1);
+
+  const second = mapper.mapNetworkUpdate('network.response', { body: JSON.stringify(sync), base64Encoded: false });
+  assert.equal(second.length, 0);
+});
+
+test('reddit chat stream mapper dedupes message_deleted events', async () => {
+  const mapper = createRedditStreamDomainMapper('self');
+
+  const sync = {
+    rooms: {
+      join: {
+        '!room:reddit.com': {
+          state: { events: [] },
+          timeline: {
+            events: [
+              {
+                type: 'm.room.redaction',
+                event_id: 'redact_1',
+                sender: '@t2_peer:reddit.com',
+                redacts: 'evt_1',
+                origin_server_ts: 1710000000000,
+              },
+            ],
+          },
+          ephemeral: { events: [] },
+        },
+      },
+    },
+  };
+
+  const first = mapper.mapNetworkUpdate('network.response', { body: JSON.stringify(sync), base64Encoded: false });
+  assert.equal(first.length, 1);
+  assert.equal(first[0]?.updateType, 'chat.message_deleted');
+
+  const second = mapper.mapNetworkUpdate('network.response', { body: JSON.stringify(sync), base64Encoded: false });
+  assert.equal(second.length, 0);
+});
+
+test('dedupeKey covers missing optional fields', () => {
+  assert.equal(dedupeKey({ kind: 'typing' }), 'typing:unknown:');
+  assert.equal(dedupeKey({ kind: 'typing', roomId: 'r1' }), 'typing:r1:');
+  assert.equal(dedupeKey({ kind: 'message_deleted' }), 'message_deleted:unknown:unknown');
+  assert.equal(dedupeKey({ kind: 'message_deleted', roomId: 'r1' }), 'message_deleted:r1:unknown');
+  assert.equal(dedupeKey({ kind: 'room_member' }), 'room_member:unknown:unknown');
+  assert.equal(dedupeKey({ kind: 'room_member', roomId: 'r1' }), 'room_member:r1:unknown');
+  assert.equal(dedupeKey({ kind: 'new_message' }), 'new_message:unknown:unknown:0:');
+  assert.equal(dedupeKey({ kind: 'new_message', roomId: 'r1' }), 'new_message:r1:unknown:0:');
+  assert.equal(dedupeKey({ kind: 'new_message', roomId: 'r1', sender: 's1' }), 'new_message:r1:s1:0:');
+  assert.equal(dedupeKey({ kind: 'new_message', roomId: 'r1', sender: 's1', originServerTs: 123 }), 'new_message:r1:s1:123:');
+});
+
+test('domainDedupeKey covers missing optional fields', () => {
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.message' } as StreamDomainObject),
+    'chat.message|||||',
+  );
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.message', conversation: { id: 'r1' } } as StreamDomainObject),
+    'chat.message|r1||||',
+  );
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.typing' } as StreamDomainObject),
+    'chat.typing|||||0',
+  );
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.typing', conversation: { id: 'r1' } } as StreamDomainObject),
+    'chat.typing|r1||||0',
+  );
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.participant' } as StreamDomainObject),
+    'chat.participant||||',
+  );
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.participant', conversation: { id: 'r1' } } as StreamDomainObject),
+    'chat.participant|r1|||',
+  );
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.message_deleted' } as StreamDomainObject),
+    'chat.message_deleted||||',
+  );
+  assert.equal(
+    domainDedupeKey({ kind: 'chat.message_deleted', conversation: { id: 'r1' } } as StreamDomainObject),
+    'chat.message_deleted|r1|||',
+  );
+});
+
+test('extractEventsFromSync handles malformed events gracefully', () => {
+  const extracted = extractEventsFromSync({
+    rooms: {
+      join: {
+        '!room:reddit.com': {
+          state: {
+            events: [
+              {},
+              { type: 'm.room.member' },
+              { type: 'm.room.member', content: 'not-object' },
+              { type: 'm.room.member', content: {}, state_key: '@t2_peer:reddit.com' },
+            ],
+          },
+          timeline: {
+            events: [
+              {},
+              { type: 'm.room.message' },
+              { type: 'm.room.message', content: {} },
+              { type: 'm.room.message', content: { body: 'hi' } },
+              { type: 'm.room.redaction' },
+              { type: 'm.room.redaction', redacts: 'evt_1' },
+            ],
+          },
+          ephemeral: {
+            events: [
+              {},
+              { type: 'm.typing' },
+              { type: 'm.typing', content: {} },
+              { type: 'm.typing', content: { user_ids: [] } },
+              { type: 'm.typing', content: { user_ids: ['@t2_peer:reddit.com'] } },
+            ],
+          },
+        },
+      },
+    },
+  });
+  assert.equal(extracted.events.length, 7);
+  assert.equal(extracted.events.filter((e) => e.kind === 'room_member').length, 3);
+  assert.equal(extracted.events.filter((e) => e.kind === 'new_message').length, 1);
+  assert.equal(extracted.events.filter((e) => e.kind === 'message_deleted').length, 2);
+  assert.equal(extracted.events.filter((e) => e.kind === 'typing').length, 1);
+});
+
+test('toStreamDomainObjects handles missing sender and text', () => {
+  const updates = toStreamDomainObjects([
+    { kind: 'new_message', roomId: 'r1' },
+    { kind: 'new_message', roomId: 'r1', sender: '@t2_peer:reddit.com', text: 'hi' },
+  ]);
+  assert.equal(updates.length, 2);
+  assert.equal((updates[0] as { from?: { id: string } }).from?.id, 'unknown');
+  assert.equal((updates[0] as { message?: string }).message, '');
+});
+
+test('toStreamDomainObjects handles missing userIds in typing', () => {
+  const updates = toStreamDomainObjects([
+    { kind: 'typing', roomId: 'r1' },
+    { kind: 'typing', roomId: 'r1', userIds: ['@t2_peer:reddit.com'] },
+  ]);
+  assert.equal(updates.length, 1);
+});
+
+test('toStreamDomainObjects handles message_deleted without redacts', () => {
+  const updates = toStreamDomainObjects([
+    { kind: 'message_deleted', roomId: 'r1' },
+    { kind: 'message_deleted', roomId: 'r1', redacts: 'm1' },
+  ]);
+  assert.equal(updates.length, 1);
+});
+
+test('mapNetworkUpdate handles malformed sync payloads', () => {
+  const mapper = createRedditStreamDomainMapper('self');
+  assert.deepEqual(mapper.mapNetworkUpdate('network.response', { body: '{}' }), []);
+  assert.deepEqual(mapper.mapNetworkUpdate('network.response', { body: '123' }), []);
+  assert.deepEqual(mapper.mapNetworkUpdate('network.response', { body: '"string"' }), []);
+});
+
+test('mapNetworkUpdate handles base64 decode failure', () => {
+  const mapper = createRedditStreamDomainMapper('self');
+  assert.deepEqual(mapper.mapNetworkUpdate('network.response', { body: '!!!', base64Encoded: true }), []);
+});

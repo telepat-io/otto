@@ -76,3 +76,91 @@ test('matchingSubscriptionsForUrl filters without mimeType check', () => {
   assert.equal(matches.length, 1);
   assert.equal(matches[0].requestId, 'sub-1');
 });
+
+test('matchingSubscriptionsForUrl returns empty when no tab state', () => {
+  const matches = matchingSubscriptionsForUrl(new Map(), new Map(), 1, 'https://reddit.com/r/test');
+  assert.equal(matches.length, 0);
+});
+
+test('matchingSubscriptionsForUrl skips missing subscriptions', () => {
+  const tabStates = new Map([[1, { tabId: 1, attached: true, subscriptions: new Set(['sub-missing']) }]]);
+  const matches = matchingSubscriptionsForUrl(tabStates, new Map(), 1, 'https://reddit.com/r/test');
+  assert.equal(matches.length, 0);
+});
+
+test('matchingSubscriptionsForUrl filters by site and host allowlist', () => {
+  const tabStates = new Map([[1, { tabId: 1, attached: true, subscriptions: new Set(['sub-1', 'sub-2']) }]]);
+  const subscriptions = new Map([
+    ['sub-1', { requestId: 'sub-1', tabId: 1, tabSessionId: 't1', site: 'google.com', urlPatterns: ['https://reddit.com/*'], requestHostAllowlist: [], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'network' as const, mimeTypes: [], emitToRelay: true }],
+    ['sub-2', { requestId: 'sub-2', tabId: 1, tabSessionId: 't1', site: 'google.com', urlPatterns: ['https://reddit.com/*'], requestHostAllowlist: ['reddit.com'], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'network' as const, mimeTypes: [], emitToRelay: true }],
+  ]);
+
+  const matches = matchingSubscriptionsForUrl(tabStates, subscriptions, 1, 'https://reddit.com/r/test');
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].requestId, 'sub-2');
+});
+
+test('matchingSubscriptions filters by mimeType', () => {
+  const tabStates = new Map([[1, { tabId: 1, attached: true, subscriptions: new Set(['sub-1', 'sub-2']) }]]);
+  const subscriptions = new Map([
+    ['sub-1', { requestId: 'sub-1', tabId: 1, tabSessionId: 't1', site: 'reddit.com', urlPatterns: ['https://reddit.com/*'], requestHostAllowlist: [], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'network' as const, mimeTypes: ['application/json'], emitToRelay: true }],
+    ['sub-2', { requestId: 'sub-2', tabId: 1, tabSessionId: 't1', site: 'reddit.com', urlPatterns: ['https://reddit.com/*'], requestHostAllowlist: [], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'network' as const, mimeTypes: ['text/html'], emitToRelay: true }],
+  ]);
+
+  const matches = matchingSubscriptions(tabStates, subscriptions, 1, {
+    url: 'https://reddit.com/r/test',
+    status: 200,
+    mimeType: 'application/json',
+  });
+
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].requestId, 'sub-1');
+});
+
+test('buildFetchPatterns skips network mode subscriptions', () => {
+  const tabStates = new Map([[1, { tabId: 1, attached: true, subscriptions: new Set(['sub-1', 'sub-2']) }]]);
+  const subscriptions = new Map([
+    ['sub-1', { requestId: 'sub-1', tabId: 1, tabSessionId: 't1', site: 'reddit.com', urlPatterns: ['https://a.com/*'], requestHostAllowlist: [], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'network' as const, mimeTypes: [], emitToRelay: true }],
+    ['sub-2', { requestId: 'sub-2', tabId: 1, tabSessionId: 't1', site: 'reddit.com', urlPatterns: ['https://b.com/*'], requestHostAllowlist: [], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'fetch' as const, mimeTypes: [], emitToRelay: true }],
+  ]);
+
+  const patterns = buildFetchPatterns(tabStates, subscriptions, 1);
+  assert.equal(patterns.length, 1);
+  assert.equal(patterns[0]?.urlPattern, 'https://b.com/*');
+});
+
+test('matchingSubscriptions returns empty when no tab state', () => {
+  const matches = matchingSubscriptions(new Map(), new Map(), 1, {
+    url: 'https://reddit.com/r/test',
+    status: 200,
+    mimeType: 'application/json',
+  });
+  assert.equal(matches.length, 0);
+});
+
+test('matchingSubscriptions skips missing subscriptions', () => {
+  const tabStates = new Map([[1, { tabId: 1, attached: true, subscriptions: new Set(['sub-missing']) }]]);
+  const matches = matchingSubscriptions(tabStates, new Map(), 1, {
+    url: 'https://reddit.com/r/test',
+    status: 200,
+    mimeType: 'application/json',
+  });
+  assert.equal(matches.length, 0);
+});
+
+test('matchingSubscriptions filters by site and host allowlist', () => {
+  const tabStates = new Map([[1, { tabId: 1, attached: true, subscriptions: new Set(['sub-1', 'sub-2']) }]]);
+  const subscriptions = new Map([
+    ['sub-1', { requestId: 'sub-1', tabId: 1, tabSessionId: 't1', site: 'google.com', urlPatterns: ['https://reddit.com/*'], requestHostAllowlist: [], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'network' as const, mimeTypes: ['application/json'], emitToRelay: true }],
+    ['sub-2', { requestId: 'sub-2', tabId: 1, tabSessionId: 't1', site: 'google.com', urlPatterns: ['https://reddit.com/*'], requestHostAllowlist: ['reddit.com'], includeBody: false, includeHeaders: false, maxBodyBytes: 1024, mode: 'network' as const, mimeTypes: ['application/json'], emitToRelay: true }],
+  ]);
+
+  const matches = matchingSubscriptions(tabStates, subscriptions, 1, {
+    url: 'https://reddit.com/r/test',
+    status: 200,
+    mimeType: 'application/json',
+  });
+
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].requestId, 'sub-2');
+});

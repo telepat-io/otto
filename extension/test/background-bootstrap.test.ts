@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   relayHttpFromWs,
+  ensureNodeId,
   ensurePairingState,
   ensureOffscreenDocument,
   reconcileAutomationState,
@@ -565,4 +566,103 @@ test('reconcileAutomationState rebuilds missing automation group and reattaches 
   const calls = getTabsGroupCalls();
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0]?.tabIds.slice().sort((a, b) => a - b), [31, 32]);
+});
+
+test('ensureNodeId generates new id when missing', async () => {
+  const { chromeApi, localStore } = createChromeMock({});
+
+  const nodeId = await ensureNodeId(chromeApi);
+  assert.ok(nodeId.startsWith('node_'));
+  assert.equal(localStore.nodeId, nodeId);
+});
+
+test('ensurePairingState clears partial token state', async () => {
+  const { chromeApi, localStore } = createChromeMock({
+    nodeId: 'node_test_partial',
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    nodeAccessToken: 'only_access',
+  });
+
+  await ensurePairingState(chromeApi, (async () => ({ ok: true, async json() { return {}; } })) as unknown as typeof fetch, () => undefined);
+
+  assert.equal(localStore.nodeAccessToken, undefined);
+  assert.equal(localStore.nodeRefreshToken, undefined);
+});
+
+test('reconcileAutomationState clears automation group when no valid tabs remain', async () => {
+  const { chromeApi, sessionStore } = createChromeMock({}, {
+    initialSession: {
+      automationGroupId: 42,
+      tabSessions: {
+        stale_tab: 99,
+      },
+    },
+    tabsById: {},
+    existingGroupIds: [42],
+  });
+
+  await reconcileAutomationState(chromeApi, () => undefined);
+
+  assert.equal(sessionStore.automationGroupId, undefined);
+});
+
+test('reconcileAutomationState reattaches tabs to existing group', async () => {
+  const { chromeApi, sessionStore, getTabsGroupCalls } = createChromeMock({}, {
+    initialSession: {
+      automationGroupId: 42,
+      tabSessions: {
+        tab_a: 31,
+        tab_b: 32,
+      },
+    },
+    tabsById: {
+      31: { id: 31, groupId: -1 },
+      32: { id: 32, groupId: 42 },
+    },
+    existingGroupIds: [42],
+  });
+
+  await reconcileAutomationState(chromeApi, () => undefined);
+
+  assert.equal(sessionStore.automationGroupId, 42);
+  const calls = getTabsGroupCalls();
+  assert.ok(calls.some((c) => c.tabIds.includes(31)));
+});
+
+test('ensurePairingState handles expired pairing challenge', async () => {
+  const { chromeApi, localStore } = createChromeMock({
+    nodeId: 'node_test',
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    pairingChallengeId: 'ch_exp',
+    pairingCode: '000-000',
+    pairingExpiresAt: Date.now() + 300_000,
+  });
+
+  const fetchCalls: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    fetchCalls.push(url);
+    if (url.includes('/api/pairing/status')) {
+      return {
+        ok: true,
+        async json() {
+          return { status: 'expired' };
+        },
+      };
+    }
+    return {
+      ok: true,
+      async json() {
+        return {
+          challengeId: 'ch_new',
+          code: '111-222',
+          expiresAt: Date.now() + 300_000,
+        };
+      },
+    };
+  }) as typeof fetch;
+
+  await ensurePairingState(chromeApi, fetchImpl, () => undefined);
+
+  assert.equal(localStore.pairingChallengeId, 'ch_new');
+  assert.equal(localStore.pairingCode, '111-222');
 });

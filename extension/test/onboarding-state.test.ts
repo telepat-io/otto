@@ -75,3 +75,38 @@ test('deriveOnboardingState prioritizes error state when relay error exists', ()
   assert.equal(view.badgeText, 'ERR');
   assert.match(view.detail, /failed to connect/i);
 });
+
+test('deriveOnboardingState uses default error detail when relayConnectionError is missing', () => {
+  const view = deriveOnboardingState({
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    nodeId: 'node_abc',
+    relayConnectionStatus: 'error',
+  });
+
+  assert.equal(view.state, 'error');
+  assert.equal(view.badgeText, 'ERR');
+  assert.match(view.detail, /unable to reach relay/i);
+});
+
+test('deriveOnboardingState returns connected when only one version is defined', () => {
+  const view = deriveOnboardingState({
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    nodeId: 'node_abc',
+    nodeAccessToken: 'token',
+    relayConnectionStatus: 'authenticated_connected',
+    relayVersion: '0.3.0',
+  });
+
+  assert.equal(view.state, 'authenticated_connected');
+  assert.equal(view.badgeText, 'OK');
+});
+
+test('deriveOnboardingState returns requesting_pairing_code when no token or pairing code', () => {
+  const view = deriveOnboardingState({
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    nodeId: 'node_abc',
+  });
+
+  assert.equal(view.state, 'requesting_pairing_code');
+  assert.equal(view.badgeText, 'PAIR');
+});

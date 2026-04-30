@@ -2123,6 +2123,300 @@ test('command.run getSearchResults returns empty results when page script return
   assert.equal(data.query, 'unparseable query');
 });
 
+test('command.run getFeed filters out invalid post objects', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: { tab_alpha: 11 },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    scriptResults: [{ authenticated: true }, { posts: [
+      { kind: 'content.post', id: 'valid', title: 'Valid' },
+      null,
+      { kind: 'content.post', id: 123, title: 'Invalid id type' },
+      { kind: 'other.kind', id: 'other', title: 'Other' },
+      { kind: 'content.post', id: 'valid2', title: 'Valid 2' },
+    ] }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getFeed',
+    input: {},
+    authMode: 'auto',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  const posts = data.posts as Array<Record<string, unknown>>;
+  assert.equal(posts.length, 2);
+  assert.equal(posts[0]?.id, 'valid');
+  assert.equal(posts[1]?.id, 'valid2');
+});
+
+test('command.run sendChatMessage rejects missing message', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'sendChatMessage',
+      input: { username: 'alice' },
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal((err as CommandExecutionError).code, 'missing_command_input');
+      return true;
+    },
+  );
+});
+
+test('command.run sendChatMessage resolves roomId from string roomSeed', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    tabUrlSequenceById: {
+      11: [
+        'https://www.reddit.com/',
+        'https://www.reddit.com/',
+        'https://chat.reddit.com/room/room_str',
+      ],
+    },
+    scriptResults: [
+      { authenticated: true },
+      'room_str',
+      { sent: true, roomId: 'room_str', username: 'alice' },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'sendChatMessage',
+    input: {
+      username: 'alice',
+      message: 'hello',
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'sendChatMessage',
+    sent: true,
+    attempts: 1,
+    roomId: 'room_str',
+    username: 'alice',
+  });
+});
+
+test('command.run getChatMessages falls back to formatted_body when body is missing', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: 'https://chat.reddit.com/' },
+    scriptResults: [
+      { authenticated: true },
+      {
+        chunk: [
+          {
+            type: 'm.room.message',
+            event_id: 'evt_3',
+            sender: '@t2_xyz:reddit.com',
+            origin_server_ts: 1710000002000,
+            content: { formatted_body: '<p>hello html</p>' },
+          },
+          {
+            type: 'm.room.message',
+            event_id: 'evt_4',
+            sender: '@t2_xyz:reddit.com',
+            origin_server_ts: 1710000003000,
+            content: { body: '   ' },
+          },
+        ],
+      },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getChatMessages',
+    input: {
+      roomId: 'room_1',
+      limit: 20,
+    },
+    authMode: 'strict_fail',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getChatMessages',
+    scope: 'room',
+    roomId: 'room_1',
+    totalCount: 1,
+    roomCount: 1,
+    rooms: [
+      {
+        roomId: 'room_1',
+        count: 1,
+        messages: [
+          {
+            eventId: 'evt_3',
+            roomId: 'room_1',
+            text: '<p>hello html</p>',
+            sender: '@t2_xyz:reddit.com',
+            createdAt: '2024-03-09T16:00:02.000Z',
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test('command.run rejects unknown site', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+    tabUrls: { 11: 'https://unknown.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'unknown.com',
+      command: 'getFeed',
+      input: {},
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'unknown_site');
+      return true;
+    },
+  );
+});
+
+test('command.run rejects unknown command', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'unknownCommand',
+      input: {},
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'unknown_command');
+      return true;
+    },
+  );
+});
+
+test('command.run surfaces generic debugger focus errors', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+    debuggerAttachErrorValue: new Error('Some random attach failure'),
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: 'getFeed',
+      input: {},
+      authMode: 'auto',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'debugger_focus_attach_failed');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe rejects invalid includeHeaders type', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        includeHeaders: 'yes',
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'invalid_listener_include_headers');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe rejects non-array urlPatterns', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        urlPatterns: 'https://example.com/*',
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'invalid_listener_url_patterns');
+      return true;
+    },
+  );
+});
+
+test('listener.subscribe rejects non-array requestHostAllowlist', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        requestHostAllowlist: 'reddit.com',
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'invalid_listener_request_hosts');
+      return true;
+    },
+  );
+});
+
 test('command.run rejects unexpected input fields before execute', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
@@ -3117,6 +3411,99 @@ test('command.run getUserInfo maps reddit profile payload', async () => {
   });
 });
 
+test('listener.subscribe rejects empty streamAdapter string', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('listener.subscribe', {
+      listener: 'network.http_intercept',
+      options: {
+        tabSessionId: 'tab_alpha',
+        site: 'reddit.com',
+        streamAdapter: '  ',
+      },
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_listener_stream_adapter');
+      return true;
+    },
+  );
+});
+
+test('listener.unsubscribe returns unsubscribed payload', async () => {
+  const { chromeApi } = createChromeMock();
+
+  const result = await executeCommand(chromeApi, buildCommand('listener.unsubscribe', {
+    targetRequestId: 'req_123',
+  }));
+
+  assert.deepEqual(result.data, {
+    targetRequestId: 'req_123',
+    unsubscribed: true,
+  });
+});
+
+test('unsupported action throws deterministic error', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.unknown.action', {})),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'unsupported_action');
+      assert.equal(commandErr.stage, 'validation');
+      assert.equal(commandErr.retryable, false);
+      return true;
+    },
+  );
+});
+
+test('primitive.dom.extract_distilled_html throws when dom-distiller and readability both fail', async () => {
+  const { chromeApi } = createChromeMock({
+    scriptResults: [
+      { kind: 'failure', reason: 'DomDistiller.apply is unavailable in page context' },
+      { kind: 'failure', reason: 'Readability constructor is unavailable in page context' },
+    ],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.dom.extract_distilled_html', {
+      url: 'https://example.com/article',
+      mode: 'dom-distiller',
+      fallbackToReadability: false,
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'distiller_unavailable');
+      return true;
+    },
+  );
+});
+
+test('primitive.page.screenshot rejects invalid format', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.page.screenshot', {
+      tabSessionId: 'tab_alpha',
+      format: 'gif',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'invalid_screenshot_format');
+      return true;
+    },
+  );
+});
+
 test('listener.unsubscribe requires targetRequestId', async () => {
   const { chromeApi } = createChromeMock();
 
@@ -3131,4 +3518,94 @@ test('listener.unsubscribe requires targetRequestId', async () => {
       return true;
     },
   );
+});
+
+test('command.run rejects empty site', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: '',
+      command: 'getFeed',
+      input: {},
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'missing_site');
+      return true;
+    },
+  );
+});
+
+test('command.run rejects empty command', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+    tabUrls: { 11: 'https://www.reddit.com/' },
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('command.run', {
+      tabSessionId: 'tab_alpha',
+      site: 'reddit.com',
+      command: '',
+      input: {},
+      authMode: 'skip',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal(err.code, 'missing_command');
+      return true;
+    },
+  );
+});
+
+test('primitive.page.screenshot reports debugger permission denied for chrome URLs', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: { tabSessions: { tab_alpha: 11 } },
+    tabIds: [11],
+    debuggerAttachErrorValue: new Error('Cannot access a chrome:// URL'),
+  });
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.page.screenshot', {
+      tabSessionId: 'tab_alpha',
+      mode: 'viewport',
+    })),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      assert.equal((err as CommandExecutionError).code, 'screenshot_debugger_permission_denied');
+      return true;
+    },
+  );
+});
+
+test('primitive.tab.open recovers when tab group update throws nested cause object', async () => {
+  const staleGroupId = 1060980695;
+  const { chromeApi, sessionStore, getGroupCreateCount } = createChromeMock({
+    sessionSeed: {
+      automationGroupId: staleGroupId,
+    },
+    tabIds: [11],
+    invalidTabGroupUpdateIds: [staleGroupId],
+    invalidTabGroupUpdateErrorValue: {
+      cause: {
+        message: `No group with id: ${staleGroupId}.`,
+      },
+    },
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.tab.open', { url: 'https://www.reddit.com/' }));
+  const data = result.data as { tabId?: number; tabSessionId?: string };
+
+  assert.equal(typeof data.tabId, 'number');
+  assert.ok(data.tabSessionId);
+  assert.equal(typeof sessionStore.automationGroupId, 'number');
+  assert.notEqual(sessionStore.automationGroupId, staleGroupId);
+  assert.equal(getGroupCreateCount(), 1);
 });
