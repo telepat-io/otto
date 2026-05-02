@@ -209,15 +209,21 @@ jobs:
           npm run --workspace @telepat/otto-relay build
           npm run --workspace @telepat/otto-relay test
 
+          npm run --workspace @telepat/otto-sdk check
+          npm run --workspace @telepat/otto-sdk lint
+          npm run --workspace @telepat/otto-sdk build
+          npm run --workspace @telepat/otto-sdk test:coverage
+
           npm run --workspace @telepat/otto check
           npm run --workspace @telepat/otto lint
           npm run --workspace @telepat/otto build
           npm run --workspace @telepat/otto test
 
-      - name: Publish protocol, relay, and CLI
+      - name: Publish protocol, relay, SDK, and CLI
         run: |
           npm publish --workspace @telepat/otto-protocol --access public --provenance
           npm publish --workspace @telepat/otto-relay --access public --provenance
+          npm publish --workspace @telepat/otto-sdk --access public --provenance
           npm publish --workspace @telepat/otto --access public --provenance
 
   upload-extension-assets:

@@ -38,6 +38,7 @@ Commands flow from controller → relay → node. Results and stream updates flo
 | [Getting Started](./overview.md) | Install Otto, run setup, and send your first command |
 | [Guides](./architecture.md) | Architecture, pairing, command authoring, troubleshooting |
 | [Reference](./cli/index.md) | CLI commands, protocol, API, configuration, error codes |
+| [SDK](./sdk/index.md) | JavaScript / TypeScript SDK for building custom controllers |
 | [Technical](./security.md) | Security controls and testing strategy |
 | [Contributing](./development.md) | Local dev setup and release process |
 | [For Agents](./for-agents/index.md) | Machine-readable automation guide for AI agents |

@@ -13,11 +13,14 @@
         {"type": "json", "path": "packages/relay/package.json", "jsonpath": "$.version"},
         {"type": "json", "path": "packages/relay/package.json", "jsonpath": "$.dependencies['@telepat/otto-protocol']"},
         {"type": "json", "path": "packages/shared-protocol/package.json", "jsonpath": "$.version"},
+        {"type": "json", "path": "packages/sdk/package.json", "jsonpath": "$.version"},
+        {"type": "json", "path": "packages/sdk/package.json", "jsonpath": "$.dependencies['@telepat/otto-protocol']"},
         {"type": "json", "path": "extension/package.json", "jsonpath": "$.version"},
         {"type": "json", "path": "extension/package.json", "jsonpath": "$.dependencies['@telepat/otto-protocol']"},
         "packages/cli/.version",
         "packages/relay/.version",
         "packages/shared-protocol/.version",
+        "packages/sdk/.version",
         "extension/.version"
       ]
     }

@@ -41,6 +41,11 @@ jobs:
             hasTests: true
             coverageFlag: otto-extension
             coverageFile: extension/coverage/lcov.info
+          - label: sdk
+            workspace: '@telepat/otto-sdk'
+            hasTests: true
+            coverageFlag: otto-sdk
+            coverageFile: packages/sdk/coverage/lcov.info
     steps:
       - name: Checkout
         uses: actions/checkout@v4
