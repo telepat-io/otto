@@ -54,6 +54,7 @@ export function registerObserveCommands(params: {
     .description('List available commands')
     .option('--node-id <id>', 'Override target node id')
     .option('--site <site>', 'Filter by site, for example reddit.com')
+    .option('--json', 'Output full JSON result', false)
     .option('--timeout <ms>', 'Command timeout in milliseconds', '30000')
     .action(async (opts) => {
       const config = params.loadConfig();
@@ -112,6 +113,7 @@ export function registerObserveCommands(params: {
     .option('--max-body-bytes <n>', 'Max response body bytes per update', '256000')
     .option('--mime <mime>', 'Allowed MIME prefix (repeat for multiple)', params.collectString, [])
     .option('--node-id <id>', 'Override target node id')
+    .option('--json', 'Output stream frames as JSON', false)
     .option('--timeout <ms>', 'Command timeout in milliseconds', '30000')
     .action(async (opts) => {
       const config = params.loadConfig();
@@ -156,6 +158,7 @@ export function registerObserveCommands(params: {
     .description('Unsubscribe an active listener by its subscribe request id')
     .requiredOption('--target-request-id <id>', 'Original subscribe request id')
     .option('--node-id <id>', 'Override target node id')
+    .option('--json', 'Output full JSON result', false)
     .option('--timeout <ms>', 'Command timeout in milliseconds', '30000')
     .action(async (opts) => {
       const config = params.loadConfig();
@@ -184,6 +187,7 @@ export function registerObserveCommands(params: {
     .option('--latest <n>', 'Return only the latest N logs')
     .option('--node-id <id>', 'Filter by nodeId')
     .option('--request-id <id>', 'Filter by requestId')
+    .option('--json', 'Output full JSON result', false)
     .action(async (opts) => {
       const config = params.loadConfig();
       const base = config.relayHttpUrl ?? params.deriveHttpUrl(config.relayUrl);
@@ -226,6 +230,7 @@ export function registerObserveCommands(params: {
   logs
     .command('status')
     .description('Show relay log storage status')
+    .option('--json', 'Output full JSON result', false)
     .action(async () => {
       const config = params.loadConfig();
       const base = config.relayHttpUrl ?? params.deriveHttpUrl(config.relayUrl);

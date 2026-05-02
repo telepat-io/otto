@@ -73,7 +73,7 @@ otto cmd [options]
 | `--node-id` | | No | string | Auto-selected | Target node ID |
 | `--tab-session` | | No | string | | Tab session ID for tab-scoped actions |
 | `--timeout` | | No | number | 30000 | Command timeout in milliseconds |
-| `--json` | | No | boolean | false | Output result as JSON |
+| `--json` | | No | boolean | false | Output result as JSON and skip interactive TUI |
 
 ### Examples
 
