@@ -7,6 +7,7 @@ import {
   ottoCmdToolInputSchema,
   ottoTestToolInputSchema,
   ottoScreenshotToolInputSchema,
+  ottoExtractContentToolInputSchema,
   ottoLogsListToolInputSchema,
   ottoLogsFollowToolInputSchema,
   ottoLogsExportToolInputSchema,
@@ -96,6 +97,33 @@ test('otto_test schema rejects invalid authMode', () => {
 test('otto_screenshot schema requires url', () => {
   assert.equal(validateSchema(ottoScreenshotToolInputSchema, {}), false);
   assert.equal(validateSchema(ottoScreenshotToolInputSchema, { url: 'https://example.com' }), true);
+});
+
+test('otto_extract_content schema accepts url-only input', () => {
+  assert.equal(validateSchema(ottoExtractContentToolInputSchema, { url: 'https://example.com' }), true);
+});
+
+test('otto_extract_content schema accepts tabSession-only input', () => {
+  assert.equal(validateSchema(ottoExtractContentToolInputSchema, { tabSession: 'tab_123' }), true);
+});
+
+test('otto_extract_content schema accepts all optional fields', () => {
+  assert.equal(validateSchema(ottoExtractContentToolInputSchema, {
+    tabSession: 'tab_123',
+    format: 'markdown',
+    distillMode: 'dom-distiller',
+    fallbackToReadability: true,
+    maxChars: 200000,
+    nodeId: 'node_1',
+    timeout: 45000,
+  }), true);
+});
+
+test('otto_extract_content schema rejects invalid format', () => {
+  assert.equal(validateSchema(ottoExtractContentToolInputSchema, {
+    url: 'https://example.com',
+    format: 'html',
+  }), false);
 });
 
 test('otto_logs_list schema accepts all filter options', () => {
@@ -219,7 +247,7 @@ test('otto_extension_info schema accepts empty input', () => {
 });
 
 test('tool contracts count matches registered tools', () => {
-  assert.equal(ottoToolContracts.length, 24);
+  assert.equal(ottoToolContracts.length, 25);
 });
 
 test('all tool contracts have required fields', () => {

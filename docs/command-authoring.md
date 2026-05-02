@@ -139,9 +139,19 @@ otto test example.com getItems
 
 # Run with explicit input
 otto test example.com getItems --payload '{"limit": 5}'
+
+# Inspect target page content quickly (defaults to markdown)
+otto extract-content https://example.com
 ```
 
 A successful run returns a JSON result with `messageType: result` and exits with code `0`.
+
+For extraction-heavy debugging, prefer `otto extract-content` over hand-written primitive sequences. It consolidates output selection in one place:
+
+- `--format markdown` (default) for quick page understanding
+- `--format distilled_html` for readability-safe HTML capture
+- `--format raw_html --selector <css>` for precise DOM snapshots
+- `--format text --tab-session <id>` for visible text extraction from managed tabs
 
 ## Safety rules
 

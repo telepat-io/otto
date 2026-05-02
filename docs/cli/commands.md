@@ -1,10 +1,11 @@
 ---
 title: Command Execution
 sidebar_position: 8
-description: CLI reference for otto commands list, otto cmd, and otto test — browse available browser commands, run one-shot actions, and stream test sessions.
+description: CLI reference for otto commands list, otto cmd, otto extract-content, and otto test — browse available browser commands, run one-shot actions, extract page content, and stream test sessions.
 keywords:
   - otto commands list
   - otto cmd
+  - otto extract-content
   - otto test
   - command execution
   - stream follow
@@ -12,7 +13,7 @@ keywords:
 
 # Command Execution
 
-Browse available browser commands, run one-shot actions, and run streaming test sessions.
+Browse available browser commands, run one-shot actions, extract content from pages, and run streaming test sessions.
 
 ## `otto commands list`
 
@@ -127,6 +128,7 @@ otto test <site> <command> [options]
 | `--timeout` | | No | number | 30000 | Command timeout in milliseconds |
 | `--stream-follow-ms` | | No | number | | How long to follow stream updates after command completes (ms) |
 | `--stream-probe` | | No | boolean | false | Force traffic probe immediately after stream subscribe |
+| `--stream-poll-interval-ms` | | No | number | | Poll interval override for stream listener modes that support polling |
 | `--wait-for-interrupt` | | No | boolean | false | Keep the managed tab open until Ctrl+C |
 | `--json` | | No | boolean | false | Output as JSON (machine-readable stream frames) |
 
@@ -163,6 +165,67 @@ If `--tab-session` is omitted, `otto test` auto-opens a tab to the command's `pr
 |---|---|
 | `0` | Test completed successfully |
 | `1` | Test failed, timed out, `manual_login_required`, or relay error |
+
+---
+
+## `otto extract-content`
+
+Extracts page content through one command with selectable output format. Default format is `markdown`.
+
+### Usage
+
+```bash
+otto extract-content [url] [options]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|---|---|---|
+| `[url]` | No | Page URL to extract from. Optional when `--tab-session` is provided. |
+
+### Flags
+
+| Flag | Shorthand | Required | Type | Default | Description |
+|---|---|---|---|---|---|
+| `--format` | | No | enum | `markdown` | `markdown`, `distilled_html`, `raw_html`, or `text` |
+| `--tab-session` | | No | string | | Existing tab session ID to extract from |
+| `--selector` | | No | string | `body` | CSS selector (supported for `raw_html` and `text`) |
+| `--distill-mode` | | No | enum | `readability` | `readability` or `dom-distiller` (for `markdown` and `distilled_html`) |
+| `--no-fallback-to-readability` | | No | boolean | false | Disable readability fallback when `dom-distiller` is selected |
+| `--max-chars` | | No | number | | Maximum extracted characters for supported formats |
+| `--node-id` | | No | string | Auto-selected | Target node ID |
+| `--timeout` | | No | number | 60000 | Command timeout in milliseconds |
+| `--json` | | No | boolean | false | Output full JSON result |
+
+### Examples
+
+```bash
+# Extract markdown (default)
+otto extract-content https://example.com
+
+# Extract distilled HTML
+otto extract-content https://example.com --format distilled_html
+
+# Extract raw HTML from a selector
+otto extract-content https://example.com --format raw_html --selector article
+
+# Extract text from an existing managed tab
+otto extract-content --format text --tab-session <tabSessionId>
+```
+
+### Behavior notes
+
+- Provide either `[url]` or `--tab-session`.
+- For `--format text` and URL-only calls, Otto auto-opens a temporary managed tab, extracts text, and closes the tab.
+- `--selector` is rejected for `markdown` and `distilled_html`.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Extraction completed successfully |
+| `1` | Extraction failed, input validation failed, or relay error |
 
 ---
 

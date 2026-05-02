@@ -30,7 +30,7 @@ The server runs on stdio transport and is intended to be spawned by an MCP clien
 
 ## Available tools
 
-The server exposes 24 tools organized by category:
+The server exposes 25 tools organized by category:
 
 ### Status tools
 
@@ -46,6 +46,7 @@ The server exposes 24 tools organized by category:
 | `otto_cmd` | Send a command to a connected node |
 | `otto_test` | Run a site command for testing (auto-registers controller if needed) |
 | `otto_screenshot` | Capture a screenshot of a URL |
+| `otto_extract_content` | Extract content with one tool (`markdown`, `distilled_html`, `raw_html`, `text`) |
 
 ### Observation tools
 
@@ -128,6 +129,29 @@ The server exposes 24 tools organized by category:
   }
 }
 ```
+
+### Extract content (default markdown)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "otto_extract_content",
+    "arguments": {
+      "url": "https://example.com"
+    }
+  }
+}
+```
+
+`otto_extract_content` input highlights:
+
+- `format`: `markdown` (default), `distilled_html`, `raw_html`, `text`
+- target selection: provide `url` or `tabSession`
+- `selector`: supported for `raw_html` and `text`
+- `distillMode` / `fallbackToReadability`: for `markdown` and `distilled_html`
 
 ## Error handling
 

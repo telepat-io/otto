@@ -44,6 +44,20 @@ export const ottoScreenshotToolInputSchema = {
   out: z.string().optional().describe('Output file path.'),
 };
 
+export const ottoExtractContentToolInputSchema = {
+  url: z.string().optional().describe('URL to extract from. Optional when tabSession is provided.'),
+  tabSession: z.string().optional().describe('Tab session ID to extract from.'),
+  format: z.enum(['markdown', 'distilled_html', 'raw_html', 'text']).optional()
+    .describe('Extraction output format. Default: "markdown".'),
+  selector: z.string().optional().describe('CSS selector for raw_html and text extraction.'),
+  distillMode: z.enum(['readability', 'dom-distiller']).optional()
+    .describe('Distillation mode for markdown and distilled_html. Default: "readability".'),
+  fallbackToReadability: z.boolean().optional().describe('Fallback to readability when distiller output is unavailable.'),
+  maxChars: z.coerce.number().int().positive().optional().describe('Maximum extracted characters for supported formats.'),
+  nodeId: z.string().optional().describe('Target node ID.'),
+  timeout: z.coerce.number().int().positive().optional().describe('Timeout in milliseconds. Default: 60000.'),
+};
+
 export const ottoLogsListToolInputSchema = {
   since: z.string().optional().describe('ISO timestamp to filter logs from.'),
   level: z.enum(['debug', 'info', 'warn', 'error']).optional().describe('Log level filter.'),
@@ -163,6 +177,14 @@ export const ottoToolContracts: ToolContract[] = [
   { name: 'otto_cmd', required: ['action'], enums: {} },
   { name: 'otto_test', required: ['site', 'command'], enums: { authMode: ['auto', 'strict_fail', 'skip'], streamListenerMode: ['network', 'fetch', 'hybrid'] } },
   { name: 'otto_screenshot', required: ['url'], enums: {} },
+  {
+    name: 'otto_extract_content',
+    required: [],
+    enums: {
+      format: ['markdown', 'distilled_html', 'raw_html', 'text'],
+      distillMode: ['readability', 'dom-distiller'],
+    },
+  },
   { name: 'otto_logs_list', required: [], enums: { level: ['debug', 'info', 'warn', 'error'], source: ['relay', 'controller', 'node', 'all'] } },
   { name: 'otto_logs_follow', required: [], enums: { level: ['debug', 'info', 'warn', 'error'], source: ['relay', 'controller', 'node', 'all'] } },
   { name: 'otto_logs_export', required: [], enums: { level: ['debug', 'info', 'warn', 'error'], source: ['relay', 'controller', 'node', 'all'] } },

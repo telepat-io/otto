@@ -33,7 +33,9 @@ Otto commands serve two audiences: command authors implementing extension bundle
 | Primitive page | `primitive.page.screenshot` |
 | Command | `command.list`, `command.run`, `command.test`, `command.reddit_feed` (legacy alias) |
 | Listener | `listener.subscribe`, `listener.unsubscribe` |
-| Common CLI entrypoints | `otto commands list`, `otto test <site> <command>`, `otto cmd --action ...` |
+| Common CLI entrypoints | `otto commands list`, `otto test <site> <command>`, `otto extract-content [url]`, `otto cmd --action ...` |
+
+`otto extract-content` is the recommended high-level CLI path for content extraction and defaults to markdown output. It maps to primitive actions under the hood (`primitive.dom.extract_markdown`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_html`, and `primitive.dom.extract_text`) based on `--format`.
 
 ## Site command model
 

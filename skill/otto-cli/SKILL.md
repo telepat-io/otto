@@ -120,6 +120,7 @@ Do not use this skill when:
 3. Choose operation path:
    - Start/stop relay: `otto start` / `otto stop`
    - Run site command: `otto cmd --action command.run --payload '{"site":"...","command":"..."}'`
+   - Extract content: `otto extract-content <url> --format markdown|distilled_html|raw_html|text`
    - Test command: `otto test <site> <command> --json`
    - Capture screenshot: `otto screenshot <url>`
    - View logs: `otto logs list --json` / `otto logs follow`
@@ -170,6 +171,15 @@ otto test reddit.com getChatMessages --stream-follow-ms 30000 --json
 # Capture screenshot
 otto screenshot https://www.reddit.com --json
 
+# Extract content (default format = markdown)
+otto extract-content https://www.reddit.com --json
+
+# Extract distilled HTML
+otto extract-content https://www.reddit.com --format distilled_html --json
+
+# Extract text from an existing tab session
+otto extract-content --format text --tab-session <tabSessionId> --json
+
 # List available commands
 otto commands list --json
 ```
@@ -209,7 +219,7 @@ Documented MCP characteristics:
 
 - Transport: stdio
 - Intended usage: local process-spawned MCP clients
-- Tool set (24 tools): `otto_status`, `otto_commands_list`, `otto_cmd`, `otto_test`, `otto_screenshot`, `otto_logs_list`, `otto_logs_follow`, `otto_logs_export`, `otto_listener_subscribe_network`, `otto_listener_unsubscribe`, `otto_setup`, `otto_start`, `otto_stop`, `otto_config`, `otto_pair`, `otto_authcode`, `otto_revoke`, `otto_client_register`, `otto_client_login`, `otto_client_status`, `otto_client_forget`, `otto_client_remove`, `otto_extension_update`, `otto_extension_info`
+- Tool set (25 tools): `otto_status`, `otto_commands_list`, `otto_cmd`, `otto_test`, `otto_screenshot`, `otto_extract_content`, `otto_logs_list`, `otto_logs_follow`, `otto_logs_export`, `otto_listener_subscribe_network`, `otto_listener_unsubscribe`, `otto_setup`, `otto_start`, `otto_stop`, `otto_config`, `otto_pair`, `otto_authcode`, `otto_revoke`, `otto_client_register`, `otto_client_login`, `otto_client_status`, `otto_client_forget`, `otto_client_remove`, `otto_extension_update`, `otto_extension_info`
 
 Agent framework registration:
 
@@ -235,7 +245,17 @@ Test command:
 - `site` and `command` are required positional arguments.
 - `--stream-follow-ms` enables streaming mode for the specified duration.
 - `--stream-probe` forces immediate traffic after subscribe.
+- `--stream-poll-interval-ms` overrides polling cadence for stream listener modes that support polling.
 - `--json` always recommended for agent/CI use.
+
+Extract content command:
+
+- `otto extract-content` defaults to `--format markdown`.
+- Supported formats: `markdown`, `distilled_html`, `raw_html`, `text`.
+- Use URL or `--tab-session` as the extraction target.
+- `--selector` is supported only for `raw_html` and `text`.
+- `--distill-mode` and `--fallback-to-readability` apply to `markdown` and `distilled_html`.
+- Text extraction with URL auto-opens a temporary managed tab and closes it after extraction.
 
 Node resolution:
 

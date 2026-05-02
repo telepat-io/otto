@@ -13,6 +13,7 @@ import {
   ottoCmdToolInputSchema,
   ottoCommandsListToolInputSchema,
   ottoConfigToolInputSchema,
+  ottoExtractContentToolInputSchema,
   ottoExtensionInfoToolInputSchema,
   ottoExtensionUpdateToolInputSchema,
   ottoListenerSubscribeNetworkToolInputSchema,
@@ -29,6 +30,7 @@ import {
   ottoStopToolInputSchema,
   ottoTestToolInputSchema,
 } from './tools.js';
+import { runExtractContentHandler } from '../cli/extract-content-handler.js';
 import {
   buildRelayStatusReport,
   deleteClientSecret,
@@ -251,6 +253,37 @@ export async function startOttoMcpServer(): Promise<void> {
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         structuredContent: result as Record<string, unknown>,
+      };
+    } catch (error) {
+      return formatToolError(error);
+    }
+  });
+
+  // --- otto_extract_content ---
+  server.registerTool('otto_extract_content', {
+    title: 'Extract Content',
+    description: 'Extract page content in one tool. Formats: markdown (default), distilled_html, raw_html, text.',
+    inputSchema: ottoExtractContentToolInputSchema,
+  }, async (input) => {
+    try {
+      const result = await runExtractContentHandler(
+        {
+          format: input.format,
+          url: input.url,
+          tabSession: input.tabSession,
+          nodeId: input.nodeId,
+          selector: input.selector,
+          maxChars: input.maxChars,
+          distillMode: input.distillMode,
+          fallbackToReadability: input.fallbackToReadability,
+          timeout: input.timeout,
+        },
+        { loadConfig, resolveTargetNodeId, runCommandOnce },
+      );
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        structuredContent: result as unknown as Record<string, unknown>,
       };
     } catch (error) {
       return formatToolError(error);

@@ -140,6 +140,13 @@ Every `command` payload must identify a target node and include replay protectio
 | `primitive.dom.extract_markdown` | Extract Markdown representation |
 | `primitive.page.screenshot` | Screenshot the tab or a URL |
 
+Content extraction is also exposed through first-class controller interfaces:
+
+- CLI: `otto extract-content [url] --format markdown|distilled_html|raw_html|text` (defaults to markdown)
+- MCP: `otto_extract_content` tool with `format` selector and shared targeting (`url` or `tabSession`)
+
+These interfaces map to the primitive DOM actions above and provide one consolidated surface for agents and CLI users.
+
 `command.test` may return a `stream` manifest in `result.payload.data`. Controllers should keep follow-up subscribe traffic on the same authenticated WebSocket, maintain heartbeat (`ping`/`pong`) for long sessions, and use `command_cancel` against the original test `requestId` when shutting down active stream tests.
 
 ## Routing, queueing, and reliability

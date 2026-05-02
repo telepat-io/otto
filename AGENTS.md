@@ -25,7 +25,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Build all: `npm run build`
 - Check types: `npm run check`
 - Lint all: `npm run lint`
-- Test all (where present): `npm run -ws --if-present test`
+- Test all (where present, concise output): `NODE_OPTIONS='--test-reporter=dot' npm run -ws --if-present --silent test`
 - Start relay daemon: `otto start`
 - Start relay attached with logs (dev): `otto start --attached`
 - Stop relay daemon: `otto stop`
@@ -53,7 +53,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - `npm run check`
 - `npm run lint`
 - `npm run build`
-- `npm run -ws --if-present test`
+- `NODE_OPTIONS='--test-reporter=dot' npm run -ws --if-present --silent test`
 - If a command fails, fix the issues and re-run until all pass.
 - Write new tests for any new features or edge cases, and ensure they pass reliably.
 - Update the documentation extensively to reflect any changes in behavior, architecture, or developer experience.

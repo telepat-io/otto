@@ -44,6 +44,7 @@ import {
 } from './client-secret-store.js';
 import { resolveCleanupSocketStrategy } from './test-cleanup.js';
 import { createSocketClosedWhileWaitingError, toSocketCloseAlertPayload } from './cli/socket-errors.js';
+import { buildExtractContentRequest, parseExtractContentFormat } from './content-extraction.js';
 
 type CommandDescriptorLike = {
   site?: string;
@@ -2383,6 +2384,98 @@ logs
     }
     const data = await response.text();
     console.log(data);
+  });
+
+program
+  .command('extract-content')
+  .description('Extract page content with one command (markdown, distilled_html, raw_html, or text)')
+  .argument('[url]', 'Page URL to extract from (optional when --tab-session is provided)')
+  .option('--format <format>', 'markdown|distilled_html|raw_html|text', 'markdown')
+  .option('--tab-session <id>', 'Use an existing tabSessionId instead of opening a temporary tab')
+  .option('--selector <selector>', 'CSS selector (supported for raw_html and text)', 'body')
+  .option('--distill-mode <mode>', 'readability|dom-distiller (markdown/distilled_html only)', 'readability')
+  .option('--no-fallback-to-readability', 'Disable fallback to readability when dom-distiller is selected')
+  .option('--max-chars <n>', 'Maximum extracted character count (format dependent)')
+  .option('--node-id <id>', 'Override target node id')
+  .option('--timeout <ms>', 'Command timeout in milliseconds', '60000')
+  .option('--json', 'Output full JSON result', false)
+  .action(async (url: string | undefined, opts) => {
+    const config = loadConfig();
+    const targetNodeId = await resolveTargetNodeId(config, opts.nodeId);
+    const timeoutMs = parseMaybeNumber(opts.timeout, 60_000);
+    const format = parseExtractContentFormat(opts.format);
+
+    const request = buildExtractContentRequest({
+      format,
+      url,
+      tabSessionId: opts.tabSession,
+      selector: opts.selector,
+      maxChars: opts.maxChars !== undefined ? parsePositiveNumberOption(opts.maxChars, '--max-chars') : undefined,
+      distillMode: opts.distillMode,
+      fallbackToReadability: Boolean(opts.fallbackToReadability),
+    });
+
+    let resolvedTabSessionId = request.tabSessionId;
+    let openedTabSessionId: string | undefined;
+
+    try {
+      if (request.requiresTemporaryTextTab) {
+        const openResponse = await runCommandOnce(config, targetNodeId, {
+          action: 'primitive.tab.open',
+          payload: { url },
+          timeoutMs,
+        });
+
+        if (openResponse.messageType === 'error') {
+          console.log(JSON.stringify(openResponse, null, 2));
+          process.exitCode = 1;
+          return;
+        }
+
+        const openPayload = openResponse.payload as { data?: { tabSessionId?: string } };
+        resolvedTabSessionId = openPayload.data?.tabSessionId;
+        openedTabSessionId = resolvedTabSessionId;
+        if (!resolvedTabSessionId) {
+          throw new Error('primitive.tab.open succeeded but did not return tabSessionId');
+        }
+      }
+
+      const payload = {
+        ...request.payload,
+        ...(resolvedTabSessionId ? { tabSessionId: resolvedTabSessionId } : {}),
+      };
+
+      const response = await runCommandOnce(config, targetNodeId, {
+        action: request.action,
+        tabSession: resolvedTabSessionId,
+        payload,
+        timeoutMs,
+      });
+
+      const output = {
+        format,
+        action: request.action,
+        response,
+      };
+      console.log(JSON.stringify(output, null, 2));
+
+      if (response.messageType === 'error') {
+        process.exitCode = 1;
+      }
+    } finally {
+      if (openedTabSessionId) {
+        try {
+          await runCommandOnce(config, targetNodeId, {
+            action: 'primitive.tab.close',
+            tabSession: openedTabSessionId,
+            payload: { tabSessionId: openedTabSessionId },
+            timeoutMs,
+          });
+        } catch {
+          // Best-effort cleanup for auto-opened extraction tabs.
+        }
+      }
+    }
   });
 
 program

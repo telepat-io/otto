@@ -16,7 +16,8 @@ Full command and argument matrix for the Otto CLI.
 | `otto authcode` | List pending auth codes | (none) |
 | `otto revoke` | Revoke stored refresh token | (none) |
 | `otto cmd` | Send a command to a node | `--action <action>` (required), `--tab-session`, `--node-id`, `--payload <json>`, `--timeout <ms>` |
-| `otto test <site> <command>` | Run a site command for testing | `--node-id`, `--payload`, `--timeout`, `--auth-mode`, `--json`, `--stream-follow-ms`, `--stream-probe`, `--stream-listener-mode` |
+| `otto test <site> <command>` | Run a site command for testing | `--node-id`, `--payload`, `--timeout`, `--auth-mode`, `--json`, `--stream-follow-ms`, `--stream-probe`, `--stream-listener-mode`, `--stream-poll-interval-ms` |
+| `otto extract-content [url]` | Extract content in one command | `--format`, `--tab-session`, `--selector`, `--distill-mode`, `--no-fallback-to-readability`, `--max-chars`, `--node-id`, `--timeout`, `--json` |
 | `otto screenshot <url>` | Capture a screenshot | `--mode`, `--format`, `--quality`, `--max-bytes`, `--node-id`, `--timeout`, `--out`, `--json` |
 | `otto mcp` | Start MCP server on stdio | (none) |
 
@@ -41,7 +42,7 @@ Full command and argument matrix for the Otto CLI.
 
 | Command | Description | Key Options |
 |---------|-------------|-------------|
-| `otto commands list` | List available commands from node | `--node-id`, `--site`, `--timeout` |
+| `otto commands list` | List available commands from node | `--node-id`, `--site`, `--json`, `--timeout` |
 
 ## `otto listener` subcommands
 
@@ -67,7 +68,7 @@ Full command and argument matrix for the Otto CLI.
 | `otto agent uninstall <runtime>` | Remove MCP from agent framework | `<runtime>` argument |
 | `otto agent status` | Show integration status | `--json` |
 
-## MCP tools (24 tools)
+## MCP tools (25 tools)
 
 | Tool | Category | Required Args |
 |------|----------|---------------|
@@ -76,6 +77,7 @@ Full command and argument matrix for the Otto CLI.
 | `otto_cmd` | Execute | `action` |
 | `otto_test` | Execute | `site`, `command` |
 | `otto_screenshot` | Execute | `url` |
+| `otto_extract_content` | Execute | (none) |
 | `otto_logs_list` | Observe | (none) |
 | `otto_logs_follow` | Observe | (none) |
 | `otto_logs_export` | Observe | (none) |

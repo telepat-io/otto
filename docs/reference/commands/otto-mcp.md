@@ -31,11 +31,11 @@ Launches an MCP (Model Context Protocol) server that exposes Otto's full command
 
 ## Available tools
 
-The server exposes 24 tools:
+The server exposes 25 tools:
 
 **Status**: `otto_status`, `otto_commands_list`
 
-**Execute**: `otto_cmd`, `otto_test`, `otto_screenshot`
+**Execute**: `otto_cmd`, `otto_test`, `otto_screenshot`, `otto_extract_content`
 
 **Observe**: `otto_logs_list`, `otto_logs_follow`, `otto_logs_export`, `otto_listener_subscribe_network`, `otto_listener_unsubscribe`
 
