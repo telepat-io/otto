@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/telepat-io/otto/compare/v0.9.0...v0.10.0) (2026-05-02)
+
+
+### Features
+
+* Implement Otto SDK client with WebSocket and HTTP support ([980bd0b](https://github.com/telepat-io/otto/commit/980bd0be6f5d2fad70e733da6082eeb69ab2b2e3))
+
 ## [0.9.0](https://github.com/telepat-io/otto/compare/v0.8.5...v0.9.0) (2026-04-30)
 
 
