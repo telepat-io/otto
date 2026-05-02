@@ -11,6 +11,9 @@ Known failures, diagnosis paths, and remediation.
 | `ECONNREFUSED` on relay URL | Wrong relay URL or port | Check `~/.otto/config.json` relayUrl | Run `otto config --relay-url <correct-url>` |
 | Auth fails with `invalid_access_token` | Token expired, refresh failed | Check `otto client status` | Run `otto client login` |
 | `Timed out waiting for auth_ack` | Relay unreachable or version mismatch | Verify relay is running on expected port | Restart relay, check version |
+| `otto commands list --json` returns `[]` | No extension node connected | `otto status` + check `chrome://extensions` | Follow empty nodes recovery: load extension, set relay URL, run pairing flow |
+| `otto authcode` returns empty array | No node has requested a pairing challenge | Open extension popup | Extension auto-requests a challenge when popup opens; re-run `otto authcode` |
+| Extension popup shows "Waiting..." indefinitely | Pairing code not yet approved | Run `otto authcode` to see pending codes | Run `otto pair <code>` with the displayed code |
 
 ## Node issues
 

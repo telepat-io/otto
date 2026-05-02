@@ -70,6 +70,107 @@ otto status
 otto commands list --json
 ```
 
+## Agent onboarding: first-run decision tree
+
+When an agent first encounters Otto, it must determine which onboarding phase the user is in and guide them forward. This section is the canonical first-run decision tree for agents. Do not skip steps — each gateway must pass before proceeding.
+
+### Decision tree
+
+```
+1. IS OTTO INSTALLED?
+   ├─ Run: otto --version
+   ├─ NO  → npm install -g @telepat/otto
+   │        Then: otto setup --non-interactive
+   │        Parse JSON output for extensionPath and relay URL.
+   │        Proceed to step 5 (extension handoff).
+   └─ YES → Continue to step 2.
+
+2. IS THE RELAY RUNNING?
+   ├─ Run: otto status
+   ├─ NO  → otto start
+   │        Verify with: otto status
+   └─ YES → Continue to step 3.
+
+3. ARE NODES CONNECTED?
+   ├─ Run: otto commands list --json
+   ├─ EMPTY [] OR ERROR →
+   │        See "Empty nodes handling" below.
+   │        (This is a normal first-run state — not a failure.)
+   └─ HAS COMMAND LIST → Continue to step 4.
+
+4. IS THE CONTROLLER AUTHENTICATED?
+   ├─ Run: otto client status --json
+   ├─ NO client registered → otto client register --name "agent-worker" --json
+   │        Then: otto client login
+   │        (For auto-register flows, otto test handles this automatically.)
+   └─ YES → Continue to step 6.
+
+5. EXTENSION HANDOFF (user must perform these):
+   Tell the user to:
+   1. Open chrome://extensions in Chrome.
+   2. Enable Developer mode (toggle in top right).
+   3. Click Load unpacked and select the extension path from setup output.
+   4. Open the extension popup and set the relay URL.
+   5. Return here when done → return to step 3.
+
+6. ACL GRANTED?
+   ├─ If commands return acl_missing_node_grant → tell the user to:
+   │   1. Open the extension popup.
+   │   2. Navigate to Controller Access.
+   │   3. Approve the controller client.
+   │   Then retry the command.
+   └─ YES → The full stack is operational. Proceed to commands.
+```
+
+### Empty nodes handling
+
+When `otto commands list --json` returns `[]` or fails with a connectivity error, diagnose in this order:
+
+| Scenario | How to detect | What to tell the user |
+|----------|--------------|-----------------------|
+| Extension not loaded at all | `otto status` shows relay running but no extension entry in Chrome's `chrome://extensions` | "The Otto extension needs to be loaded in Chrome. Open `chrome://extensions`, enable Developer mode, click Load unpacked, and select the extension folder." |
+| Extension loaded but wrong relay URL | Extension appears in Chrome but shows "disconnected" | "Open the extension popup and set the relay URL to `<relay-url>`. The relay is running at that address." |
+| Extension running, relay URL correct, but unpaired | Extension shows "Waiting" or a pairing code | Proceed to "Pin-based pairing flow" below. |
+| Remote relay deployment | Relay lives on a different server from the controller | "The relay lives at `<relay-url>`. You need to: (1) ensure the relay is running on that server (`otto start` there), and (2) enter that URL in the extension popup. Note: `otto setup` runs on the controller machine — if the relay is remote, it must be started separately on the relay host." |
+
+### Pin-based pairing flow (agent perspective)
+
+The pairing flow uses a short-lived code displayed in the extension popup. The agent approves this code to establish trust between the extension node and the controller.
+
+```
+1. Agent runs: otto authcode
+   → Output shows pending challenge codes, e.g.:
+     {
+       "pending": [
+         { "code": "123-456", "nodeId": "node_abc", ... }
+       ]
+     }
+
+2. IF pending codes exist:
+   → Agent: "I see pending pairing codes: 123-456. Shall I approve all of them?"
+   → Run: otto pair 123-456  (repeat for each code)
+
+3. IF no pending codes (empty array):
+   → Agent tells user: "Open the extension popup in Chrome. It should display a pairing code (e.g., 123-456). Please tell me the code."
+   → (The extension auto-requests a challenge each time the popup opens.)
+   → When user provides the code → Run: otto pair <code>
+
+4. Verify pairing succeeded:
+   → Run: otto commands list --json
+   → A non-empty command list confirms the node is paired and reachable.
+
+5. IF pairing fails (code expired, invalid, or rejected):
+   → Codes are short-lived. The extension auto-reissues a fresh challenge when the popup opens.
+   → Return to step 1: otto authcode
+```
+
+### Key pairing gotchas
+
+- **Pairing codes are ephemeral** — if `otto pair <code>` returns an error, don't retry the same code. Instead, re-run `otto authcode` to get a fresh one.
+- **The extension popup is the code source** — codes originate from the extension, not the CLI. If `otto authcode` shows nothing, the user needs to open the extension popup.
+- **Pairing and controller auth are separate** — pairing approves the node. Controller registration (`otto client register` + `otto client login`) is a separate step for long-lived controller identities. `otto test` auto-handles controller registration for quick flows.
+- **Node grant is node-owned** — after pairing, the user must still explicitly approve the controller client in the extension's Controller Access panel. This can't be automated.
+
 ## Local readiness checks
 
 Readiness checklist:
@@ -82,7 +183,7 @@ Readiness checklist:
 Expected success signals:
 
 - `otto status` shows relay daemon running with PID.
-- `otto commands list --json` returns a list of available commands.
+- `otto commands list --json` returns a non-empty list of available commands.
 - `otto test` exits with code 0 and returns structured result.
 
 ## When to use this skill
@@ -314,6 +415,10 @@ Command outcomes:
 - **Extension handoff**: After `otto setup`, the user must manually load the extension in Chrome. There is no way to automate this step.
 - **Signal handling**: `otto logs follow` and `otto listener subscribe-network` run until interrupted. Use Ctrl+C or a caller-side timeout for agent/CI use.
 - **Non-interactive mode**: `otto setup --non-interactive` requires the relay URL to be pre-configured or passed explicitly.
+- **Empty `otto commands list` is a normal first-run state**: A non-existent or empty node list means no extension node is connected yet. Don't treat it as an error — follow the empty nodes handling decision tree. The answer is never "retry the same command."
+- **Remote relay**: `otto setup` runs on the **controller** machine. If the relay lives on a different server, the user must start it there separately and configure the extension's relay URL to point to that remote address. The controller does not start the remote relay.
+- **Pin codes are short-lived**: If `otto pair <code>` fails with an invalid/expired response, do not retry the same code. Re-run `otto authcode` to get a fresh challenge. The extension auto-reissues a new code each time its popup opens.
+- **Pairing ≠ controller auth**: Pairing (`otto pair`) establishes trust between the extension node and the relay. Controller authentication (`otto client register` + `otto client login`) creates a long-lived controller identity. Both are required before commands can be routed.
 
 ## Clarifying questions for risky operations
 
@@ -347,6 +452,8 @@ Credential:
 | Relay not running | Run `otto start` or `otto setup` |
 | Extension not loaded | Ask user to load extension at `chrome://extensions` |
 | Controller not authenticated | Run `otto client register` then `otto client login` |
+| `otto commands list` returns empty `[]` | No extension node connected — this is normal on first run. Follow the [empty nodes handling](#empty-nodes-handling) decision tree: check extension loaded, relay URL in popup, then pairing flow |
+| `otto authcode` returns empty | No node has requested a pairing challenge. Ask the user to open the extension popup — it auto-requests a challenge on open |
 
 For all failures: correlate by `requestId` using `otto logs list --request-id <id> --source all`.
 

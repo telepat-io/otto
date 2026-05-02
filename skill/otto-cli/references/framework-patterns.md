@@ -132,3 +132,82 @@ otto test reddit.com getFeed --controller-name "test-runner" --json
 # Clean up after test
 # (use --cleanup-test-controller when available)
 ```
+
+## Pattern 11: Agent first-run scaffolding
+
+Complete zero-to-command sequence for an agent onboarding a new user. Run each step, check results, and only proceed when each gateway passes.
+
+```bash
+# Step 1: Verify Otto is installed
+otto --version
+# If not found: npm install -g @telepat/otto
+
+# Step 2: Run setup (non-interactive for agents)
+otto setup --non-interactive
+# Parse JSON output: note extensionPath and relay URL
+
+# Step 3: Start relay if not already running
+otto status
+# If not running: otto start
+
+# --- Extension handoff (user must do this) ---
+# Tell user:
+# 1. Open chrome://extensions
+# 2. Enable Developer mode
+# 3. Click Load unpacked → select extensionPath from setup output
+# 4. Open extension popup → set relay URL
+# Wait for user confirmation, then continue.
+
+# Step 4: Check if nodes are connected
+otto commands list --json
+# If empty []: go to Pattern 12 (empty nodes recovery)
+# If has commands: node is connected and authenticated, proceed
+
+# Step 5: Register controller if needed
+otto client status --json
+# If no client: otto client register --name "agent-worker" --json
+# Then: otto client login
+
+# Step 6: Verify full stack
+otto commands list --json
+
+# Step 7: Run a test command
+otto test reddit.com getFeed --json
+```
+
+## Pattern 12: Empty nodes recovery
+
+When `otto commands list --json` returns `[]` or a connectivity error, diagnose and fix step by step:
+
+```bash
+# 1. Confirm relay is running
+otto status
+
+# 2. Check for pending pairing codes
+otto authcode
+# If empty: ask user to open the extension popup (auto-requests a challenge)
+
+# 3. If pending codes exist, approve them
+otto pair <code>
+
+# 4. Verify node is now connected
+otto commands list --json
+
+# 5. If still empty, check extension state
+# Tell user to verify:
+#   - Extension is loaded at chrome://extensions
+#   - Relay URL in extension popup matches otto status output
+#   - Extension shows "Connected" not "Disconnected" or "Waiting..."
+
+# 6. Remote relay: if relay is on a different server
+# Tell user:
+#   - Ensure relay is running on the remote host (otto start there)
+#   - Set extension relay URL to the remote address
+#   - The controller does not start the remote relay
+
+# 7. If pairing codes expired, retry
+otto authcode
+# Extension auto-reissues a fresh challenge when popup opens
+otto pair <new-code>
+```
+
