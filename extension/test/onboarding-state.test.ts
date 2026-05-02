@@ -76,7 +76,7 @@ test('deriveOnboardingState returns version_mismatch with relay label when relay
   assert.equal(view.state, 'version_mismatch');
   assert.equal(view.stateLabel, 'Relay update required');
   assert.equal(view.badgeText, 'UPDT');
-  assert.match(view.detail, /otto relay update/i);
+  assert.match(view.detail, /npm i -g @telepat\/otto/i);
 });
 
 test('deriveOnboardingState prioritizes error state when relay error exists', () => {

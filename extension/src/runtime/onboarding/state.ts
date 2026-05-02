@@ -83,7 +83,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
         const relayIsOlder = relayVersion.localeCompare(extensionVersion, undefined, { numeric: true, sensitivity: 'base' }) < 0;
         const stateLabel = relayIsOlder ? 'Relay update required' : 'Extension update required';
         const detail = relayIsOlder
-          ? `Version mismatch: extension v${extensionVersion} and relay v${relayVersion}. Action required: run "otto relay update" in terminal to update the relay daemon.`
+          ? `Version mismatch: extension v${extensionVersion} and relay v${relayVersion}. Action required: run "npm i -g @telepat/otto" in terminal to update the relay daemon.`
           : `Version mismatch: extension v${extensionVersion} and relay v${relayVersion}. Action required: run "otto extension update" in terminal, then reload Otto in chrome://extensions or restart your browser.`;
         return {
           state: 'version_mismatch',
