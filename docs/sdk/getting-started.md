@@ -16,7 +16,7 @@ This guide takes you from zero to running your first command through `@telepat/o
 
 ## Prerequisites
 
-- A running Otto relay (`otto start`). See [Installation](/docs/installation) if you haven't set that up yet.
+- A running Otto relay (`otto start`). See [Installation](/installation) if you haven't set that up yet.
 - Node.js 22+ (or an edge runtime — see [Edge runtimes](#edge-runtimes)).
 - npm, yarn, or pnpm.
 
@@ -91,7 +91,7 @@ console.log(nodes);
 // [{ nodeId: 'node_local_1' }, ...]
 ```
 
-Nodes that appear here are both connected to the relay and have granted your controller ACL access. If the list is empty, see the [Pairing](/docs/pairing-auth) guide.
+Nodes that appear here are both connected to the relay and have granted your controller ACL access. If the list is empty, see the [Pairing](/pairing-auth) guide.
 
 ## Step 5 — Run a command
 
@@ -201,4 +201,4 @@ export default {
 
 - [API Reference](./api-reference.md) — complete method signatures and type definitions
 - [Examples](./examples.md) — streaming, retry patterns, CI integration, and more
-- [Error Codes](/docs/error-codes) — relay error codes you may encounter
+- [Error Codes](/error-codes) — relay error codes you may encounter
