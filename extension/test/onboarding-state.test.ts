@@ -58,8 +58,25 @@ test('deriveOnboardingState returns version_mismatch when relay and extension ve
   });
 
   assert.equal(view.state, 'version_mismatch');
+  assert.equal(view.stateLabel, 'Extension update required');
   assert.equal(view.badgeText, 'UPDT');
   assert.match(view.detail, /otto extension update/i);
+});
+
+test('deriveOnboardingState returns version_mismatch with relay label when relay is older than extension', () => {
+  const view = deriveOnboardingState({
+    relayUrl: 'ws://127.0.0.1:8787?role=node',
+    nodeId: 'node_abc',
+    nodeAccessToken: 'token',
+    relayConnectionStatus: 'authenticated_connected',
+    relayVersion: '0.8.5',
+    extensionVersion: '0.9.0',
+  });
+
+  assert.equal(view.state, 'version_mismatch');
+  assert.equal(view.stateLabel, 'Relay update required');
+  assert.equal(view.badgeText, 'UPDT');
+  assert.match(view.detail, /otto relay update/i);
 });
 
 test('deriveOnboardingState prioritizes error state when relay error exists', () => {
