@@ -27,6 +27,16 @@ module.exports = {
     },
     {
       type: 'category',
+      label: 'SDK',
+      items: [
+        'sdk/index',
+        'sdk/getting-started',
+        'sdk/api-reference',
+        'sdk/examples'
+      ]
+    },
+    {
+      type: 'category',
       label: 'Reference',
       items: [
         {
