@@ -2392,7 +2392,7 @@ program
   .argument('[url]', 'Page URL to extract from (optional when --tab-session is provided)')
   .option('--format <format>', 'markdown|distilled_html|raw_html|text', 'markdown')
   .option('--tab-session <id>', 'Use an existing tabSessionId instead of opening a temporary tab')
-  .option('--selector <selector>', 'CSS selector (supported for raw_html and text)', 'body')
+  .option('--selector <selector>', 'CSS selector (supported for raw_html and text)')
   .option('--distill-mode <mode>', 'readability|dom-distiller (markdown/distilled_html only)', 'readability')
   .option('--no-fallback-to-readability', 'Disable fallback to readability when dom-distiller is selected')
   .option('--max-chars <n>', 'Maximum extracted character count (format dependent)')
