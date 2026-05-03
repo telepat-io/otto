@@ -122,11 +122,11 @@ function isClaudeInstalled(): boolean {
 // --- Claude Desktop ---
 function getClaudeDesktopConfigPath(): string {
   if (process.platform === 'darwin') {
-      /* c8 ignore next */
+    /* c8 ignore next */
     return join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
   }
   if (process.platform === 'win32') {
-      /* c8 ignore next */
+    /* c8 ignore next */
     return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
   }
   return join(homedir(), '.config', 'Claude', 'claude_desktop_config.json');
@@ -204,7 +204,7 @@ function isChatGptInstalled(): boolean {
 
 // --- Gemini ---
 function getGeminiSettingsPath(): string {
-    /* c8 ignore next */
+  /* c8 ignore next 2 */
   if (process.platform === 'win32') {
     return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'Gemini', 'settings.json');
   }
@@ -252,7 +252,7 @@ function isGeminiInstalled(): boolean {
 
 // --- Codex ---
 function getCodexConfigPath(): string {
-    /* c8 ignore next */
+  /* c8 ignore next 2 */
   if (process.platform === 'win32') {
     return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'codex', 'config.toml');
   }
