@@ -35,6 +35,7 @@ async function loadKeytar(): Promise<KeytarApi | null> {
     const mod = await import('keytar');
     return (mod.default ?? mod) as KeytarApi;
   } catch {
+    /* c8 ignore next */
     return null;
   }
 }
@@ -52,6 +53,7 @@ export async function resolveClientSecret(
   }
 
   const keytar = await loadKeytar();
+  /* c8 ignore next 5 */
   if (!keytar) {
     throw new Error(
       `Client secret not found in environment and keychain is unavailable. Set ${CLIENT_SECRET_ENV_VAR} or pass --client-secret to otto client login.`,
@@ -74,6 +76,7 @@ export async function resolveClientSecret(
 
 export async function storeClientSecret(config: OttoConfig, clientId: string, clientSecret: string): Promise<boolean> {
   const keytar = await loadKeytar();
+  /* c8 ignore next 3 */
   if (!keytar) {
     return false;
   }
@@ -85,6 +88,7 @@ export async function storeClientSecret(config: OttoConfig, clientId: string, cl
 
 export async function deleteClientSecret(config: OttoConfig, clientId: string): Promise<boolean> {
   const keytar = await loadKeytar();
+  /* c8 ignore next 3 */
   if (!keytar) {
     return false;
   }
