@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/telepat-io/otto/compare/v0.11.0...v0.12.0) (2026-05-03)
+
+
+### Features
+
+* add SDK category to sidebars configuration ([c6e0450](https://github.com/telepat-io/otto/commit/c6e04507807378d4588510e21836e4ed6f4ca002))
+
+
+### Bug Fixes
+
+* remove default value for CSS selector option in command line interface ([1f4fbcd](https://github.com/telepat-io/otto/commit/1f4fbcd0c8f3ba774d2ace23b91886e11c7269fa))
+
 ## [0.11.0](https://github.com/telepat-io/otto/compare/v0.10.0...v0.11.0) (2026-05-03)
 
 
