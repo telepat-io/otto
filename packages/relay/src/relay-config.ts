@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -49,7 +50,7 @@ export const DEFAULT_CONTROLLER_SCOPES: string[] =
   ];
 
 export const LOG_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
-export const LOG_DIR = process.env.OTTO_LOG_DIR ?? join(process.cwd(), '.otto-relay');
+export const LOG_DIR = process.env.OTTO_LOG_DIR ?? join(homedir(), '.otto', 'relay');
 export const LOG_LEGACY_FILE_NAME = 'operations.jsonl';
 export const LOG_WINDOW_PREFIX = 'operations-';
 export const LOG_WINDOW_SUFFIX = '.jsonl';

@@ -28,7 +28,7 @@ Set these in the relay process environment before starting with `otto start` or 
 | `OTTO_TOKEN_TTL_MINUTES` | `15` | Access token lifetime in minutes |
 | `OTTO_REFRESH_TTL_DAYS` | `30` | Refresh token lifetime in days |
 | `OTTO_EXTENSION_ORIGIN` | (extension origin) | Allowed origin for node WebSocket connections |
-| `OTTO_LOG_DIR` | (runtime default) | Directory for JSONL operation log files |
+| `OTTO_LOG_DIR` | `~/.otto/relay` | Directory for JSONL operation log files |
 | `OTTO_LOG_MAX_FILE_BYTES` | `104857600` (100 MB) | Max size per log file before spillover |
 | `OTTO_RATE_LIMIT_PER_MIN` | (runtime default) | Max authenticated frames per session per minute |
 | `OTTO_REPLAY_WINDOW_MS` | `60000` | Timestamp skew window for replay protection |
