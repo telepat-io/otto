@@ -193,4 +193,4 @@ otto client remove --all
 ## Related commands
 
 - [otto pair / otto revoke](./pairing.md) — manage node pairing.
-- [Pairing and Auth Guide](../pairing-auth.md) — full auth lifecycle.
+- [Pairing and Auth Guide](../guides/pairing-auth.md) — full auth lifecycle.

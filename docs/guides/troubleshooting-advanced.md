@@ -80,4 +80,4 @@ Expected: streamed `listener_update` events. If nothing arrives, the pattern, ho
 
 - [Controller Troubleshooting Decision Tree](./controller-troubleshooting-decision-tree.md) — step-by-step decision path.
 - [requestId Correlation Runbook](./requestid-correlation-runbook.md) — trace one request across components.
-- [Error Codes](./error-codes.md) — full error code reference with retryability.
+- [Error Codes](../error-codes.md) — full error code reference with retryability.

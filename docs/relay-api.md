@@ -194,5 +194,5 @@ After connecting, send `hello` then `auth` frames. Relay responds with `auth_ack
 ## Next steps
 
 - [Reusable Snippets](./snippets.md) — curl and WebSocket frame examples.
-- [Controller Implementation Guide](./controller-implementation.md) — full bootstrap sequence.
+- [Controller Implementation Guide](./guides/controller-implementation.md) — full bootstrap sequence.
 - [Protocol Reference](./protocol.md) — WebSocket envelope and message family contracts.

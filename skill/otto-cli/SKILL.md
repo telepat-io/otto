@@ -494,4 +494,4 @@ Should not trigger:
 - Agent-facing docs: `docs/for-agents/index.md`, `docs/for-agents/automation-guide.md`
 - Protocol semantics: `docs/protocol.md`
 - Error codes: `docs/error-codes.md`
-- Security model: `docs/security.md`, `docs/pairing-auth.md`
+- Security model: `docs/security.md`, `docs/guides/pairing-auth.md`

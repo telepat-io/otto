@@ -118,5 +118,5 @@ Expected output: streamed JSON `listener_update` events from the target API.
 ## Next steps
 
 - [Command Authoring Templates](./command-authoring-templates.md) — stream command test hook template.
-- [Logging and Debugging](./logging-debugging.md) — stream diagnostics and failure playbook.
-- [otto listener CLI reference](./cli/listener.md) — full subscribe-network options.
+- [Logging and Debugging](../logging-debugging.md) — stream diagnostics and failure playbook.
+- [otto listener CLI reference](../cli/listener.md) — full subscribe-network options.

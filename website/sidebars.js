@@ -13,16 +13,17 @@ module.exports = {
       type: 'category',
       label: 'Guides',
       items: [
-        'architecture',
-        'pairing-auth',
-        'command-authoring',
-        'command-authoring-templates',
-        'controller-implementation',
-        'listener-development',
-        'use-cases',
-        'troubleshooting-advanced',
-        'controller-troubleshooting-decision-tree',
-        'requestid-correlation-runbook'
+        'guides/architecture',
+        'guides/pairing-auth',
+        'guides/command-authoring',
+        'guides/command-authoring-templates',
+        'guides/controller-implementation',
+        'guides/listener-development',
+        'guides/use-cases',
+        'guides/content-extraction',
+        'guides/troubleshooting-advanced',
+        'guides/controller-troubleshooting-decision-tree',
+        'guides/requestid-correlation-runbook'
       ]
     },
     {

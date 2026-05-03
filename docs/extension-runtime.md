@@ -140,5 +140,5 @@ Compatibility behavior: runtime accepts `tabSessionId` from command top-level fi
 ## Next steps
 
 - [Commands Reference](./commands.md) — action surface and execution contract.
-- [Listener Development](./listener-development.md) — stream-capable command integration.
-- [Pairing and Auth](./pairing-auth.md) — node identity and token lifecycle.
+- [Listener Development](./guides/listener-development.md) — stream-capable command integration.
+- [Pairing and Auth](./guides/pairing-auth.md) — node identity and token lifecycle.

@@ -91,7 +91,7 @@ console.log(nodes);
 // [{ nodeId: 'node_local_1' }, ...]
 ```
 
-Nodes that appear here are both connected to the relay and have granted your controller ACL access. If the list is empty, see the [Pairing](/pairing-auth) guide.
+Nodes that appear here are both connected to the relay and have granted your controller ACL access. If the list is empty, see the [Pairing](/guides/pairing-auth) guide.
 
 ## Step 5 — Run a command
 

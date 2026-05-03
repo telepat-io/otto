@@ -103,4 +103,4 @@ prevention:        add bounded wait policy / fix token refresh lifecycle
 
 - [Advanced Troubleshooting](./troubleshooting-advanced.md) — error-to-action table.
 - [Controller Troubleshooting Decision Tree](./controller-troubleshooting-decision-tree.md) — layer-by-layer decision path.
-- [Error Codes](./error-codes.md) — full error code reference.
+- [Error Codes](../error-codes.md) — full error code reference.

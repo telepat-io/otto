@@ -77,5 +77,5 @@ flowchart TD
 ## Next steps
 
 - [requestId Correlation Runbook](./requestid-correlation-runbook.md) — trace across components when the tree doesn't resolve the failure.
-- [Error Codes](./error-codes.md) — full error code reference.
-- [Reusable Snippets](./snippets.md) — curl commands for each HTTP gate.
+- [Error Codes](../error-codes.md) — full error code reference.
+- [Reusable Snippets](../snippets.md) — curl commands for each HTTP gate.

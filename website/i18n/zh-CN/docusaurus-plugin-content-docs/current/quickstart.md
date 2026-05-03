@@ -92,6 +92,6 @@ otto test reddit.com getFeed
 ## 下一步
 
 - [CLI 参考](./cli/index.md) — 带选项、示例和退出码的完整命令列表。
-- [配对与认证](./pairing-auth.md) — 深入了解配对流程和控制器客户端模型。
-- [使用案例](./use-cases.md) — 实用命令工作流和场景矩阵。
-- [故障排查](./troubleshooting-advanced.md) — 常见故障的错误对应操作指南。
+- [配对与认证](./guides/pairing-auth.md) — 深入了解配对流程和控制器客户端模型。
+- [使用案例](./guides/use-cases.md) — 实用命令工作流和场景矩阵。
+- [故障排查](./guides/troubleshooting-advanced.md) — 常见故障的错误对应操作指南。

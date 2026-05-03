@@ -98,4 +98,4 @@ The controller and extension may point to the same relay host but use different 
 
 - [Install Otto](./installation.md) — global install or monorepo dev path.
 - [Quickstart](./quickstart.md) — relay up, pair node, run your first command.
-- [Architecture](./architecture.md) — deeper look at system roles and command lifecycle.
+- [Architecture](./guides/architecture.md) — deeper look at system roles and command lifecycle.

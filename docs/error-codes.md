@@ -74,6 +74,6 @@ This page is the canonical error code reference for Otto. Each code is emitted i
 
 ## Next steps
 
-- [Advanced Troubleshooting](./troubleshooting-advanced.md) — error-to-action workflows.
-- [Controller Troubleshooting Decision Tree](./controller-troubleshooting-decision-tree.md) — isolation path for controller failures.
+- [Advanced Troubleshooting](./guides/troubleshooting-advanced.md) — error-to-action workflows.
+- [Controller Troubleshooting Decision Tree](./guides/controller-troubleshooting-decision-tree.md) — isolation path for controller failures.
 - [Protocol Reference](./protocol.md) — error envelope shape.

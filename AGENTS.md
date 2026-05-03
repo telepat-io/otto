@@ -138,7 +138,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 ## Reference Docs
 - Architecture: `docs/overview.md`
 - Protocol semantics: `docs/protocol.md`
-- Pairing/auth lifecycle: `docs/pairing-auth.md`
+- Pairing/auth lifecycle: `docs/guides/pairing-auth.md`
 - Extension runtime behavior: `docs/extension-runtime.md`
 - Relay operations: `docs/relay-operations.md`
 - Testing matrix: `docs/testing.md`

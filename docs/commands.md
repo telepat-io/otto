@@ -177,7 +177,7 @@ otto test <site> <command> --payload '{"limit": 5}'
 
 ## Next steps
 
-- [Command Authoring](./command-authoring.md) — build a new site command.
-- [Command Authoring Templates](./command-authoring-templates.md) — copy-ready TypeScript templates.
-- [Listener Development](./listener-development.md) — stream-capable command integration.
+- [Command Authoring](./guides/command-authoring.md) — build a new site command.
+- [Command Authoring Templates](./guides/command-authoring-templates.md) — copy-ready TypeScript templates.
+- [Listener Development](./guides/listener-development.md) — stream-capable command integration.
 

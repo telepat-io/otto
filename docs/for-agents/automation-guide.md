@@ -152,9 +152,9 @@ When relay, browser node, and controller are on different machines:
 - [For Agents](./index.md) — constraints, decision flow, and failure handling reference.
 - [MCP Server](./mcp-server.md) — MCP server documentation and tool list.
 - [Agent Setup](./agent-setup.md) — register Otto with agent frameworks.
-- [Controller Implementation Guide](../controller-implementation.md) — WebSocket controller integration.
-- [Use Cases](../use-cases.md) — runnable examples for common automation patterns.
-- [Troubleshooting Advanced](../troubleshooting-advanced.md) — stream and routing diagnostics.
+- [Controller Implementation Guide](../guides/controller-implementation.md) — WebSocket controller integration.
+- [Use Cases](../guides/use-cases.md) — runnable examples for common automation patterns.
+- [Troubleshooting Advanced](../guides/troubleshooting-advanced.md) — stream and routing diagnostics.
 
 ## MCP server usage
 

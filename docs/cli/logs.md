@@ -194,4 +194,4 @@ otto logs export --request-id <requestId> --source all
 
 - [otto listener subscribe-network](./listener.md) — subscribe to network interception streams.
 - [Logging and Debugging](../logging-debugging.md) — debugging workflows and event model.
-- [RequestId Correlation Runbook](../requestid-correlation-runbook.md) — incident correlation guide.
+- [RequestId Correlation Runbook](../guides/requestid-correlation-runbook.md) — incident correlation guide.

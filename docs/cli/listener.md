@@ -155,5 +155,5 @@ otto listener list --json
 ## Related commands
 
 - [otto test](./commands.md) — run stream-capable commands with built-in listener management.
-- [Listener Development](../listener-development.md) — build stream-capable commands.
+- [Listener Development](../guides/listener-development.md) — build stream-capable commands.
 - [Logging and Debugging](../logging-debugging.md) — diagnose listener and stream issues.

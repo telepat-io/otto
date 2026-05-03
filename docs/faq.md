@@ -132,7 +132,7 @@ Bulk remove purges controller client records after revocation. Once all clients 
 
 ## Next steps
 
-- [Advanced Troubleshooting](./troubleshooting-advanced.md) — error-to-action workflows.
+- [Advanced Troubleshooting](./guides/troubleshooting-advanced.md) — error-to-action workflows.
 - [Error Codes](./error-codes.md) — full error catalog with retryability.
 - [Logging and Debugging](./logging-debugging.md) — log commands and diagnostic sequence.
 

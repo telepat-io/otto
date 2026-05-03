@@ -92,6 +92,6 @@ A successful run prints command output JSON and exits with code `0`. If you see 
 ## Next steps
 
 - [CLI Reference](./cli/index.md) — full command list with options, examples, and exit codes.
-- [Pairing and Auth](./pairing-auth.md) — deeper look at the pairing flow and controller client model.
-- [Use Cases](./use-cases.md) — practical command workflows and scenario matrix.
-- [Troubleshooting](./troubleshooting-advanced.md) — error-to-action guide for common failures.
+- [Pairing and Auth](./guides/pairing-auth.md) — deeper look at the pairing flow and controller client model.
+- [Use Cases](./guides/use-cases.md) — practical command workflows and scenario matrix.
+- [Troubleshooting](./guides/troubleshooting-advanced.md) — error-to-action guide for common failures.

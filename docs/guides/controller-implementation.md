@@ -231,7 +231,7 @@ Use idempotency keys where applicable so safe retries return cached terminal out
 
 ## Next steps
 
-- [Protocol Reference](./protocol.md) — full envelope contract, message families, and routing guarantees.
-- [Relay API](./relay-api.md) — all HTTP endpoints.
-- [Reusable Snippets](./snippets.md) — copy-paste curl and WebSocket examples.
-- [Error Codes](./error-codes.md) — error code table with remediation.
+- [Protocol Reference](../protocol.md) — full envelope contract, message families, routing guarantees.
+- [Relay API](../relay-api.md) — all HTTP endpoints.
+- [Reusable Snippets](../snippets.md) — copy-paste curl and WebSocket examples.
+- [Error Codes](../error-codes.md) — error code table with remediation.

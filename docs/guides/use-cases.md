@@ -148,4 +148,4 @@ otto cmd --action primitive.page.screenshot \
 
 - [Command Authoring](./command-authoring.md) — add a new site command.
 - [Advanced Troubleshooting](./troubleshooting-advanced.md) — debug failures across components.
-- [Reusable Snippets](./snippets.md) — copy-paste curl and WebSocket examples.
+- [Reusable Snippets](../snippets.md) — copy-paste curl and WebSocket examples.

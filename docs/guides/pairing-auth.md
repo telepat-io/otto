@@ -159,6 +159,6 @@ Relay auth controls API access. Command `requiresAuth` controls website session 
 ## Next steps
 
 - [Controller Implementation](./controller-implementation.md) — build a custom controller over the relay protocol.
-- [Error Codes](./error-codes.md) — auth error codes and remediation.
-- [Relay API](./relay-api.md) — full endpoint reference.
+- [Error Codes](../error-codes.md) — auth error codes and remediation.
+- [Relay API](../relay-api.md) — full endpoint reference.
 

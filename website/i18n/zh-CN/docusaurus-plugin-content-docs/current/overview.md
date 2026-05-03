@@ -98,4 +98,4 @@ Otto 使用 Chrome MV3 分离运行时：
 
 - [安装 Otto](./installation.md) — 全局安装或 monorepo 开发路径。
 - [快速开始](./quickstart.md) — 启动中继、配对节点、运行第一条命令。
-- [架构](./architecture.md) — 深入了解系统角色和命令生命周期。
+- [架构](./guides/architecture.md) — 深入了解系统角色和命令生命周期。

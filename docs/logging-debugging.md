@@ -44,7 +44,7 @@ Start with bounded evidence, then escalate to live follow only when ordering mat
 3. If behavior appears extension-specific, narrow to node logs.
 4. If timing/race conditions are suspected, run `logs follow --json` in a bounded capture window.
 
-For full onboarding and end-to-end controller flow guidance, see the [Controller Implementation Guide](./controller-implementation.md).
+For full onboarding and end-to-end controller flow guidance, see the [Controller Implementation Guide](./guides/controller-implementation.md).
 
 ## Event model
 
@@ -115,6 +115,6 @@ For pairing-recovery issues, capture popup status, service worker logs, and offs
 
 ## Next steps
 
-- [RequestId Correlation Runbook](./requestid-correlation-runbook.md) — incident-level correlation workflow.
-- [Troubleshooting Advanced](./troubleshooting-advanced.md) — stream diagnostics, error-to-action table.
+- [RequestId Correlation Runbook](./guides/requestid-correlation-runbook.md) — incident-level correlation workflow.
+- [Troubleshooting Advanced](./guides/troubleshooting-advanced.md) — stream diagnostics, error-to-action table.
 - [Relay Operations](./relay-operations.md) — log storage model and retention settings.

@@ -69,4 +69,4 @@ Otto tracks tabs opened through automation workflows in a Chrome tab group (`aut
 
 - [Tab Lock Model](./tab-lock-model.md) — per-tab FIFO execution and wait policies.
 - [Protocol Reference](./protocol.md) — tab ownership and cleanup semantics.
-- [Advanced Troubleshooting](./troubleshooting-advanced.md) — stale session error resolution.
+- [Advanced Troubleshooting](./guides/troubleshooting-advanced.md) — stale session error resolution.

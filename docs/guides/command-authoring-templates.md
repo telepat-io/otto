@@ -143,4 +143,4 @@ export const getChatMessagesCommand: SiteCommand = {
 
 - [Command Authoring](./command-authoring.md) — full implementation guide.
 - [Listener Development](./listener-development.md) — stream integration patterns.
-- [Reusable Snippets](./snippets.md) — copy-paste curl/WebSocket examples.
+- [Reusable Snippets](../snippets.md) — copy-paste curl and WebSocket examples.

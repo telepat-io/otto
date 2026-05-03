@@ -14,7 +14,7 @@ keywords:
 
 This walkthrough covers the full process of adding a new site command. It is written for autonomous agents and describes the exact sequence of decisions, helper commands, iteration loops, and verification steps to follow for any site.
 
-For the command authoring API reference, see [Command Authoring](/command-authoring). For copy-ready code templates, see [Command Authoring Templates](/command-authoring-templates).
+For the command authoring API reference, see [Command Authoring](/guides/command-authoring). For copy-ready code templates, see [Command Authoring Templates](/guides/command-authoring-templates).
 
 ---
 

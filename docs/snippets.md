@@ -164,6 +164,6 @@ Cancel an active stream session using the original `command.test` `requestId`:
 
 ## Next steps
 
-- [Controller Implementation Guide](./controller-implementation.md) — full HTTP + WebSocket flow.
+- [Controller Implementation Guide](./guides/controller-implementation.md) — full HTTP + WebSocket flow.
 - [Protocol Reference](./protocol.md) — envelope contract and all message families.
 - [Relay API Reference](./relay-api.md) — full endpoint documentation.

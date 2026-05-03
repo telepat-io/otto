@@ -88,6 +88,18 @@ Use it for API monitoring, data scraping, integration testing, or proving networ
 
 ---
 
+## Browser-local content extraction
+
+Extract rendered page content directly from a live Chrome tab and return it as markdown, cleaned HTML, raw HTML, or text. Otto runs extraction inside the user's browser session, so agents can surf the web locally instead of relying on remote scraping or headless farms.
+
+```bash
+otto extract-content https://example.com/article --format markdown
+```
+
+This is ideal for agent workflows because it preserves browser-rendered page state, avoids cloud scraping services, and delivers token-efficient markdown output for summarization and action planning.
+
+---
+
 ## Site-Scoped Command Bundles
 
 Author custom, reusable commands for any domain. Commands run inside the extension runtime and are site-scoped, so `getChatMessages` for Reddit and `getChatMessages` for LinkedIn are separate, predictable, and testable.

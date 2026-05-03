@@ -12,7 +12,7 @@ keywords:
 
 # Protocol Reference
 
-This page covers wire-level behavior and command-routing guarantees. If you are implementing product workflows, start with [Architecture](./architecture.md) and the [Controller Implementation Guide](./controller-implementation.md) first, then use this page as the strict contract reference.
+This page covers wire-level behavior and command-routing guarantees. If you are implementing product workflows, start with [Architecture](./guides/architecture.md) and the [Controller Implementation Guide](./guides/controller-implementation.md) first, then use this page as the strict contract reference.
 
 Current protocol types are defined in `packages/shared-protocol/src/index.ts`.
 
@@ -177,5 +177,5 @@ Current version: `1.0`. Additive changes are preferred; breaking changes require
 
 - [Relay API Reference](./relay-api.md) — HTTP endpoint contracts.
 - [Reusable Snippets](./snippets.md) — runnable frame examples.
-- [Controller Implementation Guide](./controller-implementation.md) — full bootstrap and command flow.
+- [Controller Implementation Guide](./guides/controller-implementation.md) — full bootstrap and command flow.
 

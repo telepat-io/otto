@@ -102,5 +102,5 @@ Setup is release-driven for end users: extension artifacts come from release ass
 ## Next steps
 
 - [Pairing and Auth](./pairing-auth.md) — the token and pairing lifecycle in detail.
-- [Extension Runtime](./extension-runtime.md) — MV3 runtime composition and command execution path.
-- [Protocol Reference](./protocol.md) — envelope contract, message families, routing guarantees.
+- [Extension Runtime](../extension-runtime.md) — MV3 runtime composition and command execution path.
+- [Protocol Reference](../protocol.md) — envelope contract, message families, routing guarantees.

@@ -16,7 +16,7 @@ This guide explains how to add a site command in the Otto extension runtime with
 
 ## Before you start
 
-- Familiarity with the [Architecture overview](./architecture.md) and [Extension Runtime](./extension-runtime.md).
+- Familiarity with the [Architecture overview](./architecture.md) and [Extension Runtime](../extension-runtime.md).
 - A working monorepo build (`npm install && npm run build`).
 - Understanding of the target site's DOM and network behavior.
 
@@ -176,5 +176,5 @@ For extraction-heavy debugging, prefer `otto extract-content` over hand-written 
 
 - [Command Authoring Templates](./command-authoring-templates.md) — copy-ready code templates.
 - [Listener Development](./listener-development.md) — stream integration patterns.
-- [Commands Reference](./commands.md) — action surface and runtime execution flow.
-- [Error Codes](./error-codes.md) — all command validation error codes.
+- [Commands Reference](../commands.md) — action surface and runtime execution flow.
+- [Error Codes](../error-codes.md) — all command validation error codes.

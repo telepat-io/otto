@@ -131,4 +131,4 @@ otto revoke --node-id node_abc123
 
 - [otto setup](./setup.md) — full first-run setup including pairing.
 - [otto client](./client.md) — manage controller client identities.
-- [Pairing and Auth Guide](../pairing-auth.md) — pairing lifecycle and token management.
+- [Pairing and Auth Guide](../guides/pairing-auth.md) — pairing lifecycle and token management.

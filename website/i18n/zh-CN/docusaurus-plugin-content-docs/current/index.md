@@ -36,7 +36,7 @@ Otto 是一个安全的远程浏览器自动化平台，围绕三个运行时组
 | 章节 | 内容 |
 |---|---|
 | [入门指南](./overview.md) | 安装 Otto、运行配置并发送第一条命令 |
-| [指南](./architecture.md) | 架构、配对、命令编写、故障排查 |
+| [指南](./guides/architecture.md) | 架构、配对、命令编写、故障排查 |
 | [参考](./cli/index.md) | CLI 命令、协议、API、配置、错误码 |
 | [技术](./security.md) | 安全控制与测试策略 |
 | [贡献](./development.md) | 本地开发配置和发布流程 |
