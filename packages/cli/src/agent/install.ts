@@ -1,6 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
+import {
+  resolveClaudeDesktopConfigPathForPlatform,
+  resolveGeminiSettingsPathForPlatform,
+  resolveCodexConfigPathForPlatform,
+} from './config-paths.js';
 
 
 const OTTO_MARKER = 'otto';
@@ -121,15 +126,7 @@ function isClaudeInstalled(): boolean {
 
 // --- Claude Desktop ---
 function getClaudeDesktopConfigPath(): string {
-  /* c8 ignore next 3 */
-  if (process.platform === 'darwin') {
-    return join(homedir(), 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
-  }
-  /* c8 ignore next 3 */
-  if (process.platform === 'win32') {
-    return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
-  }
-  return join(homedir(), '.config', 'Claude', 'claude_desktop_config.json');
+  return resolveClaudeDesktopConfigPathForPlatform(process.platform, homedir(), process.env.APPDATA);
 }
 
 function installClaudeDesktop(): AgentInstallResult {
@@ -204,11 +201,7 @@ function isChatGptInstalled(): boolean {
 
 // --- Gemini ---
 function getGeminiSettingsPath(): string {
-  /* c8 ignore next 3 */
-  if (process.platform === 'win32') {
-    return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'Gemini', 'settings.json');
-  }
-  return join(homedir(), '.gemini', 'settings.json');
+  return resolveGeminiSettingsPathForPlatform(process.platform, homedir(), process.env.APPDATA);
 }
 
 function installGemini(): AgentInstallResult {
@@ -252,11 +245,7 @@ function isGeminiInstalled(): boolean {
 
 // --- Codex ---
 function getCodexConfigPath(): string {
-  /* c8 ignore next 3 */
-  if (process.platform === 'win32') {
-    return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'codex', 'config.toml');
-  }
-  return join(homedir(), '.codex', 'config.toml');
+  return resolveCodexConfigPathForPlatform(process.platform, homedir(), process.env.APPDATA);
 }
 
 function installCodex(): AgentInstallResult {

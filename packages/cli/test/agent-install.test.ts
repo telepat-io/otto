@@ -3,6 +3,11 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync, mkdirSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import {
+  resolveClaudeDesktopConfigPathForPlatform,
+  resolveGeminiSettingsPathForPlatform,
+  resolveCodexConfigPathForPlatform,
+} from '../src/agent/config-paths.js';
 
 const tmpDir = mkdtempSync(join(tmpdir(), 'otto-agent-test-'));
 
@@ -170,4 +175,37 @@ test('agent install vscode creates mcp.json with servers.otto', () => {
   assert.equal(result.servers.otto.type, 'stdio');
   assert.equal(result.servers.otto.command, 'otto');
   assert.deepEqual(result.servers.otto.args, ['mcp']);
+});
+
+test('resolveClaudeDesktopConfigPathForPlatform handles darwin/win32/linux', () => {
+  const home = '/home/tester';
+
+  const darwin = resolveClaudeDesktopConfigPathForPlatform('darwin', home);
+  assert.equal(darwin, '/home/tester/Library/Application Support/Claude/claude_desktop_config.json');
+
+  const win32 = resolveClaudeDesktopConfigPathForPlatform('win32', home, '/appdata/roaming');
+  assert.equal(win32, '/appdata/roaming/Claude/claude_desktop_config.json');
+
+  const linux = resolveClaudeDesktopConfigPathForPlatform('linux', home);
+  assert.equal(linux, '/home/tester/.config/Claude/claude_desktop_config.json');
+});
+
+test('resolveGeminiSettingsPathForPlatform handles win32 and non-win32', () => {
+  const home = '/home/tester';
+
+  const win32 = resolveGeminiSettingsPathForPlatform('win32', home, '/appdata/roaming');
+  assert.equal(win32, '/appdata/roaming/Gemini/settings.json');
+
+  const linux = resolveGeminiSettingsPathForPlatform('linux', home);
+  assert.equal(linux, '/home/tester/.gemini/settings.json');
+});
+
+test('resolveCodexConfigPathForPlatform handles win32 and non-win32', () => {
+  const home = '/home/tester';
+
+  const win32 = resolveCodexConfigPathForPlatform('win32', home, '/appdata/roaming');
+  assert.equal(win32, '/appdata/roaming/codex/config.toml');
+
+  const linux = resolveCodexConfigPathForPlatform('linux', home);
+  assert.equal(linux, '/home/tester/.codex/config.toml');
 });
