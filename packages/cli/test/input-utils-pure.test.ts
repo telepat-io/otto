@@ -151,6 +151,10 @@ test('parseNetworkMode returns valid mode', () => {
   assert.equal(parseNetworkMode('fetch'), 'fetch');
 });
 
+test('parseNetworkMode accepts hybrid mode', () => {
+  assert.equal(parseNetworkMode('hybrid'), 'hybrid');
+});
+
 test('parseNetworkMode throws for invalid', () => {
   assert.throws(() => parseNetworkMode('invalid'), /must be one of/);
 });
@@ -246,6 +250,97 @@ test('resolveControllerRegistrationMetadata returns undefined avatarSeed for whi
     { promptIfMissing: false },
   );
   assert.equal(result.avatarSeed, undefined);
+});
+
+test('resolveControllerRegistrationMetadata skips prompt when promptIfMissing false', async () => {
+  await assert.rejects(
+    resolveControllerRegistrationMetadata(
+      { name: 'Test' },
+      {},
+      { promptIfMissing: false },
+    ),
+    /Non-interactive registration requires/,
+  );
+});
+
+test('resolveControllerRegistrationMetadata requires TTY for prompting', async () => {
+  const originalStdout = process.stdout.isTTY;
+  const originalStdin = process.stdin.isTTY;
+
+  try {
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, configurable: true });
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+
+    await assert.rejects(
+      resolveControllerRegistrationMetadata(
+        { name: 'Test' },
+        {},
+        { promptIfMissing: true },
+      ),
+      /Non-interactive registration requires/,
+    );
+  } finally {
+    Object.defineProperty(process.stdout, 'isTTY', { value: originalStdout, configurable: true });
+    Object.defineProperty(process.stdin, 'isTTY', { value: originalStdin, configurable: true });
+  }
+});
+
+test('normalizeControllerName removes extra spaces', () => {
+  assert.equal(normalizeControllerName('  hello   world  '), 'hello world');
+});
+
+test('normalizeControllerName handles empty string', () => {
+  assert.equal(normalizeControllerName(''), '');
+});
+
+test('normalizeControllerName handles only spaces', () => {
+  assert.equal(normalizeControllerName('    '), '');
+});
+
+test('normalizeControllerDescription handles empty string', () => {
+  assert.equal(normalizeControllerDescription(''), '');
+});
+
+test('showAclMissingGrantHint includes nodeId when present', () => {
+  const originalError = console.error;
+  let output = '';
+  console.error = (...args: unknown[]) => { output += args.join(' ') + '\n'; };
+
+  showAclMissingGrantHint({ code: 'acl_missing_node_grant', nodeId: 'node-123' });
+  assert.ok(output.includes('node-123'));
+
+  console.error = originalError;
+});
+
+test('showAclMissingGrantHint includes clientId when present', () => {
+  const originalError = console.error;
+  let output = '';
+  console.error = (...args: unknown[]) => { output += args.join(' ') + '\n'; };
+
+  showAclMissingGrantHint({ code: 'acl_missing_node_grant', clientId: 'client-456' });
+  assert.ok(output.includes('client-456'));
+
+  console.error = originalError;
+});
+
+test('showAclMissingGrantHint includes actionableHint when provided', () => {
+  const originalError = console.error;
+  let output = '';
+  console.error = (...args: unknown[]) => { output += args.join(' ') + '\n'; };
+
+  showAclMissingGrantHint({ 
+    code: 'acl_missing_node_grant',
+    actionableHint: 'Custom hint message'
+  });
+  assert.ok(output.includes('Custom hint message'));
+
+  console.error = originalError;
+});
+
+test('collectString returns new array with appended value', () => {
+  const result = collectString('third', ['first', 'second']);
+  assert.deepEqual(result, ['first', 'second', 'third']);
+  assert.ok(Array.isArray(result));
 });
 
 test('resolveControllerRegistrationMetadata truncates long avatarSeed', async () => {

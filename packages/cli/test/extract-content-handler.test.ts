@@ -192,3 +192,51 @@ test('runExtractContentHandler: default format is markdown when omitted', async 
   assert.equal(result.format, 'markdown');
   assert.equal(result.action, 'primitive.dom.extract_markdown');
 });
+
+test('runExtractContentHandler: throws when tab.open succeeds but missing tabSessionId', async () => {
+  const deps = makeDeps(async (_config, _nodeId, opts) => {
+    if (opts.action === 'primitive.tab.open') {
+      return {
+        messageType: 'result',
+        payload: { data: {} },  // Missing tabSessionId
+      } as Envelope;
+    }
+    return { messageType: 'result', payload: {} } as Envelope;
+  });
+
+  await assert.rejects(
+    runExtractContentHandler({ format: 'text', url: 'https://example.com' }, deps),
+    /did not return tabSessionId/,
+  );
+});
+
+test('runExtractContentHandler: silently handles tab.close error during cleanup', async () => {
+  const calls: string[] = [];
+
+  const deps = makeDeps(async (_config, _nodeId, opts) => {
+    calls.push(opts.action);
+    if (opts.action === 'primitive.tab.open') {
+      return {
+        messageType: 'result',
+        payload: { data: { tabSessionId: 'tab_temp_123' } },
+      } as Envelope;
+    }
+    if (opts.action === 'primitive.tab.close') {
+      return {
+        messageType: 'error',
+        payload: { code: 'tab_not_found' },
+      } as Envelope;
+    }
+    return {
+      messageType: 'result',
+      payload: { data: { text: 'Content' } },
+    } as Envelope;
+  });
+
+  // Should not throw even though tab.close fails
+  const result = await runExtractContentHandler({ format: 'text', url: 'https://example.com' }, deps);
+
+  assert.equal(result.format, 'text');
+  assert.ok(calls.includes('primitive.tab.open'));
+  assert.ok(calls.includes('primitive.tab.close'));
+});

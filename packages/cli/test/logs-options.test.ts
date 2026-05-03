@@ -16,11 +16,21 @@ test('parseLogLevelOption validates levels', () => {
   assert.throws(() => parseLogLevelOption('verbose'), /debug|info|warn|error/);
 });
 
+test('parseLogLevelOption accepts all valid levels', () => {
+  assert.equal(parseLogLevelOption('info'), 'info');
+  assert.equal(parseLogLevelOption('warn'), 'warn');
+});
+
 test('parseLogSourceOption validates sources', () => {
   assert.equal(parseLogSourceOption('node'), 'node');
   assert.equal(parseLogSourceOption('all'), 'all');
   assert.equal(parseLogSourceOption(undefined), undefined);
   assert.throws(() => parseLogSourceOption('extension'), /relay|controller|node|all/);
+});
+
+test('parseLogSourceOption accepts all valid sources', () => {
+  assert.equal(parseLogSourceOption('relay'), 'relay');
+  assert.equal(parseLogSourceOption('controller'), 'controller');
 });
 
 test('parseLatestOption validates positive integer', () => {

@@ -68,3 +68,76 @@ test('buildExtractContentRequest rejects maxChars for text extraction', () => {
     /--max-chars is not supported for text extraction/,
   );
 });
+
+test('buildExtractContentRequest maps distilled_html with maxChars', () => {
+  const request = buildExtractContentRequest({
+    format: 'distilled_html',
+    url: 'https://example.com',
+    maxChars: 5000,
+  });
+  assert.equal(request.action, 'primitive.dom.extract_distilled_html');
+  assert.equal(request.payload.maxChars, 5000);
+  assert.equal(request.payload.fallbackToReadability, true);
+});
+
+test('buildExtractContentRequest maps markdown with maxChars', () => {
+  const request = buildExtractContentRequest({
+    format: 'markdown',
+    tabSessionId: 'tab_1',
+    maxChars: 3000,
+  });
+  assert.equal(request.action, 'primitive.dom.extract_markdown');
+  assert.equal(request.payload.maxChars, 3000);
+});
+
+test('buildExtractContentRequest maps raw_html with maxChars', () => {
+  const request = buildExtractContentRequest({
+    format: 'raw_html',
+    url: 'https://example.com',
+    selector: '#content',
+    maxChars: 10000,
+  });
+  assert.equal(request.action, 'primitive.dom.extract_html');
+  assert.equal(request.payload.maxChars, 10000);
+  assert.equal(request.payload.selector, '#content');
+});
+
+test('buildExtractContentRequest maps text format with tabSessionId', () => {
+  const request = buildExtractContentRequest({
+    format: 'text',
+    tabSessionId: 'tab_1',
+  });
+  assert.equal(request.action, 'primitive.dom.extract_text');
+  assert.equal(request.requiresTemporaryTextTab, false);
+  assert.equal(request.payload.tabSessionId, 'tab_1');
+});
+
+test('buildExtractContentRequest rejects distill-mode for raw_html', () => {
+  assert.throws(
+    () => buildExtractContentRequest({
+      format: 'raw_html',
+      url: 'https://example.com',
+      distillMode: 'readability',
+    }),
+    /--distill-mode is only supported/,
+  );
+});
+
+test('buildExtractContentRequest rejects fallback-to-readability for text format', () => {
+  assert.throws(
+    () => buildExtractContentRequest({
+      format: 'text',
+      url: 'https://example.com',
+      fallbackToReadability: true,
+    }),
+    /--fallback-to-readability is only supported/,
+  );
+});
+
+test('parseDistillMode accepts readability mode', () => {
+  assert.equal(parseDistillMode('readability'), 'readability');
+});
+
+test('parseExtractContentFormat handles lowercase input', () => {
+  assert.equal(parseExtractContentFormat('markdown'), 'markdown');
+});

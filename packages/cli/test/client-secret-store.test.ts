@@ -123,3 +123,38 @@ test('storeClientSecret returns false when keytar unavailable and deleteClientSe
     }
   }
 });
+
+test('getClientSecretAccount uses relayHttpUrl when provided', () => {
+  const config = {
+    relayUrl: 'ws://relay1.example.com',
+    relayHttpUrl: 'http://relay2.example.com:9999',
+  };
+  const account = getClientSecretAccount(config, 'client-1');
+  assert.equal(account, 'relay2.example.com:9999:client-1');
+});
+
+test('resolveClientSecret returns env secret with proper trimming', async () => {
+  const originalEnv = process.env[CLIENT_SECRET_ENV_VAR];
+  process.env[CLIENT_SECRET_ENV_VAR] = '  my-secret-123  ';
+  try {
+    const result = await resolveClientSecret({ relayUrl: 'ws://localhost:8787' }, 'client-1');
+    assert.equal(result.secret, 'my-secret-123');
+    assert.equal(result.source, 'env');
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env[CLIENT_SECRET_ENV_VAR];
+    } else {
+      process.env[CLIENT_SECRET_ENV_VAR] = originalEnv;
+    }
+  }
+});
+
+test('getClientSecretAccount handles uppercase domains', () => {
+  const account = getClientSecretAccount({ relayUrl: 'ws://EXAMPLE.COM:8787' }, 'client-1');
+  assert.ok(account.includes('example.com'));
+});
+
+test('getClientSecretAccount uses lowercase for all parts', () => {
+  const account = getClientSecretAccount({ relayUrl: 'ws://Example.Com:8787' }, 'CLIENT-ID');
+  assert.equal(account, 'example.com:8787:CLIENT-ID');
+});
