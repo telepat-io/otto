@@ -410,3 +410,35 @@ test('resolveControllerRegistrationMetadata with number avatarSeed returns undef
   );
   assert.equal(result.avatarSeed, undefined);
 });
+
+test('resolveControllerRegistrationMetadata uses injected prompt callback in interactive path', async () => {
+  const originalStdout = process.stdout.isTTY;
+  const originalStdin = process.stdin.isTTY;
+
+  try {
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+    const result = await resolveControllerRegistrationMetadata(
+      { name: 'Flag Name' },
+      { description: 'Default Description' },
+      {
+        promptIfMissing: true,
+        promptMetadata: async (promptDefaults) => {
+          assert.equal(promptDefaults.name, 'Flag Name');
+          assert.equal(promptDefaults.description, 'Default Description');
+          return {
+            name: 'Prompted Name',
+            description: 'Prompted Description',
+          };
+        },
+      },
+    );
+
+    assert.equal(result.name, 'Prompted Name');
+    assert.equal(result.description, 'Prompted Description');
+  } finally {
+    Object.defineProperty(process.stdout, 'isTTY', { value: originalStdout, configurable: true });
+    Object.defineProperty(process.stdin, 'isTTY', { value: originalStdin, configurable: true });
+  }
+});

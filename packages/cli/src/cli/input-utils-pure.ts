@@ -100,7 +100,10 @@ export async function resolveControllerRegistrationMetadata(
     avatarSeed?: string;
   },
   defaults: { name?: string; description?: string } = {},
-  options: { promptIfMissing?: boolean } = {},
+  options: {
+    promptIfMissing?: boolean;
+    promptMetadata?: (defaults: { name?: string; description?: string }) => Promise<ControllerRegistrationMetadata>;
+  } = {},
 ): Promise<ControllerRegistrationMetadata> {
   const flagName = typeof opts.name === 'string' ? normalizeControllerName(opts.name) : '';
   const flagDescription = typeof opts.description === 'string' ? normalizeControllerDescription(opts.description) : '';
@@ -130,7 +133,8 @@ export async function resolveControllerRegistrationMetadata(
     throw new Error('Non-interactive registration requires --name and --description.');
   }
 
-  const prompted = await promptControllerMetadata({
+  const promptMetadata = options.promptMetadata ?? promptControllerMetadata;
+  const prompted = await promptMetadata({
     name: flagName || defaults.name,
     description: flagDescription || defaults.description,
   });

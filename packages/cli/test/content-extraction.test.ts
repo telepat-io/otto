@@ -102,6 +102,23 @@ test('buildExtractContentRequest maps raw_html with maxChars', () => {
   assert.equal(request.payload.selector, '#content');
 });
 
+test('buildExtractContentRequest defaults raw_html selector to body when selector is omitted', () => {
+  const request = buildExtractContentRequest({
+    format: 'raw_html',
+    tabSessionId: 'tab_1',
+  });
+  assert.equal(request.payload.selector, 'body');
+});
+
+test('buildExtractContentRequest normalizes empty selector string to undefined', () => {
+  const request = buildExtractContentRequest({
+    format: 'raw_html',
+    tabSessionId: 'tab_1',
+    selector: '   ',
+  });
+  assert.equal(request.payload.selector, 'body');
+});
+
 test('buildExtractContentRequest maps text format with tabSessionId', () => {
   const request = buildExtractContentRequest({
     format: 'text',

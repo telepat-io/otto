@@ -193,6 +193,26 @@ test('runExtractContentHandler: default format is markdown when omitted', async 
   assert.equal(result.action, 'primitive.dom.extract_markdown');
 });
 
+test('runExtractContentHandler: markdown with url sends payload without tabSessionId', async () => {
+  const payloads: Array<Record<string, unknown>> = [];
+
+  const deps = makeDeps(async (_config, _nodeId, opts) => {
+    if (opts.action === 'primitive.dom.extract_markdown') {
+      payloads.push(opts.payload);
+    }
+    return { messageType: 'result', payload: { data: { markdown: '# hi' } } } as Envelope;
+  });
+
+  const result = await runExtractContentHandler(
+    { format: 'markdown', url: 'https://example.com' },
+    deps,
+  );
+
+  assert.equal(result.action, 'primitive.dom.extract_markdown');
+  assert.equal(payloads.length, 1);
+  assert.equal('tabSessionId' in payloads[0], false);
+});
+
 test('runExtractContentHandler: throws when tab.open succeeds but missing tabSessionId', async () => {
   const deps = makeDeps(async (_config, _nodeId, opts) => {
     if (opts.action === 'primitive.tab.open') {
@@ -234,6 +254,33 @@ test('runExtractContentHandler: silently handles tab.close error during cleanup'
   });
 
   // Should not throw even though tab.close fails
+  const result = await runExtractContentHandler({ format: 'text', url: 'https://example.com' }, deps);
+
+  assert.equal(result.format, 'text');
+  assert.ok(calls.includes('primitive.tab.open'));
+  assert.ok(calls.includes('primitive.tab.close'));
+});
+
+test('runExtractContentHandler: suppresses thrown tab.close errors during cleanup', async () => {
+  const calls: string[] = [];
+
+  const deps = makeDeps(async (_config, _nodeId, opts) => {
+    calls.push(opts.action);
+    if (opts.action === 'primitive.tab.open') {
+      return {
+        messageType: 'result',
+        payload: { data: { tabSessionId: 'tab_temp_throw' } },
+      } as Envelope;
+    }
+    if (opts.action === 'primitive.tab.close') {
+      throw new Error('close transport failed');
+    }
+    return {
+      messageType: 'result',
+      payload: { data: { text: 'Content' } },
+    } as Envelope;
+  });
+
   const result = await runExtractContentHandler({ format: 'text', url: 'https://example.com' }, deps);
 
   assert.equal(result.format, 'text');
