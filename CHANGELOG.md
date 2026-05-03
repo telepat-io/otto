@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.11.0](https://github.com/telepat-io/otto/compare/v0.10.0...v0.11.0) (2026-05-03)
+
+
+### Features
+
+* add --json option to commands for JSON output and update related tests ([d19a375](https://github.com/telepat-io/otto/commit/d19a375d2e3e74315fff49ed64327e4844250f0e))
+* add extract-content command for page content extraction ([f8992d1](https://github.com/telepat-io/otto/commit/f8992d1e70392ea7c2af46b5ea132beab1497c2c))
+
+
+### Bug Fixes
+
+* add ignore comments for keytar loading failures in client secret functions ([2678475](https://github.com/telepat-io/otto/commit/2678475215cb51f3591a437507677ac38447e47c))
+* add platform-specific paths for Claude Desktop, Gemini, and Codex configurations ([aed176a](https://github.com/telepat-io/otto/commit/aed176ab21a96edf5e03afa964ffbbd5effaeeb5))
+* adjust indentation for platform-specific config path comments in install.ts ([db47a4c](https://github.com/telepat-io/otto/commit/db47a4c2cadc3c07f965ce0f939241768ca714e3))
+* update ignore comments for platform-specific config paths in install.ts ([28534e7](https://github.com/telepat-io/otto/commit/28534e77416643361b96dfd2260be9880301b51f))
+* update Node.js version in CI workflow and enhance resolveControllerRegistrationMetadata to support custom prompt callback ([5e86d8b](https://github.com/telepat-io/otto/commit/5e86d8bebbdd5d0ef00c6d594f6a1a289e168602))
+* update version mismatch message to reflect correct update command for relay daemon ([d85dbeb](https://github.com/telepat-io/otto/commit/d85dbeb3ec5eb83c13208ecc7557a371b375d800))
+* version mismatch handling in onboarding state with specific labels and details ([4f7920c](https://github.com/telepat-io/otto/commit/4f7920ca0dacd76707848a49d0a265b9966419e3))
+
 ## [0.10.0](https://github.com/telepat-io/otto/compare/v0.9.0...v0.10.0) (2026-05-02)
 
 
