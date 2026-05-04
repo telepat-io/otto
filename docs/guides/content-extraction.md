@@ -57,3 +57,4 @@ Under the hood, Otto maps this to browser DOM extraction primitives:
 - [Architecture](/guides/architecture) — Otto's controller, relay, and node model.
 - [Pairing and Auth](/guides/pairing-auth) — browser node pairing and token lifecycle.
 - [Listener Development](/guides/listener-development) — stream-capable command and network automation.
+- [Otto vs Jina Content Extraction](./otto-vs-jina-content-extraction.md) — real-world comparison of browser DOM extraction against Jina remote page fetch.
