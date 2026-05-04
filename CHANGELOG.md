@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/telepat-io/otto/compare/v0.12.0...v0.13.0) (2026-05-04)
+
+
+### Features
+
+* add comprehensive guide for implementing a custom controller client against the Otto relay ([c68ef2f](https://github.com/telepat-io/otto/commit/c68ef2f6563184267cd4c6081868de1d7c5643ad))
+
+
+### Bug Fixes
+
+* update default log directory to user home for better accessibility ([ae58076](https://github.com/telepat-io/otto/commit/ae58076031032112bce84c3c7db6a1f88da7539a))
+
 ## [0.12.0](https://github.com/telepat-io/otto/compare/v0.11.0...v0.12.0) (2026-05-03)
 
 
