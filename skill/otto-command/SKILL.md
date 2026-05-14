@@ -94,6 +94,7 @@ Use this as a starting point for most new commands.
 
 ```ts
 import type { SiteCommand } from '../types.js';
+import type { Post, SearchResult, UserProfile, Article } from '@telepat/otto-protocol';
 
 type GetItemsInput = {
    limit?: number;
@@ -146,6 +147,122 @@ export const getItemsCommand: SiteCommand = {
       return helpers.execute(input);
    },
 };
+```
+
+## Shared output types for command results
+When building extraction commands, prefer the shared protocol domain types from `@telepat/otto-protocol` so the output is normalized and agent-friendly.
+
+Common returned kinds include:
+- `entity.user`
+- `content.post`
+- `content.post_comment`
+- `content.search_result`
+- `content.article`
+- `chat.message`
+- `chat.typing`
+- `chat.participant`
+- `chat.message_deleted`
+
+Import types directly in command modules when they are a useful contract aid:
+
+```ts
+import type {
+  Post,
+  PostComment,
+  SearchResult,
+  Article,
+  UserProfile,
+} from '@telepat/otto-protocol';
+```
+
+Best practice:
+- Always return objects with `kind` set to a stable shared-domain value.
+- Include `originalEntity` only when it helps debugging or preserves necessary raw payload context.
+- Prefer existing kinds over inventing new ones for similar content shapes.
+
+### When `content.post` is appropriate
+Use `content.post` for lightweight post/feed extraction such as Reddit feed or article cards.
+The object should include at least `id`, `title`, and `kind`, and may include `url`, `author`, `publishedAt`, `content`, `community`, `score`, `commentCount`, `comments`, `meta`, and `originalEntity`.
+
+### When `entity.user` is appropriate
+Use `entity.user` for user profile lookups, login state, or session identity results.
+The object should include `id`, `platform`, and typically `username`, `displayName`, `profileUrl`, `avatarUrl`, and `stats`.
+
+### When `content.search_result` is appropriate
+Use `content.search_result` for search-like result lists with fields like `title`, `url`, `description`, `rank`, and optional `links`/`image`.
+
+### When `chat.*` is appropriate
+Use the `chat.*` stream shapes for chat events and message history rather than raw network payloads.
+
+### Standard output rule
+Always make the command’s returned shape stable and predictable for automation consumers. If a page result is not a good shared-domain fit, return a smaller deterministic wrapper object rather than an unstructured blob.
+
+### Example: import section in command modules
+```ts
+import type { SiteCommand } from '../types.js';
+import type { Post } from '@telepat/otto-protocol';
+```
+
+### Example: content result shape
+```ts
+const post: Post = {
+  kind: 'content.post',
+  id: 'post_123',
+  title: 'Example title',
+  url: 'https://www.reddit.com/r/example/comments/123',
+  author: { kind: 'entity.user', id: 'reddit:alice', platform: 'reddit', username: 'alice' },
+  publishedAt: '2026-05-15T00:00:00.000Z',
+  community: 'r/example',
+  meta: { site: 'reddit.com', source: 'reddit.json' },
+  originalEntity: rawPostData,
+};
+```
+
+### Example: user profile shape
+```ts
+const user: UserProfile = {
+  kind: 'entity.user',
+  id: 't2_abc123',
+  platform: 'reddit',
+  username: 'alice',
+  displayName: 'alice',
+  profileUrl: 'https://www.reddit.com/user/alice',
+  avatarUrl: 'https://...',
+};
+```
+
+### Example: search result shape
+```ts
+const result: SearchResult = {
+  kind: 'content.search_result',
+  id: '1',
+  title: 'Search result title',
+  url: 'https://example.com',
+  description: 'Short summary',
+  rank: 1,
+};
+```
+
+### Example: chat message shape
+```ts
+const message = {
+  kind: 'chat.message',
+  conversation: { id: 'room_123', platform: 'reddit' },
+  from: { kind: 'entity.user', id: 'alice', platform: 'reddit', username: 'alice' },
+  to: { kind: 'entity.user', id: 'bob', platform: 'reddit', username: 'bob' },
+  message: 'hello',
+  datetime: '2026-05-15T00:00:00.000Z',
+};
+```
+
+### Example: strict command result contract
+```ts
+return {
+  posts: posts.filter((value): value is Post =>
+    value.kind === 'content.post' && typeof value.id === 'string' && typeof value.title === 'string',
+  ),
+};
+```
 ```
 
 ### Example: command-scoped network interception
