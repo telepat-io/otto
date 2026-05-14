@@ -34,11 +34,16 @@ export function resolveCommandAutoOpenUrl(
   const matchedDescriptor = resolveCommandDescriptor(siteArg, commandId, descriptors);
 
   const preloadHost = String(matchedDescriptor?.preloadHost ?? '').trim();
-  if (!preloadHost) {
-    return 'about:blank';
+  if (preloadHost) {
+    return toHttpsUrl(preloadHost);
   }
-
-  return toHttpsUrl(preloadHost);
+  // If no preloadHost, default to the site itself
+  const site = String(matchedDescriptor?.site ?? siteArg).trim();
+  if (site) {
+    return toHttpsUrl(site);
+  }
+  // Fallback to about:blank only if site is missing
+  return 'about:blank';
 }
 
 export function resolveCommandDescriptor(

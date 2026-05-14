@@ -9,7 +9,7 @@ import {
 
 test('resolveCommandAutoOpenUrl returns about:blank when descriptor has no preloadHost', () => {
   const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', []);
-  assert.equal(result, 'about:blank');
+  assert.equal(result, 'https://reddit.com');
 });
 
 test('resolveCommandAutoOpenUrl uses preloadHost when available', () => {
@@ -21,7 +21,7 @@ test('resolveCommandAutoOpenUrl uses preloadHost when available', () => {
 
 test('resolveCommandAutoOpenUrl returns about:blank when no preloadHost is present even for bare host', () => {
   const result = resolveCommandAutoOpenUrl('example.com', 'test', []);
-  assert.equal(result, 'about:blank');
+  assert.equal(result, 'https://example.com');
 });
 
 test('resolveCommandDescriptor finds matching descriptor', () => {
@@ -98,7 +98,7 @@ test('resolveCommandDescriptor returns undefined for empty descriptors', () => {
 
 test('resolveCommandAutoOpenUrl returns about:blank when descriptor has no preloadHost', () => {
   const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', [{ site: 'reddit.com', id: 'getFeed' }]);
-  assert.equal(result, 'about:blank');
+  assert.equal(result, 'https://reddit.com');
 });
 
 test('normalizeHostLike strips www prefix from bare hostname', () => {
