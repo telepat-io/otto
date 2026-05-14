@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.0](https://github.com/telepat-io/otto/compare/v0.13.0...v0.14.0) (2026-05-14)
+
+
+### Features
+
+* add LinkedIn commands for login checks ([102874b](https://github.com/telepat-io/otto/commit/102874b8ae671210a0fd6710966e5dcf9dc9de81))
+* add skill for command authoring and debugging ([cd682a4](https://github.com/telepat-io/otto/commit/cd682a47248c78a1e5950fb096304642ca2bcf01))
+* enhance `otto status` command to include connected node IDs and JSON output ([57c928c](https://github.com/telepat-io/otto/commit/57c928c0e49dfa84328b6e4d168f09a13bb3a80b))
+
 ## [0.13.0](https://github.com/telepat-io/otto/compare/v0.12.0...v0.13.0) (2026-05-04)
 
 
