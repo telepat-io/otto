@@ -80,18 +80,20 @@ otto stop
 
 ## `otto status`
 
-Reports whether the relay daemon is running.
+Reports whether the relay daemon is running. Use `--nodes` to include connected node IDs.
 
 ### Usage
 
 ```bash
-otto status
+otto status [--nodes] [--json]
 ```
 
 ### Examples
 
 ```bash
 otto status
+otto status --nodes
+otto status --nodes --json
 ```
 
 When stopped, `otto status` suggests running `otto start`.

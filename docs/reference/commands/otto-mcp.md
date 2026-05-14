@@ -33,7 +33,7 @@ Launches an MCP (Model Context Protocol) server that exposes Otto's full command
 
 The server exposes 25 tools:
 
-**Status**: `otto_status`, `otto_commands_list`
+**Status**: `otto_status` (supports `nodes: true`), `otto_commands_list`
 
 **Execute**: `otto_cmd`, `otto_test`, `otto_screenshot`, `otto_extract_content`
 

@@ -40,6 +40,10 @@ test('otto_status schema accepts empty input', () => {
   assert.equal(validateSchema(ottoStatusToolInputSchema, {}), true);
 });
 
+test('otto_status schema accepts nodes flag', () => {
+  assert.equal(validateSchema(ottoStatusToolInputSchema, { nodes: true }), true);
+});
+
 test('otto_commands_list schema accepts empty input', () => {
   assert.equal(validateSchema(ottoCommandsListToolInputSchema, {}), true);
 });

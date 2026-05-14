@@ -18,7 +18,7 @@ import {
 import { refreshControllerAccessToken } from './auth/refresh.js';
 import { buildRelayStatusReport, renderRelayStatusPretty } from './daemon-status.js';
 import { installExtensionArtifact } from './extension-manager.js';
-import { resolveTargetNodeId } from './node-resolution.js';
+import { resolveTargetNodeId, fetchConnectedNodeIds } from './node-resolution.js';
 import { readRelayDaemonState, startRelayAttached, startRelayDaemon, stopRelayDaemon } from './relay-daemon.js';
 import { ensureRelayDaemonReadyForSetup, shouldReuseCachedInstall, shouldRunSetupNonInteractive } from './setup-logic.js';
 import { runCommandTui, runLogsFollowTui, runSettingsTui, runSetupPromptTui, showTerminalErrorAlert } from './tui.js';
@@ -1152,14 +1152,44 @@ program
 program
   .command('status')
   .description('Show relay daemon status')
-  .action(async () => {
+  .option('--nodes', 'Include connected node IDs in status output', false)
+  .option('--json', 'Output full JSON result', false)
+  .action(async (opts) => {
     const config = loadConfig();
     const report = buildRelayStatusReport(readRelayDaemonState());
+    const jsonOutput = Boolean(opts.json) || isJsonOutput(config);
+    let nodes: string[] | undefined;
 
-    if (isJsonOutput(config)) {
-      logJsonAware(config, report);
-    } else {
-      console.log(renderRelayStatusPretty(report));
+    if (opts.nodes) {
+      try {
+        nodes = await fetchConnectedNodeIds(config);
+      } catch (error) {
+        if (!jsonOutput) {
+          console.error(`[otto] failed to fetch connected nodes: ${String(error)}`);
+        }
+        nodes = [];
+      }
+    }
+
+    if (jsonOutput) {
+      const output = {
+        ...report,
+        ...(nodes !== undefined ? { nodes } : {}),
+      };
+      logJsonAware(config, output);
+      return;
+    }
+
+    console.log(renderRelayStatusPretty(report));
+    if (opts.nodes) {
+      if (!nodes || nodes.length === 0) {
+        console.log('[otto] connected nodes: none');
+      } else {
+        console.log('[otto] connected nodes:');
+        for (const nodeId of nodes) {
+          console.log(`  - ${nodeId}`);
+        }
+      }
     }
   });
 

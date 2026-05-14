@@ -113,6 +113,20 @@ The server exposes 25 tools organized by category:
 }
 ```
 
+You can also request connected node IDs with `nodes: true`:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "otto_status",
+    "arguments": { "nodes": true }
+  }
+}
+```
+
 ### Run a command
 
 ```json

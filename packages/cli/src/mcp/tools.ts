@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-export const ottoStatusToolInputSchema = {};
+export const ottoStatusToolInputSchema = {
+  nodes: z.boolean().optional().describe('Include connected node IDs in the status response.'),
+};
 
 export const ottoCommandsListToolInputSchema = {
   nodeId: z.string().optional().describe('Target node ID. Auto-resolved if only one node is connected.'),

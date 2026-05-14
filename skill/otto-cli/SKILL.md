@@ -63,8 +63,8 @@ Extension handoff (required after setup):
 Setup verification checks:
 
 ```bash
-# Confirm relay is running
-otto status
+# Confirm relay is running and identify available nodes
+otto status --nodes --json
 
 # Confirm full stack is reachable
 otto commands list --json

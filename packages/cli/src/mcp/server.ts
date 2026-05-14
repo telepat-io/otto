@@ -56,6 +56,7 @@ import {
 } from './otto-mcp-helpers.js';
 import { ensureRelayDaemonReadyForSetup, shouldRunSetupNonInteractive } from '../setup-logic.js';
 import { installExtensionArtifact } from '../extension-manager.js';
+import { fetchConnectedNodeIds } from '../node-resolution.js';
 import type { LogLevel, LogSource } from '../logs-options.js';
 
 const require = createRequire(import.meta.url);
@@ -105,13 +106,20 @@ export async function startOttoMcpServer(): Promise<void> {
     title: 'Otto Status',
     description: 'Show relay daemon status (running, port, pid, log path).',
     inputSchema: ottoStatusToolInputSchema,
-  }, async () => {
+  }, async (input) => {
     try {
       const state = readRelayDaemonState();
       const report = buildRelayStatusReport(state);
+      const structuredContent: Record<string, unknown> = { ...report };
+
+      if (input.nodes) {
+        const config = loadConfig();
+        structuredContent.nodes = await fetchConnectedNodeIds(config);
+      }
+
       return {
-        content: [{ type: 'text', text: JSON.stringify(report, null, 2) }],
-        structuredContent: report,
+        content: [{ type: 'text', text: JSON.stringify(structuredContent, null, 2) }],
+        structuredContent,
       };
     } catch (error) {
       return formatToolError(error);

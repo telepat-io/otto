@@ -41,8 +41,8 @@ If any item is unclear, ask for it before writing code.
 ## Readiness gate (required before coding)
 
 Run this gate when entering a command-authoring session (or when connection state is unclear):
-1. `otto status`
-   - If relay not running, stop and hand off to the broader Otto setup and operations workflow.
+1. `otto status --nodes --json`
+   - If relay not running or node list is unavailable, stop and hand off to the broader Otto setup and operations workflow.
 2. `otto commands list --json`
    - If empty or error, stop and hand off to the broader Otto setup and operations workflow.
 3. Node targeting policy:
