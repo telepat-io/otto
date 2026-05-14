@@ -7,9 +7,9 @@ import {
   toHttpsUrl,
 } from '../src/command-open-url.js';
 
-test('resolveCommandAutoOpenUrl returns default https URL', () => {
+test('resolveCommandAutoOpenUrl returns about:blank when descriptor has no preloadHost', () => {
   const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', []);
-  assert.equal(result, 'https://reddit.com');
+  assert.equal(result, 'about:blank');
 });
 
 test('resolveCommandAutoOpenUrl uses preloadHost when available', () => {
@@ -19,9 +19,9 @@ test('resolveCommandAutoOpenUrl uses preloadHost when available', () => {
   assert.equal(result, 'https://old.reddit.com');
 });
 
-test('resolveCommandAutoOpenUrl adds https to bare host', () => {
+test('resolveCommandAutoOpenUrl returns about:blank when no preloadHost is present even for bare host', () => {
   const result = resolveCommandAutoOpenUrl('example.com', 'test', []);
-  assert.equal(result, 'https://example.com');
+  assert.equal(result, 'about:blank');
 });
 
 test('resolveCommandDescriptor finds matching descriptor', () => {
@@ -96,9 +96,9 @@ test('resolveCommandDescriptor returns undefined for empty descriptors', () => {
   assert.equal(result, undefined);
 });
 
-test('resolveCommandAutoOpenUrl returns default url when descriptor has no preloadHost', () => {
+test('resolveCommandAutoOpenUrl returns about:blank when descriptor has no preloadHost', () => {
   const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', [{ site: 'reddit.com', id: 'getFeed' }]);
-  assert.equal(result, 'https://reddit.com');
+  assert.equal(result, 'about:blank');
 });
 
 test('normalizeHostLike strips www prefix from bare hostname', () => {

@@ -2767,6 +2767,104 @@ test('command.test falls back to execute and honors preloadHost compatibility', 
   });
 });
 
+test('command.test can execute from a blank tab when preloadHost is missing', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: null },
+    scriptResults: [
+      {
+        user: {
+          kind: 'entity.user',
+          id: 'reddit:otto',
+          username: 'otto',
+          platform: 'reddit',
+        },
+        lookup: {
+          username: 'otto',
+        },
+      },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.test', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getUserInfo',
+    input: { username: 'otto' },
+    authMode: 'strict_fail',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.tabSessionId, 'tab_alpha');
+  assert.equal(data.site, 'reddit.com');
+  assert.equal(data.command, 'getUserInfo');
+
+  const user = data.user as Record<string, unknown>;
+  assert.equal(user.kind, 'entity.user');
+  assert.equal(user.id, 'reddit:otto');
+  assert.equal(user.username, 'otto');
+  assert.equal(user.platform, 'reddit');
+
+  assert.deepEqual(data.lookup, {
+    username: 'otto',
+    id: undefined,
+  });
+});
+
+test('command.run can execute from a blank tab when preloadHost is missing', async () => {
+  const { chromeApi } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    tabUrls: { 11: null },
+    scriptResults: [
+      {
+        user: {
+          kind: 'entity.user',
+          id: 'reddit:otto',
+          username: 'otto',
+          platform: 'reddit',
+        },
+        lookup: {
+          username: 'otto',
+        },
+      },
+    ],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('command.run', {
+    tabSessionId: 'tab_alpha',
+    site: 'reddit.com',
+    command: 'getUserInfo',
+    input: { username: 'otto' },
+    authMode: 'strict_fail',
+  }));
+
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.tabSessionId, 'tab_alpha');
+  assert.equal(data.site, 'reddit.com');
+  assert.equal(data.command, 'getUserInfo');
+
+  const user = data.user as Record<string, unknown>;
+  assert.equal(user.kind, 'entity.user');
+  assert.equal(user.id, 'reddit:otto');
+  assert.equal(user.username, 'otto');
+  assert.equal(user.platform, 'reddit');
+
+  assert.deepEqual(data.lookup, {
+    username: 'otto',
+    id: undefined,
+  });
+});
+
 test('command.test waits for preload document readiness before execute fallback', async () => {
   const { chromeApi, getExecuteScriptFunctionCalls } = createChromeMock({
     sessionSeed: {

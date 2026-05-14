@@ -31,12 +31,11 @@ export function resolveCommandAutoOpenUrl(
   commandId: string,
   descriptors: CommandDescriptorLike[],
 ): string {
-  const defaultUrl = toHttpsUrl(siteArg);
   const matchedDescriptor = resolveCommandDescriptor(siteArg, commandId, descriptors);
 
   const preloadHost = String(matchedDescriptor?.preloadHost ?? '').trim();
   if (!preloadHost) {
-    return defaultUrl;
+    return 'about:blank';
   }
 
   return toHttpsUrl(preloadHost);

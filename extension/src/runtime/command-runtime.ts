@@ -23,7 +23,7 @@ import { installPageDomQueryHelpers } from './page-dom-query.js';
 
 type ChromeLike = typeof chrome;
 
-const TAB_URL_READY_TIMEOUT_MS = 1200;
+const TAB_URL_READY_TIMEOUT_MS = 5000;
 const TAB_URL_POLL_INTERVAL_MS = 75;
 const NAVIGATE_TAB_READY_TIMEOUT_MS = 15000;
 const NAVIGATE_TAB_POLL_INTERVAL_MS = 150;
@@ -42,6 +42,23 @@ type CommandRun = {
 const COMMAND_INPUT_TYPES: CommandInputFieldType[] = ['string', 'number', 'boolean', 'object', 'array'];
 
 type CommandMode = 'run' | 'test';
+
+function isHostlessExecutionUrl(url: string | null | undefined): boolean {
+  if (!url) {
+    return true;
+  }
+
+  const normalized = url.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  if (normalized === 'about:blank' || normalized === 'chrome://newtab/' || normalized === 'chrome://newtab') {
+    return true;
+  }
+
+  return false;
+}
 
 function truncateDebugText(value: string, maxBytes = COMMAND_DEBUG_MAX_DATA_BYTES): string {
   if (value.length <= maxBytes) {
@@ -651,25 +668,40 @@ async function executeCommandAction(
     bundle.site,
     commandDebugEnabled,
   );
-  const urlProbe = await waitForCommittedTabUrl(chromeApi, tabId);
-  const tabUrl = urlProbe.url;
-  if (!tabUrl) {
-    const pendingDetails = urlProbe.pendingUrl ? ` (pending: ${urlProbe.pendingUrl})` : '';
-    throw new CommandExecutionError(
-      `Tab URL not ready yet for site validation on ${bundle.site}${pendingDetails}`,
-      'tab_url_not_ready',
-      actionName,
-      true,
-    );
-  }
 
-  if (!isSiteMatch(tabUrl, bundle.site)) {
-    throw new CommandExecutionError(
-      `Tab URL does not match site ${bundle.site}: ${tabUrl}`,
-      'site_mismatch',
-      actionName,
-      false,
-    );
+  if (typeof command.metadata.preloadHost === 'string' && command.metadata.preloadHost.trim().length > 0) {
+    const urlProbe = await waitForCommittedTabUrl(chromeApi, tabId);
+    const tabUrl = urlProbe.url;
+    if (!tabUrl) {
+      const pendingDetails = urlProbe.pendingUrl ? ` (pending: ${urlProbe.pendingUrl})` : '';
+      throw new CommandExecutionError(
+        `Tab URL not ready yet for site validation on ${bundle.site}${pendingDetails}`,
+        'tab_url_not_ready',
+        actionName,
+        true,
+      );
+    }
+
+    if (!isSiteMatch(tabUrl, bundle.site)) {
+      throw new CommandExecutionError(
+        `Tab URL does not match site ${bundle.site}: ${tabUrl}`,
+        'site_mismatch',
+        actionName,
+        false,
+      );
+    }
+  } else {
+    const tab = await chromeApi.tabs.get(tabId);
+    const tabUrl = tab.url ?? null;
+
+    if (!isHostlessExecutionUrl(tabUrl) && !isSiteMatch(tabUrl, bundle.site)) {
+      throw new CommandExecutionError(
+        `Tab URL does not match site ${bundle.site}: ${tabUrl}`,
+        'site_mismatch',
+        actionName,
+        false,
+      );
+    }
   }
 
   if (command.metadata.requiresDebuggerFocus === true) {
