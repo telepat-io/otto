@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.0](https://github.com/telepat-io/otto/compare/v0.14.1...v0.15.0) (2026-05-14)
+
+
+### Features
+
+* add 'otto restart' command to manage relay daemon lifecycle ([84a9f0d](https://github.com/telepat-io/otto/commit/84a9f0de07b5d6837cefb3fdb01da80ee82c8c05))
+* add clean_html format for content extraction ([761d10a](https://github.com/telepat-io/otto/commit/761d10ae37e7a72e0f6d1819f5efc5ab992e83c4))
+* add shared output types and best practices for command results ([e34064b](https://github.com/telepat-io/otto/commit/e34064b1ac2faf260359aa86fa560cacbb5ac683))
+
 ## [0.14.1](https://github.com/telepat-io/otto/compare/v0.14.0...v0.14.1) (2026-05-14)
 
 

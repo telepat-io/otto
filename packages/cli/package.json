@@ -1,6 +1,6 @@
 {
   "name": "@telepat/otto",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Ottomate Everything - Efficient Automation For Your Browser",
   "type": "module",
   "main": "dist/index.js",
@@ -35,8 +35,8 @@
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
-    "@telepat/otto-protocol": "0.14.1",
-    "@telepat/otto-relay": "0.14.1",
+    "@telepat/otto-protocol": "0.15.0",
+    "@telepat/otto-relay": "0.15.0",
     "adm-zip": "^0.5.16",
     "commander": "^14.0.0",
     "ink": "^6.3.0",
