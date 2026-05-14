@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.1](https://github.com/telepat-io/otto/compare/v0.14.0...v0.14.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* correct exports structure in package.json ([69d618f](https://github.com/telepat-io/otto/commit/69d618f352b3256dc3177d064b420ed858319658))
+* ts issues ([8d8711d](https://github.com/telepat-io/otto/commit/8d8711df9b6a3685f43aa6065e7899acc17e9f21))
+* update resolveCommandAutoOpenUrl to return HTTPS URLs instead of about:blank ([7772b4f](https://github.com/telepat-io/otto/commit/7772b4f78c6a7f93aa4718443df253fac9ad0ad3))
+
 ## [0.14.0](https://github.com/telepat-io/otto/compare/v0.13.0...v0.14.0) (2026-05-14)
 
 
