@@ -78,6 +78,40 @@ otto stop
 
 ---
 
+## `otto restart`
+
+Restarts the relay daemon. If the relay is not running, this command starts it.
+
+### Usage
+
+```bash
+otto restart [options]
+```
+
+### Flags
+
+| Flag | Shorthand | Required | Type | Default | Description |
+|---|---|---|---|---|---|
+| `--port` | | No | number | current daemon port or `8787` | Port to restart the relay on |
+| `--attached` | `-a` | No | boolean | false | Run attached in foreground and stream logs to current terminal |
+
+### Examples
+
+```bash
+otto restart
+otto restart --port 9000
+otto restart --attached
+```
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Relay restarted successfully |
+| `1` | Failed to restart the relay |
+
+---
+
 ## `otto status`
 
 Reports whether the relay daemon is running. Use `--nodes` to include connected node IDs.

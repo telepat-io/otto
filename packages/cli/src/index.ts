@@ -19,7 +19,7 @@ import { refreshControllerAccessToken } from './auth/refresh.js';
 import { buildRelayStatusReport, renderRelayStatusPretty } from './daemon-status.js';
 import { installExtensionArtifact } from './extension-manager.js';
 import { resolveTargetNodeId, fetchConnectedNodeIds } from './node-resolution.js';
-import { readRelayDaemonState, startRelayAttached, startRelayDaemon, stopRelayDaemon } from './relay-daemon.js';
+import { readRelayDaemonState, startRelayAttached, startRelayDaemon, restartRelayDaemon, stopRelayDaemon } from './relay-daemon.js';
 import { ensureRelayDaemonReadyForSetup, shouldReuseCachedInstall, shouldRunSetupNonInteractive } from './setup-logic.js';
 import { runCommandTui, runLogsFollowTui, runSettingsTui, runSetupPromptTui, showTerminalErrorAlert } from './tui.js';
 import {
@@ -1147,6 +1147,37 @@ program
     }
 
     console.log(`[otto] relay stopped (pid ${result.state.pid})`);
+  });
+
+program
+  .command('restart')
+  .description('Restart relay daemon')
+  .option('--port <port>', 'Relay port')
+  .option('-a, --attached', 'Run attached in foreground and stream logs to current terminal', false)
+  .action(async (opts) => {
+    const port = opts.port === undefined ? undefined : Number(opts.port);
+    if (opts.port !== undefined && (port === undefined || !Number.isFinite(port) || port <= 0)) {
+      throw new Error('--port must be a positive number');
+    }
+
+    if (opts.attached) {
+      const existing = readRelayDaemonState();
+      if (existing) {
+        const result = await stopRelayDaemon();
+        if (!result.stopped && result.state) {
+          throw new Error(`Failed to stop existing relay daemon (pid ${result.state.pid})`);
+        }
+      }
+
+      const proc = startRelayAttached(port ?? 8787);
+      proc.on('exit', (code) => process.exit(code ?? 0));
+      return;
+    }
+
+    const state = await restartRelayDaemon(port);
+    console.log(`[otto] relay restarted in daemon mode (pid ${state.pid})`);
+    console.log(`[otto] logs: ${state.logPath}`);
+    console.log('[otto] stop with: otto stop');
   });
 
 program

@@ -28,6 +28,7 @@ Build Otto as a secure, debuggable remote browser automation platform (controlle
 - Test all (where present, concise output): `NODE_OPTIONS='--test-reporter=dot' npm run -ws --if-present --silent test`
 - Start relay daemon: `otto start`
 - Start relay attached with logs (dev): `otto start --attached`
+- Restart relay daemon: `otto restart`
 - Stop relay daemon: `otto stop`
 - Start MCP server: `otto mcp`
 - Register with agent framework: `otto agent install <runtime>`

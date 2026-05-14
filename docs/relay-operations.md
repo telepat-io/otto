@@ -30,6 +30,7 @@ Relay starts on port `8787` by default. Global `@telepat/otto` installs include 
 |---|---|
 | `otto start` | Start relay daemon |
 | `otto stop` | Stop relay daemon |
+| `otto restart` | Restart relay daemon |
 | `otto status` | Report running or stopped; when stopped suggests `otto start` |
 | `otto setup` | Ensures relay daemon is running on the setup relay URL port before setup completes |
 

@@ -219,7 +219,7 @@ Do not use this skill when:
 1. Discover user intent and risk class.
 2. Confirm install and setup state using readiness checks.
 3. Choose operation path:
-   - Start/stop relay: `otto start` / `otto stop`
+   - Start/stop/restart relay: `otto start` / `otto stop` / `otto restart`
    - Run site command: `otto cmd --action command.run --payload '{"site":"...","command":"..."}'`
    - Extract content: `otto extract-content <url> --format markdown|distilled_html|raw_html|text`
    - Test command: `otto test <site> <command> --json`

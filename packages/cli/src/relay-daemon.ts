@@ -11,11 +11,18 @@ export type RelayDaemonState = {
   startedAt: string;
 };
 
-const RUNTIME_DIR = join(CONFIG_DIR, 'runtime');
-const RELAY_STATE_PATH = join(RUNTIME_DIR, 'relay-daemon.json');
 const RELAY_ENTRYPOINT_OVERRIDE_ENV = 'OTTO_RELAY_ENTRYPOINT';
+const RELAY_RUNTIME_DIR_ENV = 'OTTO_RUNTIME_DIR';
 
 type ResolveModulePath = (specifier: string) => string;
+
+function getRuntimeDir(): string {
+  return process.env[RELAY_RUNTIME_DIR_ENV] ?? join(CONFIG_DIR, 'runtime');
+}
+
+function getRelayStatePath(): string {
+  return join(getRuntimeDir(), 'relay-daemon.json');
+}
 
 const require = createRequire(import.meta.url);
 
@@ -81,13 +88,14 @@ export function createRelayLaunchSpec(port: number, options: {
 }
 
 function ensureRuntimeDir(): void {
-  if (!existsSync(RUNTIME_DIR)) {
-    mkdirSync(RUNTIME_DIR, { recursive: true });
+  const runtimeDir = getRuntimeDir();
+  if (!existsSync(runtimeDir)) {
+    mkdirSync(runtimeDir, { recursive: true });
   }
 }
 
 function relayLogPath(port: number): string {
-  return join(RUNTIME_DIR, `relay-${port}.log`);
+  return join(getRuntimeDir(), `relay-${port}.log`);
 }
 
 function isProcessRunning(pid: number): boolean {
@@ -111,11 +119,12 @@ function isProcessRunning(pid: number): boolean {
 }
 
 function readRelayState(): RelayDaemonState | null {
-  if (!existsSync(RELAY_STATE_PATH)) {
+  const statePath = getRelayStatePath();
+  if (!existsSync(statePath)) {
     return null;
   }
 
-  const parsed = JSON.parse(readFileSync(RELAY_STATE_PATH, 'utf8')) as unknown;
+  const parsed = JSON.parse(readFileSync(statePath, 'utf8')) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return null;
   }
@@ -149,11 +158,11 @@ function readRelayState(): RelayDaemonState | null {
 
 function writeRelayState(state: RelayDaemonState): void {
   ensureRuntimeDir();
-  writeFileSync(RELAY_STATE_PATH, JSON.stringify(state, null, 2));
+  writeFileSync(getRelayStatePath(), JSON.stringify(state, null, 2));
 }
 
 function clearRelayState(): void {
-  rmSync(RELAY_STATE_PATH, { force: true });
+  rmSync(getRelayStatePath(), { force: true });
 }
 
 async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
@@ -237,6 +246,20 @@ export function startRelayDaemon(port: number): RelayDaemonState {
   } finally {
     closeSync(logFd);
   }
+}
+
+export async function restartRelayDaemon(port?: number): Promise<RelayDaemonState> {
+  const existing = readRelayDaemonState();
+  const restartPort = port ?? existing?.port ?? 8787;
+
+  if (existing) {
+    const result = await stopRelayDaemon();
+    if (!result.stopped && result.state) {
+      throw new Error(`Failed to stop existing relay daemon (pid ${result.state.pid})`);
+    }
+  }
+
+  return startRelayDaemon(restartPort);
 }
 
 export async function stopRelayDaemon(): Promise<{ stopped: boolean; state: RelayDaemonState | null }> {

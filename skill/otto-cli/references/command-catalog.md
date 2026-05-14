@@ -8,6 +8,7 @@ Full command and argument matrix for the Otto CLI.
 |---------|-------------|-------------|
 | `otto start` | Start relay (daemon or attached) | `-a, --attached`, `--port <port>` (default 8787) |
 | `otto stop` | Stop relay daemon | (none) |
+| `otto restart` | Restart relay daemon | `-a, --attached`, `--port <port>` |
 | `otto status` | Show relay daemon status | (none) |
 | `otto config` | Configure relay and defaults | `--relay-url <url>`, `--relay-http-url <url>`, `--node-id <id>` |
 | `otto setup` | Guided setup wizard | `--relay-url <url>`, `--yes`, `--force`, `--non-interactive`, `--output-dir`, `--release-base-url`, `--download-timeout-ms` |
