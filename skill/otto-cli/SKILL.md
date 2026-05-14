@@ -352,11 +352,12 @@ Test command:
 Extract content command:
 
 - `otto extract-content` defaults to `--format markdown`.
-- Supported formats: `markdown`, `distilled_html`, `raw_html`, `text`.
+- Supported formats: `markdown`, `distilled_html`, `clean_html`, `raw_html`, `text`.
 - Use URL or `--tab-session` as the extraction target.
-- `--selector` is supported only for `raw_html` and `text`.
+- `--selector` is supported for `clean_html`, `raw_html`, and `text`.
 - `--distill-mode` and `--fallback-to-readability` apply to `markdown` and `distilled_html`.
 - Text extraction with URL auto-opens a temporary managed tab and closes it after extraction.
+- `clean_html` is optimized for command development: removes scripts/styles but preserves DOM structure and semantic attributes (data-*, aria-*) for easy selector building.
 
 Node resolution:
 

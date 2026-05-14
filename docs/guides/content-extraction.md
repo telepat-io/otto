@@ -26,9 +26,18 @@ That means Otto extracts from the final rendered page after JavaScript execution
 Otto supports multiple extraction outputs so automation workflows can choose the right shape for the task:
 
 - `markdown` — browser-safe markdown that preserves headings, lists, links, inline code, and table structure. This is the default and the best fit for agent ingestion.
-- `distilled_html` — cleaned content-centric HTML with page navigation chrome removed. Use this when you want richer markup without the noise.
-- `html` — raw HTML from the current DOM, including the page markup as the browser sees it.
+- `clean_html` — DOM-preserving HTML with scripts/styles/inline handlers removed while keeping semantic attributes (`data-*`, `aria-*`, `role`). This is the best format for selector discovery and command authoring.
+- `distilled_html` — content-centric HTML for readability-first extraction flows.
+- `raw_html` — full HTML from the current DOM, including page chrome and script/style tags.
 - `text` — plain text extraction for summary or quick content checks.
+
+## Which format should I use?
+
+- Use `markdown` for summarization and LLM ingestion.
+- Use `clean_html` for DOM inspection and reliable selector building.
+- Use `distilled_html` only when you specifically want article-like cleaned content.
+- Use `raw_html` only when you need exact page markup fidelity.
+- Use `text` for quick plain-text checks.
 
 ## Why it matters for agents
 
@@ -42,12 +51,17 @@ Otto supports multiple extraction outputs so automation workflows can choose the
 Use the high-level extraction command:
 
 ```bash
+# Best for selector discovery and automation authoring
+otto extract-content https://example.com/article --format clean_html
+
+# Best for agent summaries (default)
 otto extract-content https://example.com/article --format markdown
 ```
 
 Under the hood, Otto maps this to browser DOM extraction primitives:
 
 - `primitive.dom.extract_markdown`
+- `primitive.dom.extract_clean_html`
 - `primitive.dom.extract_distilled_html`
 - `primitive.dom.extract_html`
 - `primitive.dom.extract_text`

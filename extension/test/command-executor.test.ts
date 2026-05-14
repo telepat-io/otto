@@ -386,6 +386,88 @@ test('primitive.dom.extract_html keeps caller tab open when tabSessionId is prov
   assert.deepEqual(getRemovedTabIds(), []);
 });
 
+test('primitive.dom.extract_clean_html uses temporary tab when url is provided', async () => {
+  const { chromeApi, getCreatedTabIds, getRemovedTabIds } = createChromeMock({
+    scriptResults: [{
+      html: '<div><button>Click</button><p data-id="123">Clean</p></div>',
+      sourceUrl: 'https://example.com/page',
+      title: 'Clean Page',
+    }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+    url: 'https://example.com/page',
+    selector: 'body',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: null,
+    sourceUrl: 'https://example.com/page',
+    title: 'Clean Page',
+    extractionMode: 'clean_html',
+    selector: 'body',
+    fallbackUsed: false,
+    contentLength: 59,
+    content: '<div><button>Click</button><p data-id="123">Clean</p></div>',
+  });
+
+  assert.equal(getCreatedTabIds().length, 1);
+  assert.deepEqual(getRemovedTabIds(), getCreatedTabIds());
+});
+
+test('primitive.dom.extract_clean_html keeps caller tab open when tabSessionId is provided', async () => {
+  const { chromeApi, getCreatedTabIds, getRemovedTabIds } = createChromeMock({
+    sessionSeed: {
+      tabSessions: {
+        tab_alpha: 11,
+      },
+    },
+    tabIds: [11],
+    scriptResults: [{
+      html: '<main><article role="article" data-testid="post"><h1>Title</h1></article></main>',
+      sourceUrl: 'https://example.com/article',
+      title: 'Article',
+    }],
+  });
+
+  const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+    tabSessionId: 'tab_alpha',
+    selector: 'main',
+  }));
+
+  assert.deepEqual(result.data, {
+    tabSessionId: 'tab_alpha',
+    sourceUrl: 'https://example.com/article',
+    title: 'Article',
+    extractionMode: 'clean_html',
+    selector: 'main',
+    fallbackUsed: false,
+    contentLength: 80,
+    content: '<main><article role="article" data-testid="post"><h1>Title</h1></article></main>',
+  });
+
+  // Verify semantic attributes are preserved
+  assert.ok(result.data.content.includes('role="article"'), 'role attribute should be preserved');
+  assert.ok(result.data.content.includes('data-testid="post"'), 'data-testid should be preserved');
+
+  assert.deepEqual(getCreatedTabIds(), []);
+  assert.deepEqual(getRemovedTabIds(), []);
+});
+
+test('primitive.dom.extract_clean_html requires url or tabSessionId', async () => {
+  const { chromeApi } = createChromeMock();
+
+  await assert.rejects(
+    () => executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {})),
+    (err: unknown) => {
+      assert.ok(err instanceof CommandExecutionError);
+      const commandErr = err as CommandExecutionError;
+      assert.equal(commandErr.code, 'missing_extraction_target');
+      return true;
+    },
+  );
+});
+
 test('primitive.dom.extract_distilled_html defaults to readability', async () => {
   const { chromeApi } = createChromeMock({
     scriptResults: [{
@@ -3706,4 +3788,137 @@ test('primitive.tab.open recovers when tab group update throws nested cause obje
   assert.equal(typeof sessionStore.automationGroupId, 'number');
   assert.notEqual(sessionStore.automationGroupId, staleGroupId);
   assert.equal(getGroupCreateCount(), 1);
+});
+
+  test('primitive.dom.extract_clean_html preserves data attributes', async () => {
+    const { chromeApi } = createChromeMock({
+      scriptResults: [{
+        html: '<div data-id="123" data-testid="main" data-value="test"><p>Content</p></div>',
+        sourceUrl: 'https://example.com',
+        title: 'Test',
+      }],
+    });
+
+    const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+      url: 'https://example.com',
+    }));
+
+    const content = (result.data as { content: string }).content;
+    assert.ok(content.includes('data-id="123"'), 'data-id attribute should be preserved');
+    assert.ok(content.includes('data-testid="main"'), 'data-testid attribute should be preserved');
+    assert.ok(content.includes('data-value="test"'), 'data-value attribute should be preserved');
+  });
+
+  test('primitive.dom.extract_clean_html preserves aria attributes', async () => {
+    const { chromeApi } = createChromeMock({
+      scriptResults: [{
+        html: '<div aria-label="Main content" aria-hidden="false"><button aria-pressed="true">Button</button></div>',
+        sourceUrl: 'https://example.com',
+        title: 'Test',
+      }],
+    });
+
+    const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+      url: 'https://example.com',
+    }));
+
+    const content = (result.data as { content: string }).content;
+    assert.ok(content.includes('aria-label="Main content"'), 'aria-label should be preserved');
+    assert.ok(content.includes('aria-hidden="false"'), 'aria-hidden should be preserved');
+    assert.ok(content.includes('aria-pressed="true"'), 'aria-pressed should be preserved');
+  });
+
+  test('primitive.dom.extract_clean_html preserves role attributes', async () => {
+    const { chromeApi } = createChromeMock({
+      scriptResults: [{
+        html: '<div role="main"><article role="article"><nav role="navigation">Nav</nav></article></div>',
+        sourceUrl: 'https://example.com',
+        title: 'Test',
+      }],
+    });
+
+    const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+      url: 'https://example.com',
+    }));
+
+    const content = (result.data as { content: string }).content;
+    assert.ok(content.includes('role="main"'), 'role=main should be preserved');
+    assert.ok(content.includes('role="article"'), 'role=article should be preserved');
+    assert.ok(content.includes('role="navigation"'), 'role=navigation should be preserved');
+  });
+
+  test('primitive.dom.extract_clean_html handles selector targeting', async () => {
+    const { chromeApi } = createChromeMock({
+      scriptResults: [{
+        html: '<header><h1>Title</h1></header><main id="main"><p>Main content</p></main><footer>Footer</footer>',
+        sourceUrl: 'https://example.com',
+        title: 'Test',
+      }],
+    });
+
+    const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+      url: 'https://example.com',
+      selector: '#main',
+    }));
+
+    assert.equal((result.data as { selector: string }).selector, '#main');
+  });
+
+  test('primitive.dom.extract_clean_html removes obfuscated classes', async () => {
+    const { chromeApi } = createChromeMock({
+      scriptResults: [{
+        html: '<div class="component"><p class="_a0b _x1 jss-1">Text with obfuscated classes</p></div>',
+        sourceUrl: 'https://example.com',
+        title: 'Test',
+      }],
+    });
+
+    const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+      url: 'https://example.com',
+    }));
+
+    const content = (result.data as { content: string }).content;
+    // The p element should still exist but obfuscated classes might be removed
+    assert.ok(content.includes('<p'), 'p tag should be preserved');
+    assert.ok(content.includes('Text with obfuscated classes'), 'Text content should be preserved');
+  });
+
+  test('primitive.dom.extract_clean_html with complex nested structure preserves semantic meaning', async () => {
+    const { chromeApi } = createChromeMock({
+      scriptResults: [{
+        html: `
+          <article data-id="123" role="main">
+            <header data-section="header">
+              <h1 aria-label="Article Title">Title</h1>
+            </header>
+            <div role="region" aria-label="Article Content">
+              <p data-testid="intro">Introduction</p>
+              <section data-subsection="details">
+                <h2>Details</h2>
+                <p>Details content</p>
+              </section>
+            </div>
+            <footer data-section="footer">Footer</footer>
+          </article>
+        `,
+        sourceUrl: 'https://example.com',
+        title: 'Complex Article',
+      }],
+    });
+
+    const result = await executeCommand(chromeApi, buildCommand('primitive.dom.extract_clean_html', {
+      url: 'https://example.com',
+    }));
+
+    const content = (result.data as { content: string }).content;
+    // Verify semantic structure
+    assert.ok(content.includes('data-id="123"'), 'data-id preserved');
+    assert.ok(content.includes('role="main"'), 'role=main preserved');
+    assert.ok(content.includes('aria-label="Article Title"'), 'aria-label preserved');
+    assert.ok(content.includes('data-testid="intro"'), 'data-testid preserved');
+    assert.ok(content.includes('role="region"'), 'role=region preserved');
+    // Verify structure
+    assert.ok(content.includes('<article'), 'article tag preserved');
+    assert.ok(content.includes('<header'), 'header tag preserved');
+    assert.ok(content.includes('<section'), 'section tag preserved');
 });

@@ -49,9 +49,9 @@ export const ottoScreenshotToolInputSchema = {
 export const ottoExtractContentToolInputSchema = {
   url: z.string().optional().describe('URL to extract from. Optional when tabSession is provided.'),
   tabSession: z.string().optional().describe('Tab session ID to extract from.'),
-  format: z.enum(['markdown', 'distilled_html', 'raw_html', 'text']).optional()
+  format: z.enum(['markdown', 'distilled_html', 'clean_html', 'raw_html', 'text']).optional()
     .describe('Extraction output format. Default: "markdown".'),
-  selector: z.string().optional().describe('CSS selector for raw_html and text extraction.'),
+  selector: z.string().optional().describe('CSS selector for raw_html, clean_html, and text extraction.'),
   distillMode: z.enum(['readability', 'dom-distiller']).optional()
     .describe('Distillation mode for markdown and distilled_html. Default: "readability".'),
   fallbackToReadability: z.boolean().optional().describe('Fallback to readability when distiller output is unavailable.'),

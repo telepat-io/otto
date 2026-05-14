@@ -93,7 +93,17 @@ export function checkRateLimit(rateLimit: Map<string, { windowStartMs: number; c
 
 export function isActionAllowed(scopes: string[], action: string): boolean {
   if (scopes.includes('*')) return true;
-  return scopes.includes(action);
+  if (scopes.includes(action)) return true;
+  // Support pattern matching: scopes like 'primitive.dom.*' match 'primitive.dom.extract_clean_html'
+  for (const scope of scopes) {
+    if (scope.endsWith('.*')) {
+      const prefix = scope.slice(0, -2); // Remove the '.*'
+      if (action.startsWith(prefix + '.')) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export function validateReplayWindow(params: {

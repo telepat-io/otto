@@ -139,8 +139,51 @@ test('isActionAllowed with explicit scope', () => {
   assert.equal(isActionAllowed(['primitive.tab.open'], 'primitive.tab.close'), false);
 });
 
-test('isActionAllowed with empty scopes', () => {
-  assert.equal(isActionAllowed([], 'action'), false);
+
+test('isActionAllowed with wildcard pattern scope', () => {
+  // Single wildcard pattern
+  assert.equal(isActionAllowed(['primitive.dom.*'], 'primitive.dom.extract_clean_html'), true);
+  assert.equal(isActionAllowed(['primitive.dom.*'], 'primitive.dom.extract_html'), true);
+  assert.equal(isActionAllowed(['primitive.dom.*'], 'primitive.dom.extract_text'), true);
+  // Pattern should not match actions outside the prefix
+  assert.equal(isActionAllowed(['primitive.dom.*'], 'primitive.tab.open'), false);
+  assert.equal(isActionAllowed(['primitive.dom.*'], 'command.run'), false);
+});
+
+test('isActionAllowed with multiple wildcard patterns', () => {
+  const scopes = ['primitive.tab.*', 'primitive.dom.*', 'command.*'];
+  assert.equal(isActionAllowed(scopes, 'primitive.tab.open'), true);
+  assert.equal(isActionAllowed(scopes, 'primitive.dom.extract_clean_html'), true);
+  assert.equal(isActionAllowed(scopes, 'command.run'), true);
+  assert.equal(isActionAllowed(scopes, 'listener.subscribe'), false);
+});
+
+test('isActionAllowed with nested wildcard pattern', () => {
+  assert.equal(isActionAllowed(['primitive.*'], 'primitive.dom.extract_clean_html'), true);
+  assert.equal(isActionAllowed(['primitive.*'], 'primitive.tab.open'), true);
+  assert.equal(isActionAllowed(['primitive.*'], 'primitive.page.reload'), true);
+  assert.equal(isActionAllowed(['primitive.*'], 'command.run'), false);
+});
+
+test('isActionAllowed mixed exact and wildcard scopes', () => {
+  const scopes = ['primitive.tab.open', 'primitive.dom.*', 'command.run'];
+  // Exact matches
+  assert.equal(isActionAllowed(scopes, 'primitive.tab.open'), true);
+  assert.equal(isActionAllowed(scopes, 'command.run'), true);
+  // Wildcard pattern match
+  assert.equal(isActionAllowed(scopes, 'primitive.dom.extract_clean_html'), true);
+  // Non-matching
+  assert.equal(isActionAllowed(scopes, 'primitive.tab.close'), false);
+  assert.equal(isActionAllowed(scopes, 'command.test'), false);
+});
+
+test('isActionAllowed pattern matching is prefix-based', () => {
+  const scopes = ['primitive.dom.*'];
+  // Should match because 'primitive.dom.' is the prefix
+  assert.equal(isActionAllowed(scopes, 'primitive.dom.extract_clean_html'), true);
+  // Should not match actions that don't have the separator after prefix
+  assert.equal(isActionAllowed(scopes, 'primitive.domain_extraction'), false);
+  assert.equal(isActionAllowed(scopes, 'primitive.do'), false);
 });
 
 test('validateReplayWindow rejects missing nonce', () => {

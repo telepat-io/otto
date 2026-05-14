@@ -149,8 +149,9 @@ A successful run returns a JSON result with `messageType: result` and exits with
 For extraction-heavy debugging, prefer `otto extract-content` over hand-written primitive sequences. It consolidates output selection in one place:
 
 - `--format markdown` (default) for quick page understanding
-- `--format distilled_html` for readability-safe HTML capture
-- `--format raw_html --selector <css>` for precise DOM snapshots
+- `--format clean_html --selector <css>` for selector discovery and DOM debugging
+- `--format distilled_html` for readability-safe article-style capture
+- `--format raw_html --selector <css>` only when exact unfiltered markup is required
 - `--format text --tab-session <id>` for visible text extraction from managed tabs
 
 ## Safety rules

@@ -63,7 +63,7 @@ Do not continue command authoring when readiness gate fails.
    - Input validation, preconditions, and structured error paths.
 5. Add extraction and interaction resilience.
    - Prefer stable selectors, deep DOM helpers when needed.
-   - For extraction-heavy tasks, try markdown or distilled HTML before raw HTML parsing.
+   - For extraction-heavy tasks, start with **markdown** (easiest to parse) or **clean_html** (removes scripts/styles/obfuscated classes to reveal clean page structure for selector building). Raw HTML is rarely needed; skip it unless you need full page exact structure.
 6. Add or tune test mode behavior.
    - Implement `test(...)` by default so the command is directly testable via CLI.
    - If a dedicated test flow is unnecessary, keep `test(...)` thin and delegate to `execute(...)`.
@@ -200,8 +200,10 @@ otto test <site> <command> --json
 otto test <site> <command> --payload '{"limit":5}' --json
 
 # 4) Content extraction shortcut for debugging page structure
+# Recommended: try markdown (easiest to parse) or clean_html (best for selectors)
 otto extract-content <url> --format markdown
-otto extract-content <url> --format distilled_html
+otto extract-content <url> --format clean_html
+otto extract-content <url> --format distilled_html  # rarely needed
 ```
 
 ### Example: primitives via CLI
@@ -218,10 +220,16 @@ otto cmd --action primitive.tab.query --payload '{"tabSessionId":"<tabSessionId>
 # Navigate the managed tab
 otto cmd --action primitive.tab.navigate --payload '{"tabSessionId":"<tabSessionId>","url":"https://www.reddit.com/r/programming"}' --json
 
-# Extract markdown (often easiest for parser debugging)
+# RECOMMENDED: Extract markdown (easiest to parse for extraction tasks)
 otto cmd --action primitive.dom.extract_markdown --payload '{"tabSessionId":"<tabSessionId>"}' --json
 
-# Extract distilled html for structural debugging
+# RECOMMENDED: Extract clean HTML (best for identifying stable selectors)
+# Clean HTML removes scripts, styles, inline event handlers, and obfuscated classes.
+# This produces readable HTML with preserved semantic attributes (role, data-*, aria-*),
+# making it ideal for DOM inspection and building reliable CSS selectors.
+otto cmd --action primitive.dom.extract_clean_html --payload '{"tabSessionId":"<tabSessionId>"}' --json
+
+# Extract distilled html (rarely needed; skip raw html—it's usually not worth retrieving)
 otto cmd --action primitive.dom.extract_distilled_html --payload '{"tabSessionId":"<tabSessionId>"}' --json
 
 # Capture viewport screenshot
@@ -313,6 +321,7 @@ Primitive tab actions:
 Primitive DOM actions:
 - `primitive.dom.extract_text`
 - `primitive.dom.extract_html`
+- `primitive.dom.extract_clean_html`
 - `primitive.dom.extract_distilled_html`
 - `primitive.dom.extract_markdown`
 

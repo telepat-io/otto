@@ -114,7 +114,7 @@ async function waitForExtractionTabReady(chromeApi: ChromeLike, tabId: number): 
 async function ensureTemporaryExtractionTabReady(
   chromeApi: ChromeLike,
   target: ExtractionTarget,
-  stage: 'primitive.dom.extract_html' | 'primitive.dom.extract_distilled_html' | 'primitive.dom.extract_markdown' | 'primitive.page.screenshot',
+  stage: 'primitive.dom.extract_html' | 'primitive.dom.extract_clean_html' | 'primitive.dom.extract_distilled_html' | 'primitive.dom.extract_markdown' | 'primitive.page.screenshot',
 ): Promise<void> {
   if (!target.temporaryTab) {
     return;
@@ -831,6 +831,65 @@ async function extractRawHtml(chromeApi: ChromeLike, tabId: number, selector: st
       const html = selected?.outerHTML ?? null;
       return {
         html,
+        sourceUrl: window.location.href,
+        title: document.title || null,
+      };
+    },
+    args: [selector],
+  });
+
+  return (result[0]?.result as { html: string | null; sourceUrl: string; title: string | null } | undefined) ?? {
+    html: null,
+    sourceUrl: '',
+    title: null,
+  };
+}
+
+async function extractCleanHtml(chromeApi: ChromeLike, tabId: number, selector: string): Promise<{ html: string | null; sourceUrl: string; title: string | null }> {
+  const result = await chromeApi.scripting.executeScript({
+    target: { tabId },
+    func: (sel: string) => {
+      const selected = document.querySelector(sel);
+      if (!selected) {
+        return {
+          html: null,
+          sourceUrl: window.location.href,
+          title: document.title || null,
+        };
+      }
+
+      const root = selected.cloneNode(true) as Element;
+
+      // Remove script and style tags
+      const toRemove = root.querySelectorAll('script, style, noscript');
+      toRemove.forEach((el) => el.remove());
+
+      // Remove all event handler attributes and clean up classes
+      const allElements = root.querySelectorAll('*');
+      allElements.forEach((el) => {
+        // Remove all event handler attributes (onclick, onload, etc.)
+        Array.from(el.attributes).forEach((attr) => {
+          if (attr.name.startsWith('on')) {
+            el.removeAttribute(attr.name);
+          }
+        });
+
+        // Clean up class attribute: keep data-* and aria-* but remove obfuscated single-letter classes
+        if (el.hasAttribute('class')) {
+          const classes = el.getAttribute('class')?.split(/\s+/) || [];
+          const cleaned = classes.filter(
+            (cls) => cls.length > 1 || cls.length === 0 || /^[A-Z]/.test(cls),
+          );
+          if (cleaned.length > 0) {
+            el.setAttribute('class', cleaned.join(' '));
+          } else {
+            el.removeAttribute('class');
+          }
+        }
+      });
+
+      return {
+        html: root.outerHTML,
         sourceUrl: window.location.href,
         title: document.title || null,
       };
@@ -1686,6 +1745,40 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
             sourceUrl: extracted.sourceUrl || target.sourceUrlInput,
             title: extracted.title,
             extractionMode: 'raw_html',
+            selector,
+            fallbackUsed: false,
+            contentLength: html?.length ?? 0,
+            content: html,
+          },
+        };
+      } finally {
+        if (target.temporaryTab) {
+          try {
+            await chromeApi.tabs.remove(target.tabId);
+          } catch {
+            // Best-effort cleanup for temporary extraction tabs.
+          }
+        }
+      }
+    }
+    case 'primitive.dom.extract_clean_html': {
+      const target = await resolveExtractionTarget(chromeApi, command);
+      const selector = String(command.payload.selector ?? 'body');
+      const maxChars = readNumberInRange(command.payload.maxChars, 500_000, 1_000, 5_000_000);
+      try {
+        await ensureTemporaryExtractionTabReady(chromeApi, target, 'primitive.dom.extract_clean_html');
+        const extracted = await extractCleanHtml(chromeApi, target.tabId, selector);
+        const html = typeof extracted.html === 'string'
+          ? applyContentLimit(extracted.html, maxChars)
+          : null;
+
+        return {
+          durationMs: Date.now() - start,
+          data: {
+            tabSessionId: target.tabSessionId,
+            sourceUrl: extracted.sourceUrl || target.sourceUrlInput,
+            title: extracted.title,
+            extractionMode: 'clean_html',
             selector,
             fallbackUsed: false,
             contentLength: html?.length ?? 0,

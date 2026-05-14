@@ -136,13 +136,14 @@ Every `command` payload must identify a target node and include replay protectio
 | `primitive.tab.query` | Query managed tab state |
 | `primitive.dom.extract_text` | Extract visible text from tab |
 | `primitive.dom.extract_html` | Extract page HTML |
+| `primitive.dom.extract_clean_html` | Extract DOM with semantic attributes, scripts/styles removed |
 | `primitive.dom.extract_distilled_html` | Extract distilled HTML (readability) |
 | `primitive.dom.extract_markdown` | Extract Markdown representation |
 | `primitive.page.screenshot` | Screenshot the tab or a URL |
 
 Content extraction is also exposed through first-class controller interfaces:
 
-- CLI: `otto extract-content [url] --format markdown|distilled_html|raw_html|text` (defaults to markdown)
+- CLI: `otto extract-content [url] --format markdown|distilled_html|clean_html|raw_html|text` (defaults to markdown)
 - MCP: `otto_extract_content` tool with `format` selector and shared targeting (`url` or `tabSession`)
 
 These interfaces map to the primitive DOM actions above and provide one consolidated surface for agents and CLI users.

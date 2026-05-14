@@ -2449,12 +2449,12 @@ logs
 
 program
   .command('extract-content')
-  .description('Extract page content with one command (markdown, distilled_html, raw_html, or text)')
+  .description('Extract page content with one command (markdown, distilled_html, clean_html, raw_html, or text)')
   .argument('[url]', 'Page URL to extract from (optional when --tab-session is provided)')
-  .option('--format <format>', 'markdown|distilled_html|raw_html|text', 'markdown')
+  .option('--format <format>', 'markdown|distilled_html|clean_html|raw_html|text', 'markdown')
   .option('--tab-session <id>', 'Use an existing tabSessionId instead of opening a temporary tab')
-  .option('--selector <selector>', 'CSS selector (supported for raw_html and text)')
-  .option('--distill-mode <mode>', 'readability|dom-distiller (markdown/distilled_html only)', 'readability')
+  .option('--selector <selector>', 'CSS selector (supported for clean_html, raw_html, and text)')
+  .option('--distill-mode <mode>', 'readability|dom-distiller (markdown/distilled_html only)')
   .option('--no-fallback-to-readability', 'Disable fallback to readability when dom-distiller is selected')
   .option('--max-chars <n>', 'Maximum extracted character count (format dependent)')
   .option('--node-id <id>', 'Override target node id')
@@ -2466,14 +2466,17 @@ program
     const timeoutMs = parseMaybeNumber(opts.timeout, 60_000);
     const format = parseExtractContentFormat(opts.format);
 
+    // Only include distillMode and fallbackToReadability for markdown/distilled_html
+    const isDistillableFormat = format === 'markdown' || format === 'distilled_html';
+
     const request = buildExtractContentRequest({
       format,
       url,
       tabSessionId: opts.tabSession,
       selector: opts.selector,
       maxChars: opts.maxChars !== undefined ? parsePositiveNumberOption(opts.maxChars, '--max-chars') : undefined,
-      distillMode: opts.distillMode,
-      fallbackToReadability: Boolean(opts.fallbackToReadability),
+      distillMode: isDistillableFormat && opts.distillMode !== undefined ? opts.distillMode : undefined,
+      fallbackToReadability: isDistillableFormat ? Boolean(opts.fallbackToReadability) : undefined,
     });
 
     let resolvedTabSessionId = request.tabSessionId;

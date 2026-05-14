@@ -32,15 +32,9 @@ export const TAB_QUEUE_LIMIT = Math.max(1, Number(process.env.OTTO_TAB_QUEUE_LIM
 export const CONTROLLER_QUEUE_LIMIT = Math.max(1, Number(process.env.OTTO_CONTROLLER_QUEUE_LIMIT ?? 100));
 export const DEFAULT_CONTROLLER_SCOPES: string[] =
   process.env.OTTO_DEFAULT_CONTROLLER_SCOPES?.split(',').map((x) => x.trim()).filter(Boolean) ?? [
-    'primitive.tab.open',
-    'primitive.tab.close',
-    'primitive.tab.navigate',
-    'primitive.tab.query',
-    'primitive.dom.extract_text',
-    'primitive.dom.extract_html',
-    'primitive.dom.extract_distilled_html',
-    'primitive.dom.extract_markdown',
-    'primitive.page.screenshot',
+    'primitive.tab.*',
+    'primitive.dom.*',
+    'primitive.page.*',
     'command.list',
     'command.run',
     'command.test',

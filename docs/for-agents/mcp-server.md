@@ -46,7 +46,7 @@ The server exposes 25 tools organized by category:
 | `otto_cmd` | Send a command to a connected node |
 | `otto_test` | Run a site command for testing (auto-registers controller if needed) |
 | `otto_screenshot` | Capture a screenshot of a URL |
-| `otto_extract_content` | Extract content with one tool (`markdown`, `distilled_html`, `raw_html`, `text`) |
+| `otto_extract_content` | Extract content with one tool (`markdown`, `distilled_html`, `clean_html`, `raw_html`, `text`) |
 
 ### Observation tools
 
@@ -162,10 +162,12 @@ You can also request connected node IDs with `nodes: true`:
 
 `otto_extract_content` input highlights:
 
-- `format`: `markdown` (default), `distilled_html`, `raw_html`, `text`
+- `format`: `markdown` (default), `distilled_html`, `clean_html`, `raw_html`, `text`
 - target selection: provide `url` or `tabSession`
-- `selector`: supported for `raw_html` and `text`
+- `selector`: supported for `clean_html`, `raw_html`, and `text`
 - `distillMode` / `fallbackToReadability`: for `markdown` and `distilled_html`
+
+For selector discovery and command authoring flows, use `format: "clean_html"`.
 
 ## Error handling
 

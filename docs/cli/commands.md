@@ -171,6 +171,7 @@ If `--tab-session` is omitted, `otto test` auto-opens a tab to the command's `pr
 ## `otto extract-content`
 
 Extracts page content through one command with selectable output format. Default format is `markdown`.
+For selector development and command authoring, prefer `clean_html`.
 
 ### Usage
 
@@ -188,9 +189,9 @@ otto extract-content [url] [options]
 
 | Flag | Shorthand | Required | Type | Default | Description |
 |---|---|---|---|---|---|
-| `--format` | | No | enum | `markdown` | `markdown`, `distilled_html`, `raw_html`, or `text` |
+| `--format` | | No | enum | `markdown` | `markdown`, `distilled_html`, `clean_html`, `raw_html`, or `text` |
 | `--tab-session` | | No | string | | Existing tab session ID to extract from |
-| `--selector` | | No | string | `body` | CSS selector (supported for `raw_html` and `text`) |
+| `--selector` | | No | string | `body` | CSS selector (supported for `clean_html`, `raw_html`, and `text`) |
 | `--distill-mode` | | No | enum | `readability` | `readability` or `dom-distiller` (for `markdown` and `distilled_html`) |
 | `--no-fallback-to-readability` | | No | boolean | false | Disable readability fallback when `dom-distiller` is selected |
 | `--max-chars` | | No | number | | Maximum extracted characters for supported formats |
@@ -207,6 +208,9 @@ otto extract-content https://example.com
 # Extract distilled HTML
 otto extract-content https://example.com --format distilled_html
 
+# Extract clean HTML (recommended for selector building)
+otto extract-content https://example.com --format clean_html --selector article
+
 # Extract raw HTML from a selector
 otto extract-content https://example.com --format raw_html --selector article
 
@@ -219,6 +223,7 @@ otto extract-content --format text --tab-session <tabSessionId>
 - Provide either `[url]` or `--tab-session`.
 - For `--format text` and URL-only calls, Otto auto-opens a temporary managed tab, extracts text, and closes the tab.
 - `--selector` is rejected for `markdown` and `distilled_html`.
+- `clean_html` preserves semantic attributes while removing scripts/styles/inline handlers, which is usually the best format for DOM debugging.
 
 ### Exit codes
 

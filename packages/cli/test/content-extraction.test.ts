@@ -158,3 +158,67 @@ test('parseDistillMode accepts readability mode', () => {
 test('parseExtractContentFormat handles lowercase input', () => {
   assert.equal(parseExtractContentFormat('markdown'), 'markdown');
 });
+
+test('buildExtractContentRequest maps clean_html format to clean_html primitive', () => {
+  const request = buildExtractContentRequest({ format: 'clean_html', url: 'https://example.com' });
+  assert.equal(request.action, 'primitive.dom.extract_clean_html');
+  assert.equal(request.requiresTemporaryTextTab, false);
+});
+
+test('buildExtractContentRequest maps clean_html format with selector', () => {
+  const request = buildExtractContentRequest({
+    format: 'clean_html',
+    tabSessionId: 'tab_1',
+    selector: '#main',
+  });
+  assert.equal(request.action, 'primitive.dom.extract_clean_html');
+  assert.equal(request.payload.selector, '#main');
+  assert.equal(request.payload.tabSessionId, 'tab_1');
+});
+
+test('buildExtractContentRequest maps clean_html with maxChars', () => {
+  const request = buildExtractContentRequest({
+    format: 'clean_html',
+    url: 'https://example.com',
+    maxChars: 50000,
+  });
+  assert.equal(request.action, 'primitive.dom.extract_clean_html');
+  assert.equal(request.payload.maxChars, 50000);
+});
+
+test('buildExtractContentRequest defaults clean_html selector to body', () => {
+  const request = buildExtractContentRequest({
+    format: 'clean_html',
+    url: 'https://example.com',
+  });
+  assert.equal(request.payload.selector, 'body');
+});
+
+test('buildExtractContentRequest rejects distill-mode for clean_html', () => {
+  assert.throws(
+    () => buildExtractContentRequest({
+      format: 'clean_html',
+      url: 'https://example.com',
+      distillMode: 'readability',
+    }),
+    /--distill-mode is only supported/,
+  );
+});
+
+test('buildExtractContentRequest rejects fallback-to-readability for clean_html', () => {
+  assert.throws(
+    () => buildExtractContentRequest({
+      format: 'clean_html',
+      url: 'https://example.com',
+      fallbackToReadability: true,
+    }),
+    /--fallback-to-readability is only supported/,
+  );
+});
+
+test('buildExtractContentRequest rejects selector for markdown extraction (includes clean_html restriction)', () => {
+  assert.throws(
+    () => buildExtractContentRequest({ format: 'markdown', url: 'https://example.com', selector: '#main' }),
+    /--selector is only supported/,
+  );
+});

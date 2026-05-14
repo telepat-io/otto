@@ -29,13 +29,15 @@ Otto commands serve two audiences: command authors implementing extension bundle
 | Group | Actions |
 |---|---|
 | Primitive tab | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query` |
-| Primitive DOM | `primitive.dom.extract_text`, `primitive.dom.extract_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown` |
+| Primitive DOM | `primitive.dom.extract_text`, `primitive.dom.extract_html`, `primitive.dom.extract_clean_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown` |
 | Primitive page | `primitive.page.screenshot` |
 | Command | `command.list`, `command.run`, `command.test`, `command.reddit_feed` (legacy alias) |
 | Listener | `listener.subscribe`, `listener.unsubscribe` |
 | Common CLI entrypoints | `otto commands list`, `otto test <site> <command>`, `otto extract-content [url]`, `otto cmd --action ...` |
 
-`otto extract-content` is the recommended high-level CLI path for content extraction and defaults to markdown output. It maps to primitive actions under the hood (`primitive.dom.extract_markdown`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_html`, and `primitive.dom.extract_text`) based on `--format`.
+`otto extract-content` is the recommended high-level CLI path for content extraction and defaults to markdown output. It maps to primitive actions under the hood (`primitive.dom.extract_markdown`, `primitive.dom.extract_clean_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_html`, and `primitive.dom.extract_text`) based on `--format`.
+
+For DOM/selector debugging, `--format clean_html` is typically the most useful mode.
 
 ## Site command model
 

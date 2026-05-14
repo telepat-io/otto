@@ -1,4 +1,4 @@
-export type ExtractContentFormat = 'markdown' | 'distilled_html' | 'raw_html' | 'text';
+export type ExtractContentFormat = 'markdown' | 'distilled_html' | 'clean_html' | 'raw_html' | 'text';
 
 export type ExtractDistillMode = 'readability' | 'dom-distiller';
 
@@ -20,12 +20,12 @@ export interface ExtractContentRequest {
   requiresTemporaryTextTab: boolean;
 }
 
-const EXTRACT_FORMATS: ExtractContentFormat[] = ['markdown', 'distilled_html', 'raw_html', 'text'];
+const EXTRACT_FORMATS: ExtractContentFormat[] = ['markdown', 'distilled_html', 'clean_html', 'raw_html', 'text'];
 
 export function parseExtractContentFormat(value: unknown): ExtractContentFormat {
   const format = String(value ?? 'markdown').trim().toLowerCase();
   if (!EXTRACT_FORMATS.includes(format as ExtractContentFormat)) {
-    throw new Error('--format must be one of markdown|distilled_html|raw_html|text');
+    throw new Error('--format must be one of markdown|distilled_html|clean_html|raw_html|text');
   }
   return format as ExtractContentFormat;
 }
@@ -60,14 +60,14 @@ export function buildExtractContentRequest(input: BuildExtractContentRequestInpu
   }
 
   if ((format === 'markdown' || format === 'distilled_html') && selector) {
-    throw new Error('--selector is only supported for raw_html or text extraction');
+    throw new Error('--selector is only supported for raw_html, clean_html, or text extraction');
   }
 
-  if ((format === 'raw_html' || format === 'text') && input.distillMode !== undefined) {
+  if ((format === 'raw_html' || format === 'clean_html' || format === 'text') && input.distillMode !== undefined) {
     throw new Error('--distill-mode is only supported for markdown or distilled_html extraction');
   }
 
-  if ((format === 'raw_html' || format === 'text') && input.fallbackToReadability !== undefined) {
+  if ((format === 'raw_html' || format === 'clean_html' || format === 'text') && input.fallbackToReadability !== undefined) {
     throw new Error('--fallback-to-readability is only supported for markdown or distilled_html extraction');
   }
 
@@ -104,6 +104,21 @@ export function buildExtractContentRequest(input: BuildExtractContentRequestInpu
     };
   }
 
+  if (format === 'clean_html') {
+    return {
+      format,
+      action: 'primitive.dom.extract_clean_html',
+      tabSessionId,
+      payload: {
+        ...(tabSessionId ? { tabSessionId } : {}),
+        ...(url ? { url } : {}),
+        selector: selector ?? 'body',
+        ...(input.maxChars !== undefined ? { maxChars: input.maxChars } : {}),
+      },
+      requiresTemporaryTextTab: false,
+    };
+  }
+
   const action = format === 'markdown'
     ? 'primitive.dom.extract_markdown'
     : 'primitive.dom.extract_distilled_html';
@@ -115,7 +130,7 @@ export function buildExtractContentRequest(input: BuildExtractContentRequestInpu
     payload: {
       ...(tabSessionId ? { tabSessionId } : {}),
       ...(url ? { url } : {}),
-      mode: parseDistillMode(input.distillMode),
+      mode: parseDistillMode(input.distillMode ?? 'readability'),
       fallbackToReadability: input.fallbackToReadability ?? true,
       ...(input.maxChars !== undefined ? { maxChars: input.maxChars } : {}),
     },

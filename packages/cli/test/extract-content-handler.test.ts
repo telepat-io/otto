@@ -287,3 +287,45 @@ test('runExtractContentHandler: suppresses thrown tab.close errors during cleanu
   assert.ok(calls.includes('primitive.tab.open'));
   assert.ok(calls.includes('primitive.tab.close'));
 });
+
+test('runExtractContentHandler: clean_html format with tabSession', async () => {
+  const calls: string[] = [];
+
+  const deps = makeDeps(async (_config, _nodeId, opts) => {
+    calls.push(opts.action);
+    return {
+      messageType: 'result',
+      payload: { data: { html: '<div data-id="123" role="article"><p>Clean content</p></div>' } },
+    } as Envelope;
+  });
+
+  const result = await runExtractContentHandler(
+    { format: 'clean_html', tabSession: 'tab_abc', selector: '#main' },
+    deps,
+  );
+
+  assert.equal(result.format, 'clean_html');
+  assert.equal(result.action, 'primitive.dom.extract_clean_html');
+  assert.deepEqual(calls, ['primitive.dom.extract_clean_html']);
+});
+
+test('runExtractContentHandler: clean_html format with URL uses temporary tab', async () => {
+  const calls: string[] = [];
+
+  const deps = makeDeps(async (_config, _nodeId, opts) => {
+    calls.push(opts.action);
+    return {
+      messageType: 'result',
+      payload: { data: { html: '<main data-testid="page"><h1>Title</h1></main>' } },
+    } as Envelope;
+  });
+
+  const result = await runExtractContentHandler(
+    { format: 'clean_html', url: 'https://example.com', maxChars: 100000 },
+    deps,
+  );
+
+  assert.equal(result.format, 'clean_html');
+  assert.equal(result.action, 'primitive.dom.extract_clean_html');
+  assert.deepEqual(calls, ['primitive.dom.extract_clean_html']);
+});
