@@ -44,8 +44,10 @@ export const checkLoginCommand: SiteCommand = {
           }
 
           const body = await response.json() as Record<string, unknown>;
-          const isUserLoggedIn = body?.client && typeof (body as Record<string, any>).client === 'object'
-            && (body as Record<string, any>).client?.isUserLoggedIn === true;
+          const client = body.client && typeof body.client === 'object' && body.client !== null
+            ? body.client as Record<string, unknown>
+            : undefined;
+          const isUserLoggedIn = client?.isUserLoggedIn === true;
 
           return {
             authenticated: Boolean(isUserLoggedIn),

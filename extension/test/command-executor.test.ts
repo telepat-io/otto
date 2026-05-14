@@ -11,7 +11,7 @@ type MockOptions = {
   sessionSeed?: AnyRecord;
   localSeed?: AnyRecord;
   tabIds?: number[];
-  tabUrls?: Record<number, string>;
+  tabUrls?: Record<number, string | null>;
   tabUrlSequenceById?: Record<number, Array<string | null | undefined>>;
   documentReadyStateSequenceByTabId?: Record<number, Array<'loading' | 'interactive' | 'complete'>>;
   defaultTabUrl?: string | null;
