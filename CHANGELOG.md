@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.0](https://github.com/telepat-io/otto/compare/v0.15.0...v0.16.0) (2026-05-15)
+
+
+### Features
+
+* enhance relay connection management with user-driven controls and improved UI feedback ([df694a9](https://github.com/telepat-io/otto/commit/df694a98b43f6018188271d47c523d0c06356b73))
+
 ## [0.15.0](https://github.com/telepat-io/otto/compare/v0.14.1...v0.15.0) (2026-05-14)
 
 
