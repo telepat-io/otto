@@ -267,6 +267,30 @@ export default defineBackground(() => {
       return true;
     }
 
+    if ((message as { type?: string }).type === 'otto.disconnectRelay') {
+      withRuntimeErrorLogging(
+        (async () => {
+          try {
+            await chrome.runtime.sendMessage({ type: 'otto.offscreen.disconnect' });
+            await chrome.storage.local.set({
+              relayConnectionStatus: 'disconnected',
+              relayConnectionUpdatedAt: Date.now(),
+            });
+            await chrome.storage.local.remove(['relayConnectionError']);
+            await forwardExtensionLog(chrome, {
+              level: 'debug',
+              type: 'background.disconnect_relay_completed',
+            });
+            sendResponse({ ok: true });
+          } catch (error) {
+            const details = error instanceof Error ? error.message : 'Failed to disconnect relay.';
+            sendResponse({ ok: false, error: details });
+          }
+        })(),
+      );
+      return true;
+    }
+
     if ((message as { type?: string }).type === 'otto.connectionStatus') {
       withRuntimeErrorLogging(
         (async () => {

@@ -60,11 +60,18 @@ flowchart TD
 | `needs_relay_url` | Relay URL is missing or invalid |
 | `requesting_pairing_code` | Waiting to obtain challenge |
 | `waiting_for_pair_approval` | Challenge exists, waiting for CLI approval |
+| `authenticated_disconnected` | Node token exists, waiting for explicit Connect action |
 | `authenticated_connecting` | Tokens exist, WebSocket not fully ready |
 | `authenticated_connected` | Auth acknowledged, command transport active |
 | `error` | Latest auth or socket failure surfaced for recovery |
 
-Refresh actions in popup or options wait for keep-warm maintenance completion before reporting success. That maintenance includes pairing reconciliation, offscreen ensure, and badge sync. Stale tokens are automatically cleared when refresh is rejected.
+Popup/options onboarding now uses an explicit connection control:
+
+- **Connect** saves relay URL and triggers setup refresh plus offscreen reconnect.
+- **Disconnect** closes the offscreen socket and suppresses reconnect attempts until Connect is requested again.
+- Relay URL input normalization no longer injects query parameters while typing or saving; `role=node` is appended only at WebSocket connect time when missing.
+
+Connect actions in popup or options wait for keep-warm maintenance completion before reporting success. That maintenance includes pairing reconciliation, offscreen ensure, and badge sync. Stale tokens are automatically cleared when refresh is rejected.
 
 ## Command execution path
 

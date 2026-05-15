@@ -107,12 +107,12 @@
         filter: grayscale(0.2) brightness(0.9);
       }
 
-      #refreshStatus {
+      #connectRelay {
         background: #1d4ed8;
         color: #fff;
       }
 
-      #refreshStatus.refresh-success {
+      #connectRelay.is-loading {
         background: #0f766e;
         box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
       }
@@ -321,15 +321,15 @@
         <h1>Otto Node Setup</h1>
         <p>Set relay URL, watch pairing state, and confirm live connection.</p>
         <label for="relayUrl">Relay URL</label>
-        <input id="relayUrl" placeholder="ws://127.0.0.1:8787?role=node" />
+        <input id="relayUrl" placeholder="ws://127.0.0.1:8787" />
         <div id="localDevLogRow" class="toggle-row">
           <input id="localDevLogStreamingEnabled" type="checkbox" />
           <label for="localDevLogStreamingEnabled">Send extension debug logs to relay (local dev)</label>
         </div>
         <div class="actions">
-          <button id="refreshStatus">Refresh Status</button>
+          <button id="connectRelay" type="button">Connect</button>
         </div>
-        <div id="relaySaveStatus">Relay URL saves automatically</div>
+        <div id="relaySaveStatus">Click Connect to apply the relay URL.</div>
         <div class="status-card">
           <span id="stateChip">SET</span>
           <div id="stateTitle">Loading status…</div>

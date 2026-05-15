@@ -6,6 +6,7 @@ import type { ListenerUpdateEventPayload } from '@telepat/otto-protocol';
 import { computeReconnectDelayMs, enqueueOutbound } from './offscreen-transport.js';
 import { createExtensionLogQueue } from './extension-log-queue.js';
 import type { RelayConnectionStatus } from './onboarding/state.js';
+import { normalizeRelaySocketUrl } from './relay-url.js';
 
 let ws: WebSocket | null = null;
 let heartbeatTimer: number | undefined;
@@ -18,6 +19,7 @@ const extensionLogQueue = createExtensionLogQueue(300);
 const extensionLogOutboundQueue: Envelope[] = [];
 let extensionLogFlushTimer: number | undefined;
 let lastRateLimitedWarnAtMs = 0;
+let reconnectEnabled = false;
 
 const MAX_EXTENSION_LOG_OUTBOUND_QUEUE = 600;
 const EXTENSION_LOG_FLUSH_BATCH_SIZE = 25;
@@ -115,6 +117,9 @@ function flushOutboundQueue(): void {
 }
 
 function scheduleReconnect(): void {
+  if (!reconnectEnabled) {
+    return;
+  }
   if (reconnectTimer) return;
   const delay = computeReconnectDelayMs(reconnectAttempt, Math.random());
   const attempt = reconnectAttempt + 1;
@@ -129,6 +134,15 @@ function scheduleReconnect(): void {
     reconnectTimer = undefined;
     void connect();
   }, delay) as unknown as number;
+}
+
+function clearReconnectTimer(): void {
+  if (!reconnectTimer) {
+    return;
+  }
+
+  clearTimeout(reconnectTimer);
+  reconnectTimer = undefined;
 }
 
 function startHeartbeat(): void {
@@ -212,7 +226,12 @@ async function forwardToBackground(message: Envelope): Promise<void> {
 }
 
 async function connect(): Promise<void> {
+  if (!reconnectEnabled) {
+    return;
+  }
+
   const { relayUrl, nodeId, accessToken, pairingCode, localDevLogStreamingEnabled: localLogFlag } = await loadConfig();
+  const socketRelayUrl = normalizeRelaySocketUrl(relayUrl);
   localDevLogStreamingEnabled = localLogFlag === true;
   if (!localDevLogStreamingEnabled) {
     extensionLogQueue.drain();
@@ -248,7 +267,7 @@ async function connect(): Promise<void> {
   });
 
   await publishConnectionStatus('connecting');
-  ws = new WebSocket(relayUrl);
+  ws = new WebSocket(socketRelayUrl);
 
   ws.addEventListener('open', () => {
     authenticated = false;
@@ -352,7 +371,11 @@ async function connect(): Promise<void> {
 
   ws.addEventListener('close', () => {
     authenticated = false;
+    ws = null;
     stopHeartbeat();
+    if (!reconnectEnabled) {
+      return;
+    }
     console.warn('[otto:offscreen] websocket closed; reconnecting');
     sendOrQueueExtensionLog({
       level: 'warn',
@@ -365,6 +388,10 @@ async function connect(): Promise<void> {
 
   ws.addEventListener('error', () => {
     authenticated = false;
+    ws = null;
+    if (!reconnectEnabled) {
+      return;
+    }
     console.warn('[otto:offscreen] websocket transport error; reconnecting');
     sendOrQueueExtensionLog({
       level: 'warn',
@@ -399,10 +426,29 @@ chrome.runtime.onMessage.addListener((message: { type?: string; payload?: unknow
   }
 
   if (message.type === 'otto.offscreen.reconnect') {
+    reconnectEnabled = true;
+    clearReconnectTimer();
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.close();
     }
+    if (ws && ws.readyState === WebSocket.CONNECTING) {
+      ws.close();
+    }
     void connect();
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === 'otto.offscreen.disconnect') {
+    reconnectEnabled = false;
+    clearReconnectTimer();
+    stopHeartbeat();
+    authenticated = false;
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      ws.close();
+    }
+    ws = null;
+    void publishConnectionStatus('disconnected');
     sendResponse({ ok: true });
     return true;
   }
@@ -434,5 +480,3 @@ chrome.runtime.onMessage.addListener((message: { type?: string; payload?: unknow
 
   return false;
 });
-
-void connect();

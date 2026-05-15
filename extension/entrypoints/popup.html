@@ -108,11 +108,11 @@
         filter: grayscale(0.2) brightness(0.9);
       }
 
-      #refreshStatus {
+      #connectRelay {
         background: #1d4ed8;
       }
 
-      #refreshStatus.refresh-success {
+      #connectRelay.is-loading {
         background: #0f766e;
         box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
       }
@@ -339,15 +339,15 @@
       <p class="subhead">Pair this browser node with relay from one place.</p>
       <section class="panel">
         <label for="relayUrl">Relay URL</label>
-        <input id="relayUrl" placeholder="ws://127.0.0.1:8787?role=node" />
+        <input id="relayUrl" placeholder="ws://127.0.0.1:8787" />
         <div id="localDevLogRow" class="toggle-row">
           <input id="localDevLogStreamingEnabled" type="checkbox" />
           <label for="localDevLogStreamingEnabled">Send extension debug logs to relay (local dev)</label>
         </div>
         <div class="actions">
-          <button id="refreshStatus">Refresh now</button>
+          <button id="connectRelay" type="button">Connect</button>
         </div>
-        <div id="relaySaveStatus" class="hint">Relay URL saves automatically</div>
+        <div id="relaySaveStatus" class="hint">Click Connect to apply the relay URL.</div>
         <section class="status-card">
           <span id="stateChip">SET</span>
           <div id="stateTitle">Loading status…</div>

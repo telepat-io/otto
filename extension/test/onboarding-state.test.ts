@@ -35,6 +35,19 @@ test('deriveOnboardingState returns authenticated_connecting when token exists w
   assert.equal(view.badgeText, 'AUTH');
 });
 
+test('deriveOnboardingState returns authenticated_disconnected when token exists and socket is not connecting', () => {
+  const view = deriveOnboardingState({
+    relayUrl: 'ws://127.0.0.1:8787',
+    nodeId: 'node_abc',
+    nodeAccessToken: 'token',
+    relayConnectionStatus: 'disconnected',
+  });
+
+  assert.equal(view.state, 'authenticated_disconnected');
+  assert.equal(view.badgeText, 'SET');
+  assert.match(view.detail, /click connect/i);
+});
+
 test('deriveOnboardingState returns authenticated_connected when auth socket status is connected', () => {
   const view = deriveOnboardingState({
     relayUrl: 'ws://127.0.0.1:8787?role=node',

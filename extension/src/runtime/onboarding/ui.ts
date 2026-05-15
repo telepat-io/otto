@@ -4,6 +4,7 @@ import {
   type OnboardingState,
   type OnboardingStorageSnapshot,
 } from './state.js';
+import { normalizeRelayInputUrl } from '../relay-url.js';
 
 type Surface = 'popup' | 'options';
 
@@ -25,7 +26,7 @@ type DomRefs = {
   relayInput: HTMLInputElement;
   localDevLogToggle: HTMLInputElement;
   localDevLogRow: HTMLDivElement;
-  refreshButton: HTMLButtonElement;
+  connectButton: HTMLButtonElement;
   statusChip: HTMLSpanElement;
   stateTitle: HTMLDivElement;
   stateDetail: HTMLDivElement;
@@ -75,7 +76,7 @@ function getDomRefs(): DomRefs {
     relayInput: byId<HTMLInputElement>('relayUrl'),
     localDevLogToggle: maybeById<HTMLInputElement>('localDevLogStreamingEnabled') ?? document.createElement('input'),
     localDevLogRow: maybeById<HTMLDivElement>('localDevLogRow') ?? document.createElement('div'),
-    refreshButton: maybeById<HTMLButtonElement>('refreshStatus') ?? document.createElement('button'),
+    connectButton: maybeById<HTMLButtonElement>('connectRelay') ?? document.createElement('button'),
     statusChip: byId<HTMLSpanElement>('stateChip'),
     stateTitle: byId<HTMLDivElement>('stateTitle'),
     stateDetail: byId<HTMLDivElement>('stateDetail'),
@@ -269,27 +270,6 @@ async function copyTextToClipboard(text: string): Promise<void> {
   }
 }
 
-function normalizeRelayUrl(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new Error('Relay URL is required.');
-  }
-
-  const parsed = new URL(trimmed);
-  if (parsed.protocol === 'http:') {
-    parsed.protocol = 'ws:';
-  } else if (parsed.protocol === 'https:') {
-    parsed.protocol = 'wss:';
-  }
-
-  if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
-    throw new Error('Relay URL must use ws:// or wss:// protocol.');
-  }
-
-  parsed.searchParams.set('role', 'node');
-  return parsed.toString();
-}
-
 function shouldPoll(state: OnboardingState): boolean {
   return state === 'requesting_pairing_code'
     || state === 'waiting_for_pair_approval'
@@ -313,7 +293,11 @@ async function loadSnapshot(): Promise<OnboardingStorageSnapshot> {
   return snapshot as OnboardingStorageSnapshot;
 }
 
-function render(snapshot: OnboardingStorageSnapshot, refs: DomRefs): OnboardingState {
+function render(
+  snapshot: OnboardingStorageSnapshot,
+  refs: DomRefs,
+  pendingAction: 'connect' | 'disconnect' | null,
+): OnboardingState {
   const view = deriveOnboardingState(snapshot);
   const showPairingStatus = Boolean(view.pairingCode)
     || view.state === 'requesting_pairing_code'
@@ -336,7 +320,20 @@ function render(snapshot: OnboardingStorageSnapshot, refs: DomRefs): OnboardingS
     ? `Pairing code: ${view.pairingCode}`
     : 'Pairing code: waiting for challenge';
 
-  refs.refreshButton.style.display = view.state === 'error' ? 'inline-block' : 'none';
+  const isConnected = view.state === 'authenticated_connected';
+  const isConnecting = !isConnected && (pendingAction === 'connect' || shouldPoll(view.state));
+  const isDisconnecting = pendingAction === 'disconnect';
+  if (isDisconnecting) {
+    refs.connectButton.textContent = 'Disconnecting...';
+  } else if (isConnected) {
+    refs.connectButton.textContent = 'Disconnect';
+  } else if (isConnecting) {
+    refs.connectButton.textContent = 'Connecting...';
+  } else {
+    refs.connectButton.textContent = 'Connect';
+  }
+  refs.connectButton.disabled = pendingAction !== null;
+  refs.connectButton.classList.toggle('is-loading', isConnecting || isDisconnecting);
 
   if (view.pairingCode) {
     refs.pairingCommand.style.display = 'block';
@@ -368,8 +365,19 @@ async function refreshRuntime(surface: Surface): Promise<void> {
   }
 }
 
+async function disconnectRuntime(surface: Surface): Promise<void> {
+  const response = await chrome.runtime.sendMessage({ type: 'otto.disconnectRelay', payload: { source: surface } }) as {
+    ok?: boolean;
+    error?: string;
+  };
+
+  if (!response?.ok) {
+    throw new Error(response?.error || 'Failed to disconnect relay.');
+  }
+}
+
 async function saveRelayUrl(nextRelayUrlRaw: string, surface: Surface): Promise<void> {
-  const relayUrl = normalizeRelayUrl(nextRelayUrlRaw);
+  const relayUrl = normalizeRelayInputUrl(nextRelayUrlRaw);
   const current = await chrome.storage.local.get(['relayUrl', 'localDevLogStreamingEnabled']);
   const previousRelayUrl = typeof current.relayUrl === 'string' ? current.relayUrl : '';
 
@@ -413,9 +421,9 @@ async function saveRelayUrl(nextRelayUrlRaw: string, surface: Surface): Promise<
   }
 }
 
-async function sync(refs: DomRefs): Promise<void> {
+async function sync(refs: DomRefs, currentPendingAction: 'connect' | 'disconnect' | null): Promise<void> {
   const snapshot = await loadSnapshot();
-  const state = render(snapshot, refs);
+  const state = render(snapshot, refs, currentPendingAction);
 
   const aclVisible = Boolean(snapshot.nodeAccessToken);
   refs.aclCard.style.display = aclVisible ? 'block' : 'none';
@@ -440,33 +448,36 @@ async function sync(refs: DomRefs): Promise<void> {
 
 export function mountOnboardingUi(surface: Surface): void {
   const refs = getDomRefs();
-  let autosaveTimer: number | undefined;
   let refreshPollTimer: number | undefined;
-  let refreshSuccessTimer: number | undefined;
   let copyToastHideTimer: number | undefined;
   let copyToastResetTimer: number | undefined;
   let pollingInFlight = false;
-  let lastSavedRelayUrl = '';
 
-  const setBusy = (busy: boolean) => {
-    if (refs.refreshButton.style.display !== 'none') {
-      refs.refreshButton.disabled = busy;
+  let pendingAction: 'connect' | 'disconnect' | null = null;
+
+  const setBusy = (action: 'connect' | 'disconnect' | null) => {
+    pendingAction = action;
+    if (action === 'connect') {
+      refs.connectButton.textContent = 'Connecting...';
+      refs.connectButton.classList.add('is-loading');
+      refs.connectButton.disabled = true;
+      return;
     }
+
+    if (action === 'disconnect') {
+      refs.connectButton.textContent = 'Disconnecting...';
+      refs.connectButton.classList.add('is-loading');
+      refs.connectButton.disabled = true;
+      return;
+    }
+
+    refs.connectButton.classList.remove('is-loading');
+    refs.connectButton.disabled = false;
   };
 
   const showMessage = (message: string, color: string) => {
     refs.relaySaveStatus.textContent = message;
     refs.relaySaveStatus.style.color = color;
-  };
-
-  const flashRefreshSuccess = () => {
-    refs.refreshButton.classList.add('refresh-success');
-    if (refreshSuccessTimer) {
-      clearTimeout(refreshSuccessTimer);
-    }
-    refreshSuccessTimer = setTimeout(() => {
-      refs.refreshButton.classList.remove('refresh-success');
-    }, 1200) as unknown as number;
   };
 
   const showCopyToast = (message: string, variant: 'success' | 'error') => {
@@ -511,7 +522,7 @@ export function mountOnboardingUi(surface: Surface): void {
       void (async () => {
         try {
           await refreshRuntime(surface);
-          await sync(refs);
+          await sync(refs, pendingAction);
         } finally {
           pollingInFlight = false;
         }
@@ -529,39 +540,6 @@ export function mountOnboardingUi(surface: Surface): void {
     stopRefreshPolling();
   };
 
-  const attemptAutoSave = () => {
-    if (autosaveTimer) {
-      clearTimeout(autosaveTimer);
-    }
-
-    autosaveTimer = setTimeout(() => {
-      void (async () => {
-        const rawInput = refs.relayInput.value.trim();
-        if (!rawInput) {
-          return;
-        }
-
-        try {
-          const normalized = normalizeRelayUrl(rawInput);
-          if (normalized === lastSavedRelayUrl) {
-            return;
-          }
-
-          await saveRelayUrl(rawInput, surface);
-          lastSavedRelayUrl = normalized;
-          await refreshRuntime(surface);
-          await sync(refs);
-          await updatePollingForCurrentState();
-          showMessage('Relay URL saved automatically', '#0f5132');
-        } catch {
-          // Ignore while user is still typing; manual refresh remains available.
-        }
-      })();
-    }, 500) as unknown as number;
-  };
-
-  refs.relayInput.addEventListener('input', attemptAutoSave);
-  refs.relayInput.addEventListener('blur', attemptAutoSave);
   refs.localDevLogToggle.addEventListener('change', () => {
     void (async () => {
       const relayUrl = refs.relayInput.value.trim();
@@ -591,33 +569,50 @@ export function mountOnboardingUi(surface: Surface): void {
       );
     })();
   });
-  refs.relayInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      attemptAutoSave();
-    }
-  });
 
-  refs.refreshButton.addEventListener('click', () => {
+  refs.connectButton.addEventListener('click', () => {
     void (async () => {
-      setBusy(true);
+      const current = await loadSnapshot();
+      const currentState = deriveOnboardingState(current).state;
+      if (currentState === 'authenticated_connected') {
+        setBusy('disconnect');
+        try {
+          showMessage('Disconnecting from relay...', '#334155');
+          await disconnectRuntime(surface);
+          await sync(refs, 'disconnect');
+          await updatePollingForCurrentState();
+          showMessage('Disconnected from relay', '#0f5132');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to disconnect relay.';
+          showMessage(message, '#b42318');
+        } finally {
+          setBusy(null);
+          await sync(refs, null);
+        }
+        return;
+      }
+
+      setBusy('connect');
       try {
-        showMessage('Checking connection...', '#334155');
+        const rawInput = refs.relayInput.value.trim();
+        await saveRelayUrl(rawInput, surface);
+        showMessage('Connecting to relay...', '#334155');
         await refreshRuntime(surface);
-        await sync(refs);
+        await sync(refs, 'connect');
         await updatePollingForCurrentState();
-        showMessage('Status refreshed', '#0f5132');
-        flashRefreshSuccess();
+        showMessage('Connection requested', '#0f5132');
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to refresh status.';
+        const message = error instanceof Error ? error.message : 'Failed to connect relay.';
         showMessage(message, '#b42318');
       } finally {
-        setBusy(false);
+        setBusy(null);
+        await sync(refs, null);
       }
     })();
   });
 
   refs.aclRefresh.addEventListener('click', () => {
-    void sync(refs);
+    void sync(refs, pendingAction);
   });
 
   refs.aclList.addEventListener('click', (event) => {
@@ -637,7 +632,7 @@ export function mountOnboardingUi(surface: Surface): void {
       try {
         const snapshot = await loadSnapshot();
         await mutateControllerAcl(snapshot, clientId, grant);
-        await sync(refs);
+        await sync(refs, pendingAction);
       } catch (error) {
         refs.aclStatus.textContent = error instanceof Error ? error.message : 'Failed to update controller access.';
         refs.aclStatus.style.color = '#b42318';
@@ -671,25 +666,15 @@ export function mountOnboardingUi(surface: Surface): void {
     const shouldRefresh = STORAGE_KEYS.some((key) => Object.prototype.hasOwnProperty.call(changes, key));
     if (shouldRefresh) {
       void (async () => {
-        await sync(refs);
+        await sync(refs, pendingAction);
         await updatePollingForCurrentState();
       })();
     }
   });
 
   void (async () => {
-    await sync(refs);
-    const current = await chrome.storage.local.get(['relayUrl']);
-    if (typeof current.relayUrl === 'string') {
-      lastSavedRelayUrl = current.relayUrl;
-    }
-    try {
-      await refreshRuntime(surface);
-      await sync(refs);
-      await updatePollingForCurrentState();
-      showMessage('Relay URL saves automatically', '#334155');
-    } catch {
-      // Let storage-driven state surface the most recent known status.
-    }
+    await sync(refs, null);
+    await updatePollingForCurrentState();
+    showMessage('Click Connect to apply the relay URL.', '#334155');
   })();
 }

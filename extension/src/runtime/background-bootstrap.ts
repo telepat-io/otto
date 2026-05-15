@@ -116,7 +116,7 @@ export async function ensureNodeId(chromeApi: ChromeLike): Promise<string> {
 
 export async function getRelayUrl(chromeApi: ChromeLike): Promise<string> {
   const config = await chromeApi.storage.local.get(['relayUrl']);
-  return (config.relayUrl as string) || 'ws://127.0.0.1:8787?role=node';
+  return (config.relayUrl as string) || 'ws://127.0.0.1:8787';
 }
 
 function isDuplicateOffscreenDocumentError(error: unknown): boolean {

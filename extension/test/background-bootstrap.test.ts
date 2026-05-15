@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   relayHttpFromWs,
+  getRelayUrl,
   ensureNodeId,
   ensurePairingState,
   ensureOffscreenDocument,
@@ -141,6 +142,11 @@ function createChromeMock(initialLocal: AnyRecord = {}, options: CreateChromeMoc
 test('relayHttpFromWs converts websocket URLs to http(s)', () => {
   assert.equal(relayHttpFromWs('ws://127.0.0.1:8787?role=node'), 'http://127.0.0.1:8787');
   assert.equal(relayHttpFromWs('wss://relay.example.com/path?role=node'), 'https://relay.example.com/path');
+});
+
+test('getRelayUrl returns default relay URL without role query when unset', async () => {
+  const { chromeApi } = createChromeMock();
+  assert.equal(await getRelayUrl(chromeApi), 'ws://127.0.0.1:8787');
 });
 
 test('ensurePairingState stores pairing challenge when node is unpaired', async () => {

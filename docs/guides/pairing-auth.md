@@ -26,6 +26,8 @@ Otto uses two separate trust flows: a **node pairing flow** that establishes a t
 
 Pairing establishes a trusted node-controller relationship without sharing raw credentials. The node requests a challenge, relay issues a short approval code, the controller approves that code, and the node polls challenge state until approved token material is available.
 
+In the extension onboarding UI, relay transport is now user-driven: entering a relay URL does not auto-connect. Use **Connect** to start transport and pairing status refresh, and use **Disconnect** to close transport without clearing stored node tokens.
+
 ```mermaid
 flowchart TD
     A[Node requests challenge\nPOST /api/pairing/request] --> B[Relay issues code\n e.g. 123-456]

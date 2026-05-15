@@ -1,4 +1,4 @@
-export const DEFAULT_NODE_RELAY_URL = 'ws://127.0.0.1:8787?role=node';
+export const DEFAULT_NODE_RELAY_URL = 'ws://127.0.0.1:8787';
 
 export type RelayConnectionStatus =
   | 'idle'
@@ -12,6 +12,7 @@ export type OnboardingState =
   | 'needs_relay_url'
   | 'requesting_pairing_code'
   | 'waiting_for_pair_approval'
+  | 'authenticated_disconnected'
   | 'authenticated_connecting'
   | 'authenticated_connected'
   | 'version_mismatch'
@@ -107,14 +108,26 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
       };
     }
 
+    if (relayConnectionStatus === 'connecting') {
+      return {
+        state: 'authenticated_connecting',
+        stateLabel: 'Authenticating',
+        detail: 'Node token is available. Waiting for active relay socket. Auto-refreshing every 4s.',
+        nodeId,
+        relayUrl,
+        badgeText: 'AUTH',
+        badgeColor: '#1d4ed8',
+      };
+    }
+
     return {
-      state: 'authenticated_connecting',
-      stateLabel: 'Authenticating',
-      detail: 'Node token is available. Waiting for active relay socket. Auto-refreshing every 4s.',
+      state: 'authenticated_disconnected',
+      stateLabel: 'Ready to connect',
+      detail: 'Node token is available. Click Connect to open relay socket.',
       nodeId,
       relayUrl,
-      badgeText: 'AUTH',
-      badgeColor: '#1d4ed8',
+      badgeText: 'SET',
+      badgeColor: '#4b5563',
     };
   }
 
