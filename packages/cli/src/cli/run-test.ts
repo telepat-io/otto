@@ -5,6 +5,27 @@ import { resolveCleanupSocketStrategy } from '../test-cleanup.js';
 import type { OttoConfig } from '../config.js';
 import { toSocketCloseAlertPayload } from './socket-errors.js';
 
+const DEFAULT_TEST_TIMEOUT_MS = 30_000;
+
+type CommandTimeoutScalingPolicyLike = {
+  inputField?: string;
+  baseMs?: number;
+  perUnitMs?: number;
+  minMs?: number;
+  maxMs?: number;
+};
+
+type CommandTimeoutPolicyLike = {
+  defaultMs?: number;
+  scaling?: CommandTimeoutScalingPolicyLike;
+};
+
+type CommandDescriptorLike = {
+  site?: string;
+  id?: string;
+  timeoutPolicy?: CommandTimeoutPolicyLike;
+};
+
 function applyTestInputDefaults(site: string, command: string, input: Record<string, unknown>): Record<string, unknown> {
   const normalizedSite = site.trim().toLowerCase();
   const normalizedCommand = command.trim();
@@ -21,6 +42,57 @@ function applyTestInputDefaults(site: string, command: string, input: Record<str
   }
 
   return input;
+}
+
+function clampTimeout(timeoutMs: number, minMs?: number, maxMs?: number): number {
+  let value = timeoutMs;
+  if (typeof minMs === 'number' && Number.isFinite(minMs)) {
+    value = Math.max(value, minMs);
+  }
+  if (typeof maxMs === 'number' && Number.isFinite(maxMs)) {
+    value = Math.min(value, maxMs);
+  }
+  return Math.max(1_000, Math.floor(value));
+}
+
+function resolveDescriptorTimeoutMs(
+  descriptor: CommandDescriptorLike | undefined,
+  input: Record<string, unknown>,
+  fallbackMs: number,
+): number {
+  if (!descriptor?.timeoutPolicy) {
+    return fallbackMs;
+  }
+
+  const policy = descriptor.timeoutPolicy;
+  let resolvedMs = typeof policy.defaultMs === 'number' && Number.isFinite(policy.defaultMs)
+    ? Math.floor(policy.defaultMs)
+    : fallbackMs;
+
+  const scaling = policy.scaling;
+  if (scaling) {
+    const inputField = typeof scaling.inputField === 'string' ? scaling.inputField : '';
+    const baseMs = typeof scaling.baseMs === 'number' && Number.isFinite(scaling.baseMs)
+      ? scaling.baseMs
+      : resolvedMs;
+    const perUnitMs = typeof scaling.perUnitMs === 'number' && Number.isFinite(scaling.perUnitMs)
+      ? scaling.perUnitMs
+      : 0;
+
+    if (inputField && perUnitMs !== 0) {
+      const rawUnits = input[inputField];
+      if (typeof rawUnits === 'number' && Number.isFinite(rawUnits)) {
+        const units = Math.max(0, rawUnits);
+        resolvedMs = Math.floor(baseMs + (units * perUnitMs));
+      }
+    }
+  }
+
+  return clampTimeout(
+    resolvedMs,
+    scaling?.minMs,
+    scaling?.maxMs,
+  );
 }
 
 export async function runCmdCommand(
@@ -50,6 +122,36 @@ export async function runCmdCommand(
 ): Promise<void> {
   const config = deps.loadConfig();
   const targetNodeId = await deps.resolveTargetNodeId(config, opts.nodeId);
+  const timeoutMs = Number(opts.timeout);
+  const parsedPayload = deps.parseJsonObject(opts.payload, '--payload');
+
+  let resolvedTimeoutMs = timeoutMs;
+  if (Number.isFinite(timeoutMs) && timeoutMs === DEFAULT_TEST_TIMEOUT_MS && opts.action === 'command.run') {
+    const commandSite = typeof parsedPayload.site === 'string' ? parsedPayload.site : undefined;
+    const commandId = typeof parsedPayload.command === 'string' ? parsedPayload.command : undefined;
+    const commandInput = (parsedPayload.input && typeof parsedPayload.input === 'object')
+      ? parsedPayload.input as Record<string, unknown>
+      : {};
+
+    if (commandSite && commandId) {
+      const listResponse = await deps.runCommandOnce(config, targetNodeId, {
+        action: 'command.list',
+        payload: {},
+        timeoutMs,
+      });
+
+      if (listResponse.messageType === 'result') {
+        const payload = listResponse.payload as { data?: { commands?: CommandDescriptorLike[] } };
+        const descriptors = Array.isArray(payload.data?.commands) ? payload.data?.commands : [];
+        const descriptor = descriptors.find((entry) => {
+          return String(entry.site ?? '').toLowerCase() === String(commandSite).toLowerCase()
+            && String(entry.id ?? '') === String(commandId);
+        });
+
+        resolvedTimeoutMs = resolveDescriptorTimeoutMs(descriptor, commandInput, timeoutMs);
+      }
+    }
+  }
 
   if (process.stdout.isTTY && process.stdin.isTTY) {
     await deps.runCommandTui(config, {
@@ -64,8 +166,8 @@ export async function runCmdCommand(
   const response = await deps.runCommandOnce(config, targetNodeId, {
     action: opts.action,
     tabSession: opts.tabSession,
-    payload: deps.parseJsonObject(opts.payload, '--payload'),
-    timeoutMs: Number(opts.timeout),
+    payload: parsedPayload,
+    timeoutMs: resolvedTimeoutMs,
   });
 
   console.log(JSON.stringify(response, null, 2));
@@ -307,13 +409,34 @@ export async function runTestCommand(
   process.once('SIGTERM', onSigterm);
 
   try {
-    const testInfo = await deps.resolveTestInfo(config, targetNodeId, site, command, timeoutMs, ws);
+    let resolvedTimeoutMs = timeoutMs;
+    if (Number.isFinite(timeoutMs) && timeoutMs === DEFAULT_TEST_TIMEOUT_MS) {
+      const listResponse = await deps.runCommandWithSocket(ws, targetNodeId, {
+        action: 'command.list',
+        payload: {},
+        timeoutMs,
+        signal: commandAbortController.signal,
+      });
+
+      if (listResponse.messageType === 'result') {
+        const payload = listResponse.payload as { data?: { commands?: CommandDescriptorLike[] } };
+        const descriptors = Array.isArray(payload.data?.commands) ? payload.data?.commands : [];
+        const descriptor = descriptors.find((entry) => {
+          return String(entry.site ?? '').toLowerCase() === String(site).toLowerCase()
+            && String(entry.id ?? '') === String(command);
+        });
+
+        resolvedTimeoutMs = resolveDescriptorTimeoutMs(descriptor, commandInput, timeoutMs);
+      }
+    }
+
+    const testInfo = await deps.resolveTestInfo(config, targetNodeId, site, command, resolvedTimeoutMs, ws);
 
     if (!tabSessionId) {
       const openResponse = await deps.runCommandWithSocket(ws, targetNodeId, {
         action: 'primitive.tab.open',
         payload: { url: testInfo.openUrl },
-        timeoutMs,
+        timeoutMs: resolvedTimeoutMs,
         signal: commandAbortController.signal,
       });
 
@@ -357,7 +480,7 @@ export async function runTestCommand(
         input: commandInput,
         authMode: opts.authMode,
       },
-      timeoutMs,
+      timeoutMs: resolvedTimeoutMs,
       signal: commandAbortController.signal,
     });
     activeCommandTestRequestId = testCommand.requestId;
@@ -453,7 +576,7 @@ export async function runTestCommand(
               input: commandInput,
               authMode: opts.authMode,
             },
-            timeoutMs,
+            timeoutMs: resolvedTimeoutMs,
             signal: commandAbortController.signal,
           });
 
@@ -470,7 +593,7 @@ export async function runTestCommand(
         command,
         streamListener.listener,
         streamOptions,
-        timeoutMs,
+        resolvedTimeoutMs,
         jsonOutput,
         streamFollowMs,
         probe,

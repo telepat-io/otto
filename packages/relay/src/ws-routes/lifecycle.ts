@@ -464,6 +464,14 @@ export function handleRelayWsClose(params: {
   clients.delete(client.id);
   replayState.delete(client.id);
   if (client.role === 'node' && client.nodeId) {
+    const currentNodeClient = nodeClients.get(client.nodeId);
+    const hasReplacementNodeSession = Boolean(currentNodeClient && currentNodeClient.id !== client.id);
+
+    // If a newer socket already replaced this nodeId, ignore stale close cleanup.
+    if (hasReplacementNodeSession) {
+      return;
+    }
+
     nodeClients.delete(client.nodeId);
     removeListenerSubscriptionsForNode(client.nodeId);
 

@@ -81,6 +81,14 @@ otto test reddit.com getFeed
 
 This opens a managed tab, runs the `getFeed` command on `reddit.com`, streams results, and closes the tab on completion.
 
+You can also run LinkedIn feed extraction:
+
+```bash
+otto test linkedin.com getFeed --payload '{"minReturnedPosts":15}'
+```
+
+LinkedIn `getFeed` supports timeout scaling metadata tied to `minReturnedPosts`, so default timeout behavior can adapt to larger feed targets.
+
 ## Verify success
 
 A successful run prints command output JSON and exits with code `0`. If you see `manual_login_required`, the command needs you to log into the site first:
@@ -88,6 +96,12 @@ A successful run prints command output JSON and exits with code `0`. If you see 
 1. The tab stays open.
 2. Complete login manually in the browser.
 3. Rerun: `otto test reddit.com getFeed`
+
+For LinkedIn-specific clipboard URL extraction prompts, if you see a clipboard permission error rerun with:
+
+```bash
+otto test linkedin.com getFeed --payload '{"getClipboardPermission":true}'
+```
 
 ## Next steps
 

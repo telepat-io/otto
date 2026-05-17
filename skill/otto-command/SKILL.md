@@ -63,7 +63,10 @@ Do not continue command authoring when readiness gate fails.
    - Input validation, preconditions, and structured error paths.
 5. Add extraction and interaction resilience.
    - Prefer stable selectors, deep DOM helpers when needed.
+   - Prefer programmatic readiness checks before extraction or interaction. Wait for concrete page conditions such as the target container, a stable heading, expected buttons, timestamps, or post/body elements instead of guessing with fixed delays.
+   - Use bounded polling loops tied to page state when possible.
    - For extraction-heavy tasks, start with **markdown** (easiest to parse) or **clean_html** (removes scripts/styles/obfuscated classes to reveal clean page structure for selector building). Raw HTML is rarely needed; skip it unless you need full page exact structure.
+   - Fixed timeouts are acceptable as a bounded fallback, especially while debugging or when the page offers no reliable readiness signal, but they should not be the first choice when a concrete readiness condition exists.
 6. Add or tune test mode behavior.
    - Implement `test(...)` by default so the command is directly testable via CLI.
    - If a dedicated test flow is unnecessary, keep `test(...)` thin and delegate to `execute(...)`.
@@ -73,6 +76,31 @@ Do not continue command authoring when readiness gate fails.
    - Resume only after user confirms refresh.
 8. Re-run validation loop.
    - Iterate code -> build -> user refresh -> validate until success criteria are met.
+   - Validation must inspect the returned payload itself, not just command success.
+   - Treat obviously wrong items, repeated containers, nav chrome, follow cards, suggested cards, ads, or malformed fields as validation failures even when `otto test` returns `ok: true`.
+   - Summarize what the command returned and call out any suspicious rows before declaring success.
+   - When semantic validation fails, do not stop at reporting the bad rows if a nearby debugging step exists.
+   - For extraction issues, immediately inspect page structure with `otto extract-content <url> --format clean_html`, `otto extract-content <url> --format markdown`, or the equivalent primitive DOM extraction commands, then refine selectors and retry.
+   - Use returned bogus rows as clues to the selector mistake: identify which surrounding UI region they came from and tighten acceptance rules before the next run.
+   - If the command intermittently returns empty or partial results, suspect readiness timing. Add a bounded wait for concrete page signals before widening selectors or adding heuristic filters.
+
+## Hard-debug escalation path (use selectively)
+
+Use this path when normal iteration is not yielding enough signal and keeping the live tab open can unlock useful observations.
+
+1. Start a validation run with `--wait-for-interrupt` in the background.
+   - Prefer JSON output for easier inspection while the process is running.
+2. Keep the tab open and ask focused user questions tied to the suspected failure.
+   - Ask only high-value questions (for example: what is visible in the feed area, whether auth interstitials appeared, whether timestamps/buttons rendered, whether lazy content loaded).
+3. Refine hypotheses using both CLI output and user observations.
+4. Stop the background run when enough data is collected.
+   - Send interrupt or kill the background process so tabs and stream sessions do not linger.
+5. Apply the next code or selector change and return to the normal build -> reload -> validate loop.
+
+Rules:
+- Do not leave `--wait-for-interrupt` runs orphaned.
+- Keep this as an escalation path, not the default for every iteration.
+- Still follow the mandatory extension reload pause after each code change.
 
 ## Mandatory pause after each code change
 
@@ -177,6 +205,7 @@ import type {
 
 Best practice:
 - Always return objects with `kind` set to a stable shared-domain value.
+- Populate only fields that are semantically meaningful for the source content; omit optional fields that do not naturally exist for that platform or artifact.
 - Include `originalEntity` only when it helps debugging or preserves necessary raw payload context.
 - Prefer existing kinds over inventing new ones for similar content shapes.
 
@@ -196,6 +225,13 @@ Use the `chat.*` stream shapes for chat events and message history rather than r
 
 ### Standard output rule
 Always make the command’s returned shape stable and predictable for automation consumers. If a page result is not a good shared-domain fit, return a smaller deterministic wrapper object rather than an unstructured blob.
+
+Validation rule:
+- After every `otto test` or `command.run` check, inspect a representative sample of the returned objects.
+- Verify that each object matches the intended domain semantics, not just the schema. A `content.post` result that is actually a follow suggestion, notification card, ad, or navigation artifact is invalid.
+- If the output includes bogus items, duplicates caused by selector drift, placeholder titles, or obviously wrong author/timestamp/content mappings, continue iterating instead of reporting success.
+- If the output is wrong and the root cause is not obvious, inspect clean page structure next. Prefer `clean_html` or `markdown` over guessing from the live output alone.
+- If the output is empty or flaky, verify whether the page had actually finished rendering the target structures before extraction. Prefer waiting on observable DOM conditions over adding arbitrary sleep values.
 
 ### Example: import section in command modules
 ```ts
@@ -297,6 +333,42 @@ try {
 }
 ```
 
+### Example: bounded readiness wait in page context
+
+Use this pattern when the page needs time to render posts, cards, or controls after navigation.
+
+```ts
+const result = await ctx.executeScript(
+   async () => {
+      const sleep = (delayMs: number): Promise<void> => new Promise((resolve) => {
+         window.setTimeout(resolve, delayMs);
+      });
+
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+         const ready = Array.from(document.querySelectorAll('[role="listitem"]')).some((node) => {
+            return node.querySelector('[data-testid="expandable-text-box"]')
+               && /\b\d+[smhdw]|today|yesterday\b/i.test(node.textContent ?? '');
+         });
+
+         if (ready) {
+            break;
+         }
+
+         await sleep(250);
+      }
+
+      return Array.from(document.querySelectorAll('[role="listitem"]')).length;
+   },
+   [],
+);
+```
+
+Guidance:
+- Prefer waiting for the exact structures your extractor needs.
+- Keep waits bounded with a deadline and short polling interval.
+- Only fall back to fixed delays when the page exposes no reliable signal.
+
 ### Example: validation commands during iteration
 
 Use these in the build -> reload -> validate loop.
@@ -316,6 +388,23 @@ otto commands list --site <site>
 otto test <site> <command> --json
 otto test <site> <command> --payload '{"limit":5}' --json
 
+# Keep the auto-opened tab alive for iterative debugging (Ctrl+C when done)
+# `--wait-for-interrupt` is the keep-alive mode for `otto test`.
+otto test <site> <command> --payload '{"limit":5}' --wait-for-interrupt --json
+
+# Reuse an existing managed tab session (no auto-open/auto-close behavior)
+otto test <site> <command> --tab-session <tabSessionId> --payload '{"limit":5}' --json
+
+# Hard-debug escalation: run in background, ask targeted user questions, then stop it.
+# (Agent runtime: start this command async/background, then interrupt/kill after collecting signals.)
+otto test <site> <command> --payload '{"limit":5}' --wait-for-interrupt --json
+
+#    Inspect the returned objects, not just `ok: true`.
+#    Confirm that sampled rows are real command targets rather than UI chrome,
+#    ads, suggestions, follow cards, duplicated containers, or placeholder values.
+#    If sampled rows are wrong, inspect `clean_html` or `markdown` for the same page
+#    before making the next selector change.
+
 # 4) Content extraction shortcut for debugging page structure
 # Recommended: try markdown (easiest to parse) or clean_html (best for selectors)
 otto extract-content <url> --format markdown
@@ -330,6 +419,9 @@ Use this when you need direct primitive checks while debugging command behavior.
 ```bash
 # Open a managed tab and capture tabSessionId from output
 otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}' --json
+
+# Reuse that tab in command.run for stable iteration without tab churn
+otto cmd --action command.run --payload '{"site":"reddit.com","command":"getFeed","tabSessionId":"<tabSessionId>"}' --json
 
 # Query current tab metadata
 otto cmd --action primitive.tab.query --payload '{"tabSessionId":"<tabSessionId>"}' --json
@@ -475,6 +567,7 @@ Keep output stable and agent-friendly:
 - bounded list sizes
 - consistent timestamps and ids
 - include `originalEntity` only when safe and useful
+- semantically correct objects only; exclude UI noise that merely fits the type shape
 
 Prefer canonical shared kinds when they match the command objective:
 - `content.post`
@@ -580,10 +673,11 @@ A command task is complete only when:
 1. Readiness gate passed.
 2. Command metadata and inputs are aligned with behavior.
 3. Command returns expected output shape.
-4. Command exposes a `test(...)` path suitable for `otto test`.
-5. Failure cases return deterministic, actionable errors.
-6. Extension rebuild and manual reload confirmation was performed after every code change.
-7. Validation run confirms success criteria from the user.
+4. Validation confirmed the sampled output rows are semantically correct and free of obvious bogus items for the requested command goal.
+5. Command exposes a `test(...)` path suitable for `otto test`.
+6. Failure cases return deterministic, actionable errors.
+7. Extension rebuild and manual reload confirmation was performed after every code change.
+8. Validation run confirms success criteria from the user.
 
 ## Quick scope boundary
 

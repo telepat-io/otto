@@ -267,9 +267,14 @@ async function connect(): Promise<void> {
   });
 
   await publishConnectionStatus('connecting');
-  ws = new WebSocket(socketRelayUrl);
+  const socket = new WebSocket(socketRelayUrl);
+  ws = socket;
 
-  ws.addEventListener('open', () => {
+  socket.addEventListener('open', () => {
+    if (ws !== socket) {
+      return;
+    }
+
     authenticated = false;
     reconnectAttempt = 0;
     console.log('[otto:offscreen] websocket opened; sending hello/auth');
@@ -283,7 +288,7 @@ async function connect(): Promise<void> {
     });
     startHeartbeat();
 
-    ws?.send(
+    socket.send(
       JSON.stringify(
         createEnvelope('hello', 'node', nanoid(), {
           role: 'node',
@@ -302,7 +307,7 @@ async function connect(): Promise<void> {
       ),
     );
 
-    ws?.send(
+    socket.send(
       JSON.stringify(
         createEnvelope('auth', 'node', nanoid(), {
           accessToken,
@@ -311,7 +316,11 @@ async function connect(): Promise<void> {
     );
   });
 
-  ws.addEventListener('message', (event) => {
+  socket.addEventListener('message', (event) => {
+    if (ws !== socket) {
+      return;
+    }
+
     const envelope = JSON.parse(String(event.data)) as Envelope;
     if (envelope.messageType === 'command' || envelope.messageType === 'command_cancel') {
       void forwardToBackground(envelope);
@@ -365,11 +374,15 @@ async function connect(): Promise<void> {
     }
 
     if (envelope.messageType === 'ping') {
-      ws?.send(JSON.stringify(createEnvelope('pong', 'node', envelope.requestId, { ok: true })));
+      socket.send(JSON.stringify(createEnvelope('pong', 'node', envelope.requestId, { ok: true })));
     }
   });
 
-  ws.addEventListener('close', () => {
+  socket.addEventListener('close', () => {
+    if (ws !== socket) {
+      return;
+    }
+
     authenticated = false;
     ws = null;
     stopHeartbeat();
@@ -386,9 +399,14 @@ async function connect(): Promise<void> {
     scheduleReconnect();
   });
 
-  ws.addEventListener('error', () => {
+  socket.addEventListener('error', () => {
+    if (ws !== socket) {
+      return;
+    }
+
     authenticated = false;
     ws = null;
+    stopHeartbeat();
     if (!reconnectEnabled) {
       return;
     }

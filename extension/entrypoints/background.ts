@@ -110,6 +110,19 @@ export default defineBackground(() => {
     withRuntimeErrorLogging(chrome.storage.local.set({ extensionVersion: chrome.runtime.getManifest().version }));
   };
 
+  const shouldResumeRelayConnection = async (): Promise<boolean> => {
+    const snapshot = await chrome.storage.local.get(['nodeAccessToken', 'relayConnectionStatus']);
+    if (!snapshot.nodeAccessToken) {
+      return false;
+    }
+
+    const status = typeof snapshot.relayConnectionStatus === 'string'
+      ? snapshot.relayConnectionStatus as RelayConnectionStatus
+      : 'idle';
+
+    return status === 'authenticated_connected' || status === 'connecting';
+  };
+
   syncExtensionVersion();
 
   const runMaintenance = (mode: 'bootstrap' | 'keepwarm') => {
@@ -129,6 +142,13 @@ export default defineBackground(() => {
           data: { mode },
         });
         await bootstrap(chrome, fetch, console.log);
+        if (await shouldResumeRelayConnection()) {
+          try {
+            await chrome.runtime.sendMessage({ type: 'otto.offscreen.reconnect' });
+          } catch {
+            // Offscreen may still be initializing; periodic keepwarm/refresh path will retry.
+          }
+        }
         await syncActionBadge(chrome);
         await forwardExtensionLog(chrome, {
           level: 'debug',

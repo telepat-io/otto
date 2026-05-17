@@ -141,6 +141,34 @@ Every `command` payload must identify a target node and include replay protectio
 | `primitive.dom.extract_markdown` | Extract Markdown representation |
 | `primitive.page.screenshot` | Screenshot the tab or a URL |
 
+### command.list descriptor metadata
+
+`command.list` returns command descriptors that include command metadata used by controllers for validation, preload behavior, and timeout planning.
+
+| Field | Required | Description |
+|---|---|---|
+| `site` | Yes | Site scope the command is valid for |
+| `id` | Yes | Command id within the site scope |
+| `displayName` | Yes | Human-readable command name |
+| `description` | Yes | Command summary |
+| `requiresAuth` | No | Indicates manual-login handoff may be required |
+| `preloadHost` | No | Preferred URL host for auto-open flows |
+| `inputFields` | No | Input schema used for command input validation |
+| `timeoutPolicy` | No | Command timeout hints for controllers |
+
+When provided, `timeoutPolicy` supports both fixed and input-scaled timeout guidance:
+
+| `timeoutPolicy` field | Required | Description |
+|---|---|---|
+| `defaultMs` | No | Suggested default timeout for this command |
+| `scaling.inputField` | No | Input field name used for scaling |
+| `scaling.baseMs` | No | Base timeout budget before scaling |
+| `scaling.perUnitMs` | No | Additional timeout budget per input unit |
+| `scaling.minMs` | No | Lower clamp for resolved timeout |
+| `scaling.maxMs` | No | Upper clamp for resolved timeout |
+
+Controllers may use this metadata to compute effective timeout budgets while preserving explicit user-provided timeout overrides.
+
 Content extraction is also exposed through first-class controller interfaces:
 
 - CLI: `otto extract-content [url] --format markdown|distilled_html|clean_html|raw_html|text` (defaults to markdown)

@@ -26,7 +26,7 @@ test('fetchConnectedNodeIds throws on non-ok non-auth response', async () => {
   delete (global as unknown as Record<string, unknown>).fetch;
 });
 
-test('fetchConnectedNodeIds returns empty on 403', async () => {
+test('fetchConnectedNodeIds throws auth-expired error on 403', async () => {
   const config = {
     controllerAccessToken: 'token',
     relayHttpUrl: 'http://localhost:8787',
@@ -35,8 +35,10 @@ test('fetchConnectedNodeIds returns empty on 403', async () => {
   global.fetch = async () =>
     new Response('Forbidden', { status: 403 }) as unknown as Response;
 
-  const result = await fetchConnectedNodeIds(config);
-  assert.deepEqual(result, []);
+  await assert.rejects(
+    fetchConnectedNodeIds(config),
+    /Controller access token expired\. Run `otto client login` to refresh\./,
+  );
 
   delete (global as unknown as Record<string, unknown>).fetch;
 });
@@ -176,7 +178,7 @@ test('resolveTargetNodeId throws when no nodes and no config', async () => {
   delete (global as unknown as Record<string, unknown>).fetch;
 });
 
-test('resolveTargetNodeId returns empty for auth errors', async () => {
+test('resolveTargetNodeId throws auth-expired error for auth failures', async () => {
   const config = {
     controllerAccessToken: 'token',
     relayHttpUrl: 'http://localhost:8787',
@@ -185,7 +187,10 @@ test('resolveTargetNodeId returns empty for auth errors', async () => {
   global.fetch = async () =>
     new Response('Unauthorized', { status: 401 }) as unknown as Response;
 
-  await assert.rejects(resolveTargetNodeId(config), /Missing targetNodeId/);
+  await assert.rejects(
+    resolveTargetNodeId(config),
+    /Controller access token expired\. Run `otto client login` to refresh\./,
+  );
 
   delete (global as unknown as Record<string, unknown>).fetch;
 });

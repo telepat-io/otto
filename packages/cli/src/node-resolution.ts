@@ -1,4 +1,5 @@
-import { deriveHttpUrl, type OttoConfig } from './config.js';
+import { deriveHttpUrl, saveConfig, type OttoConfig } from './config.js';
+import { refreshControllerAccessToken } from './auth/refresh.js';
 
 export type ConnectedNode = { nodeId: string };
 
@@ -16,20 +17,30 @@ function uniqueNodeIds(nodes: ConnectedNode[]): string[] {
   return [...deduped];
 }
 
+async function queryConnectedNodes(base: string, token: string): Promise<Response> {
+  return fetch(`${base}/api/nodes/connected`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+}
+
 export async function fetchConnectedNodeIds(config: OttoConfig): Promise<string[]> {
   if (!config.controllerAccessToken) {
     return [];
   }
 
   const base = config.relayHttpUrl ?? deriveHttpUrl(config.relayUrl);
-  const response = await fetch(`${base}/api/nodes/connected`, {
-    headers: {
-      authorization: `Bearer ${config.controllerAccessToken}`,
-    },
-  });
+  let response = await queryConnectedNodes(base, config.controllerAccessToken);
 
   if (response.status === 401 || response.status === 403) {
-    return [];
+    const refreshed = await refreshControllerAccessToken(config);
+    if (!refreshed) {
+      throw new Error('Controller access token expired. Run `otto client login` to refresh.');
+    }
+    saveConfig({ ...config, controllerAccessToken: refreshed.accessToken, ...(refreshed.refreshToken ? { controllerRefreshToken: refreshed.refreshToken } : {}) });
+    response = await queryConnectedNodes(base, refreshed.accessToken);
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Controller access token expired. Run `otto client login` to refresh.');
+    }
   }
 
   if (!response.ok) {

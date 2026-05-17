@@ -94,6 +94,7 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 | Site | Commands |
 |---|---|
 | `reddit.com` | `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
+| `linkedin.com` | `getFeed` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
 
@@ -112,6 +113,57 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 | `sendChatMessage` | Supports `roomId` direct send or username-based room create + send via Shadow DOM |
 | `commentOnPost` | Navigates to post URL; fills `shreddit-composer`; submits top-level comment |
 | `getChatMessages` | Reads Matrix history/sync; can emit stream manifest with `network.http_intercept` |
+
+### LinkedIn command notes
+
+| Command | Key behavior |
+|---|---|
+| `getFeed` | Extracts LinkedIn feed posts with semantic filtering, canonical post URL capture via control-menu copy link, bounded scroll hydration, and timeout-policy scaling by `minReturnedPosts` |
+
+#### linkedin.com getFeed inputs
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `minReturnedPosts` | number | `5` | Minimum number of posts to attempt to return. Runtime clamps to `1..200`. |
+| `getClipboardPermission` | boolean | `false` | Permission assist mode. Keeps page alive briefly to let user grant clipboard-read and retries extraction. In this mode, command targets one post. |
+
+#### linkedin.com getFeed output semantics
+
+- Returns `{ posts: content.post[] }`.
+- `title` is intentionally empty for LinkedIn feed posts.
+- `content` is required and non-empty; posts with missing/empty content are dropped.
+- `url` is the canonical post link copied from the post control menu, not a profile URL.
+- `id` is normalized as `linkedin:<post-slug-from-url>`.
+- `author` carries normalized identity fields and preserves source profile URL in `author.originalEntity.profileUrl`.
+
+#### linkedin.com getFeed timeout policy
+
+The command descriptor advertises timeout hints via `timeoutPolicy`:
+
+- `defaultMs`: `60000`
+- Scaling: `baseMs + (minReturnedPosts * perUnitMs)`
+- Current scaling values: `baseMs=45000`, `perUnitMs=4000`, `minMs=45000`, `maxMs=300000`
+
+Controllers can use this metadata when user timeout is left at default.
+
+#### linkedin.com getFeed auth and permission errors
+
+- `manual_login_required`: user must log into LinkedIn manually, then rerun.
+- `clipboard_permission_prompt_pending`: clipboard permission is still in prompt state; allow permission and rerun with `getClipboardPermission=true`.
+- `clipboard_permission_denied`: clipboard permission denied; enable clipboard access in site settings and rerun.
+
+#### linkedin.com getFeed examples
+
+```bash
+# Default extraction
+otto test linkedin.com getFeed
+
+# Request at least 15 posts
+otto test linkedin.com getFeed --payload '{"minReturnedPosts":15}'
+
+# Permission assist flow for clipboard-read
+otto test linkedin.com getFeed --payload '{"getClipboardPermission":true}'
+```
 
 ## Command network interception API
 

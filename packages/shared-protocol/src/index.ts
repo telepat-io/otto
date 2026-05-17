@@ -77,6 +77,19 @@ export interface CommandInputFieldDescriptor {
   optional?: boolean;
 }
 
+export interface CommandTimeoutScalingPolicy {
+  inputField: string;
+  baseMs: number;
+  perUnitMs: number;
+  minMs?: number;
+  maxMs?: number;
+}
+
+export interface CommandTimeoutPolicy {
+  defaultMs?: number;
+  scaling?: CommandTimeoutScalingPolicy;
+}
+
 export interface CommandDescriptor {
   site: string;
   id: string;
@@ -88,6 +101,7 @@ export interface CommandDescriptor {
   preloadHost?: string;
   inputFields?: CommandInputFieldDescriptor[];
   inputAtLeastOneOf?: string[];
+  timeoutPolicy?: CommandTimeoutPolicy;
 }
 
 export type CommandAction = 'command.list' | 'command.run' | 'command.test' | 'command.reddit_feed';

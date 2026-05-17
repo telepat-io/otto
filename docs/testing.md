@@ -65,6 +65,8 @@ Use this sequence when adding or modifying a site command:
 
 `otto test` sends `command.test` and falls back to `execute` if no command test hook exists. If `targetNodeId` is missing or stale and exactly one node is connected, CLI auto-selects that node; with multiple nodes, pass `--node-id`. If `--tab-session` is omitted, CLI auto-opens `preloadHost` when available, otherwise `https://<site>`, and auto-closes that tab after completion unless `--wait-for-interrupt` is used.
 
+For timeout handling, `otto test` and `otto cmd --action command.run` may resolve timeout from command descriptor metadata when using the default CLI timeout. If a command descriptor includes `timeoutPolicy`, CLI can derive an input-scaled timeout (for example by `minReturnedPosts`) with min/max clamps. Explicit non-default `--timeout` values always override descriptor-derived timeout behavior.
+
 ## TTY vs non-TTY contracts
 
 | Surface | TTY behavior | Non-TTY behavior |
