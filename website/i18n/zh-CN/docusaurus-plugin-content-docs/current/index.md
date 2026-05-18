@@ -2,7 +2,7 @@
 title: Otto 文档
 slug: /
 sidebar_position: 1
-description: Otto 是一个安全的远程浏览器自动化平台。通过控制器、中继和扩展节点，从 CLI 运行针对远程浏览器的命令。
+description: "Otto 是一个安全的远程浏览器自动化平台。通过控制器、中继和扩展节点，从 CLI 运行针对远程浏览器的命令。"
 keywords:
   - 浏览器自动化
   - 远程浏览器

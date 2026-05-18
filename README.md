@@ -63,9 +63,11 @@ otto commands list
 
 For the full walkthrough, see the [Installation](https://docs.telepat.io/otto/installation) and [Quickstart](https://docs.telepat.io/otto/quickstart) guides.
 
-## Available Site Commands
+## Available Commands
 
 Use `otto commands list --site <site>` to inspect the live command surface for your connected node.
+
+### Site Commands
 
 | Site | Available commands |
 |---|---|
@@ -73,6 +75,15 @@ Use `otto commands list --site <site>` to inspect the live command surface for y
 | `linkedin.com` | `getFeed`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
+
+### Primitives (Universal)
+
+| Category | Available primitives |
+|---|---|
+| Tab | `open`, `close`, `navigate`, `query` |
+| DOM extraction | `extract_text`, `extract_markdown`, `extract_clean_html`, `extract_distilled_html`, `extract_html` |
+| Page | `screenshot` (viewport or full-page) |
+| High-level | `otto extract-content [url]` (recommended for markdown/HTML extraction) |
 
 For command payloads, behavior notes, and examples, see the [Commands Reference](https://docs.telepat.io/otto/commands).
 

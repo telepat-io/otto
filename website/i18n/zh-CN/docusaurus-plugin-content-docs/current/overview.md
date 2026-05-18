@@ -1,7 +1,7 @@
 ---
 title: Otto 概述
 sidebar_position: 1
-description: 了解 Otto 的控制器、中继和浏览器节点如何协同工作，实现安全、确定性的远程浏览器自动化。
+description: "了解 Otto 的控制器、中继和浏览器节点如何协同工作，实现安全、确定性的远程浏览器自动化。"
 keywords:
   - 浏览器自动化
   - 架构概述

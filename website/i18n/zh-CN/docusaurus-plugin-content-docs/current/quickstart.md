@@ -1,7 +1,7 @@
 ---
 title: 快速开始
 sidebar_position: 3
-description: 五分钟内让 Otto 运行起来。启动中继、注册控制器、配对扩展节点并运行第一条网站命令。
+description: "五分钟内让 Otto 运行起来。启动中继、注册控制器、配对扩展节点并运行第一条网站命令。"
 keywords:
   - 快速开始
   - otto start

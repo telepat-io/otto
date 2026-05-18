@@ -63,9 +63,11 @@ otto commands list
 
 完整教程请查看[安装指南](https://docs.telepat.io/otto/installation)和[快速入门](https://docs.telepat.io/otto/quickstart)。
 
-## 可用站点命令
+## 可用命令
 
 可通过 `otto commands list --site <site>` 查看当前已连接节点上的实时命令面。
+
+### 站点命令
 
 | 站点 | 可用命令 |
 |---|---|
@@ -73,6 +75,15 @@ otto commands list
 | `linkedin.com` | `getFeed`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
+
+### 原语（通用）
+
+| 分类 | 可用原语 |
+|---|---|
+| 标签页 | `open`, `close`, `navigate`, `query` |
+| DOM 提取 | `extract_text`, `extract_markdown`, `extract_clean_html`, `extract_distilled_html`, `extract_html` |
+| 页面 | `screenshot`（视口或完整页面） |
+| 高级接口 | `otto extract-content [url]`（推荐用于 markdown/HTML 提取） |
 
 关于命令入参、行为说明与示例，请参阅[命令参考](https://docs.telepat.io/otto/commands)。
 

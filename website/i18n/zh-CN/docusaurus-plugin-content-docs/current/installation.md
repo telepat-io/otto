@@ -1,7 +1,7 @@
 ---
 title: 安装
 sidebar_position: 2
-description: 安装 Otto CLI 和扩展。涵盖全局最终用户安装路径和 monorepo 贡献者开发配置。
+description: "安装 Otto CLI 和扩展。涵盖全局最终用户安装路径和 monorepo 贡献者开发配置。"
 keywords:
   - 安装 Otto
   - npm install

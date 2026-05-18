@@ -186,6 +186,228 @@ Expected success signals:
 - `otto commands list --json` returns a non-empty list of available commands.
 - `otto test` exits with code 0 and returns structured result.
 
+## Site Commands Reference
+
+### Reddit (`reddit.com`)
+
+#### `getFeed`
+
+Extracts the Reddit feed with configurable post count and optional clipboard permission assist.
+
+**Inputs:**
+| Parameter | Type | Default | Notes |
+|---|---|---|---|
+| `minReturnedPosts` | number | `5` | Minimum posts to return (1–200) |
+| `getClipboardPermission` | boolean | `false` | Permission assist mode (1 post, keep alive for user clipboard grant) |
+
+**Returns:**
+- `content.post[]` — Array of post entities with title, URL, subreddit, score, comment count, award count
+
+**Example:**
+```bash
+otto test reddit.com getFeed --json
+otto test reddit.com getFeed --payload '{"minReturnedPosts":10}' --json
+```
+
+#### `getUserInfo`
+
+Looks up user profile by username or ID; defaults to current session.
+
+**Inputs:**
+| Parameter | Type | Notes |
+|---|---|---|
+| `username` | string | Optional; defaults to current logged-in user |
+
+**Returns:**
+- `entity.user` — User object with name, profile URL, karma, created date, profile banner
+
+**Example:**
+```bash
+otto test reddit.com getUserInfo --json
+otto test reddit.com getUserInfo --payload '{"username":"spez"}' --json
+```
+
+#### `commentOnPost`
+
+Posts a top-level comment to a Reddit post.
+
+**Inputs:**
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `postUrl` | string | Yes | Full Reddit post permalink |
+| `commentBody` | string | Yes | Comment text |
+
+**Returns:**
+- `sent: boolean` — Success indicator
+- `commentUrl` — Permalink to the posted comment (if successful)
+
+**Example:**
+```bash
+otto test reddit.com commentOnPost --payload '{"postUrl":"https://reddit.com/r/...","commentBody":"Great post!"}' --json
+```
+
+#### `sendChatMessage`, `getChatMessages`
+
+Chat operations for Reddit direct messages and chat rooms.
+
+**`sendChatMessage` inputs:**
+| Parameter | Type | Notes |
+|---|---|---|
+| `roomId` | string | Optional; chat room ID (uses Shadow DOM) |
+| `username` | string | Optional; creates room with user if `roomId` not set |
+| `message` | string | Message to send |
+
+**`getChatMessages` returns:**
+- `network.http_intercept` — Stream manifest when streaming is enabled
+- `message[]` — Array of chat messages with sender, timestamp, body
+
+### LinkedIn (`linkedin.com`)
+
+#### `getFeed`
+
+Extracts LinkedIn feed posts with semantic filtering and bounded scroll.
+
+**Inputs:**
+| Parameter | Type | Default | Notes |
+|---|---|---|---|
+| `minReturnedPosts` | number | `5` | Minimum posts to return (1–200) |
+| `getClipboardPermission` | boolean | `false` | Permission assist mode |
+
+**Returns:**
+- `content.post[]` — Array of post entities with title, author, engagement (likes, comments, shares)
+
+**Example:**
+```bash
+otto test linkedin.com getFeed --json
+otto test linkedin.com getFeed --payload '{"minReturnedPosts":15}' --json
+```
+
+#### `commentOnPost`
+
+Posts a top-level comment on a LinkedIn post.
+
+**Inputs:**
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `postUrl` | string | Yes | LinkedIn post URL; auto-normalized to `https://www.linkedin.com/posts/...` |
+| `commentBody` | string | Yes | Comment text (non-empty) |
+
+**Returns:**
+- `sent: boolean` — Success indicator
+- `postUrl` — The target post URL
+
+**Confirmation semantics:**
+- Fills the in-page comment editor (`.ql-editor[contenteditable="true"]`)
+- Waits for submit button (multiple selector support)
+- After submit, retries reading first `.comments-comment-item__main-content` and matches normalized text (12 attempts × 300ms = 3.6s window)
+
+**Example:**
+```bash
+otto test linkedin.com commentOnPost --payload '{"postUrl":"https://www.linkedin.com/posts/...","commentBody":"Great insights!"}' --json
+```
+
+### Hacker News (`news.ycombinator.com`)
+
+#### `getFrontPage`
+
+Extracts the Hacker News front page stories.
+
+**Inputs:** (none)
+
+**Returns:**
+- `content.post[]` — Array of story entities with title, URL, author, points, comment count
+
+**Example:**
+```bash
+otto test news.ycombinator.com getFrontPage --json
+```
+
+### Google (`google.com`)
+
+#### `getSearchResults`
+
+Searches Google and extracts SERP results.
+
+**Inputs:**
+| Parameter | Type | Default | Range | Notes |
+|---|---|---|---|---|
+| `query` | string | (required) | — | Search query |
+| `pages` | number | `1` | 1–5 | Number of SERP pages to fetch |
+| `limit` | number | `10` | 1–100 | Total results cap per page |
+
+**Returns:**
+- `content.search_result[]` — Array of results with:
+  - `title`, `url`, `description`, `rank`
+  - `links` — Sitelinks (if any)
+  - `image` — Thumbnail URL or null
+  - `isAd` — Boolean marking sponsored results
+
+**Example:**
+```bash
+otto test google.com getSearchResults --payload '{"query":"typescript best practices"}' --json
+otto test google.com getSearchResults --payload '{"query":"typescript","pages":2,"limit":20}' --json
+```
+
+### Primitives (Universal)
+
+Primitives are cross-site building blocks for tab/page/DOM operations.
+
+#### Tab operations
+
+- `primitive.tab.open` — Open URL in new managed tab → returns `tabSessionId`
+- `primitive.tab.close` — Close tab by `tabSessionId`
+- `primitive.tab.navigate` — Navigate tab to new URL
+- `primitive.tab.query` — Get tab metadata (URL, title, status)
+
+**Examples:**
+```bash
+otto cmd --action primitive.tab.open --payload '{"url":"https://example.com"}' --json
+otto cmd --action primitive.tab.navigate --payload '{"tabSessionId":"...","url":"https://example.com/page"}' --json
+```
+
+#### DOM extraction
+
+- `primitive.dom.extract_text` — Raw text content
+- `primitive.dom.extract_markdown` — Markdown (recommended for readability)
+- `primitive.dom.extract_clean_html` — HTML with scripts/styles removed, preserves semantic attributes (best for command development)
+- `primitive.dom.extract_distilled_html` — Reader-mode-like distilled HTML
+- `primitive.dom.extract_html` — Full raw HTML
+
+**Examples:**
+```bash
+# High-level CLI (recommended)
+otto extract-content https://example.com --json
+otto extract-content https://example.com --format markdown --json
+otto extract-content https://example.com --format clean_html --selector '.main-content' --json
+
+# Low-level primitive
+otto cmd --action primitive.dom.extract_markdown --payload '{"tabSessionId":"..."}' --json
+otto cmd --action primitive.dom.extract_clean_html --payload '{"url":"https://example.com"}' --json
+```
+
+#### Page screenshot
+
+- `primitive.page.screenshot` — Capture viewport or full page
+
+**Modes:**
+- `viewport` — Active tab viewport snapshot
+- `full_page` — Full-page capture via Chrome DevTools Protocol
+
+**Examples:**
+```bash
+otto screenshot https://example.com --json
+otto screenshot https://example.com --mode full_page --json
+otto cmd --action primitive.page.screenshot --payload '{"tabSessionId":"...","mode":"viewport"}' --json
+```
+
+### High-level CLI
+
+- `otto extract-content [url]` — Recommended for all extraction; defaults to markdown; supports `--format`, `--selector`, `--tab-session`
+- `otto test <site> <command>` — Recommended for site commands
+- `otto commands list --json` — Always authoritative; lists all available commands at runtime
+
+For full command details, inputs, and examples, see the [Commands Reference](https://docs.telepat.io/otto/commands).
+
 ## When to use this skill
 
 Use this skill when:
@@ -263,8 +485,11 @@ otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}
 # Run a site command
 otto cmd --action command.run --tab-session <tabSessionId> --payload '{"site":"reddit.com","command":"getFeed"}'
 
-# Test a command (auto-registers controller if needed)
+# Test a Reddit command
 otto test reddit.com getFeed --json
+
+# Test a LinkedIn command
+otto test linkedin.com commentOnPost --payload '{"postUrl":"https://www.linkedin.com/posts/...","commentBody":"Great post!"}' --json
 
 # Test with streaming
 otto test reddit.com getChatMessages --stream-follow-ms 30000 --json
@@ -477,22 +702,3 @@ Should not trigger:
 - See `references/command-catalog.md` for full command/argument matrix.
 - See `references/troubleshooting.md` for detailed failure diagnostics.
 - See `references/framework-patterns.md` for reusable workflow patterns.
-
-## Source evidence map
-
-- CLI command surface and options: `packages/cli/src/index.ts`
-- Config types and defaults: `packages/cli/src/config.ts`
-- Protocol types and error codes: `packages/shared-protocol/src/index.ts`
-- Relay daemon management: `packages/cli/src/relay-daemon.ts`
-- Node resolution logic: `packages/cli/src/node-resolution.ts`
-- MCP server and tools: `packages/cli/src/mcp/server.ts`, `packages/cli/src/mcp/tools.ts`
-- Agent install logic: `packages/cli/src/agent/install.ts`
-- Auth and token refresh: `packages/cli/src/auth/refresh.ts`, `packages/cli/src/auth/retry.ts`
-- Client secret storage: `packages/cli/src/client-secret-store.ts`
-- Setup logic: `packages/cli/src/setup-logic.ts`
-- Daemon status: `packages/cli/src/daemon-status.ts`
-- Install docs: `docs/installation.md`, `docs/quickstart.md`
-- Agent-facing docs: `docs/for-agents/index.md`, `docs/for-agents/automation-guide.md`
-- Protocol semantics: `docs/protocol.md`
-- Error codes: `docs/error-codes.md`
-- Security model: `docs/security.md`, `docs/guides/pairing-auth.md`

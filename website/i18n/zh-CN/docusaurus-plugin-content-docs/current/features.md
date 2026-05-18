@@ -1,7 +1,7 @@
 ---
 slug: /features
 title: "真实浏览器。远程控制。零基础设施。"
-description: Otto 能为开发者、自动化团队和 AI 智能体做什么。
+description: "Otto 能为开发者、自动化团队和 AI 智能体做什么。"
 keywords: [otto, 功能, 浏览器自动化, 远程浏览器, chrome 扩展, cli]
 sidebar_label: 功能
 sidebar_position: 1
