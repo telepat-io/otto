@@ -76,6 +76,7 @@ Do not continue command authoring when readiness gate fails.
    - Resume only after user confirms refresh.
 8. Re-run validation loop.
    - Iterate code -> build -> user refresh -> validate until success criteria are met.
+   - During debugging iterations, prefer targeted command validation first (for example `otto test <site> <command> ...`); run the full workspace test suite only after the command is working to reduce iteration time.
    - Validation must inspect the returned payload itself, not just command success.
    - Treat obviously wrong items, repeated containers, nav chrome, follow cards, suggested cards, ads, or malformed fields as validation failures even when `otto test` returns `ok: true`.
    - Summarize what the command returned and call out any suspicious rows before declaring success.

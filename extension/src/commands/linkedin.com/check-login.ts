@@ -1,5 +1,7 @@
 import type { SiteCommand } from '../types.js';
 
+const LINKEDIN_AUTH_CHECK_URL = 'https://www.linkedin.com/feed/';
+
 type LinkedInCheckLoginResult = {
   authenticated: boolean;
   source?: string;
@@ -24,11 +26,21 @@ export const checkLoginCommand: SiteCommand = {
     inputFields: [],
   },
   async execute(ctx) {
+    await ctx.navigateTab(LINKEDIN_AUTH_CHECK_URL);
+
     const authState = await ctx.executeScript(
       /* c8 ignore start */
       async () => {
+        const path = window.location.pathname.toLowerCase();
+        const isLoginPath = path.startsWith('/login') || path.startsWith('/signup');
+        const isFeedPath = path.startsWith('/feed');
+
+        const hasLoggedInDomSignals = Boolean(document.querySelector(
+          '.global-nav__me, .global-nav__me-photo, [data-test-global-nav-link="feed"]',
+        ));
+
         try {
-          const response = await fetch('https://www.linkedin.com/litms/api/metadata/user', {
+          const response = await fetch('/litms/api/metadata/user', {
             credentials: 'include',
             cache: 'no-store',
             headers: {
@@ -38,8 +50,8 @@ export const checkLoginCommand: SiteCommand = {
 
           if (!response.ok) {
             return {
-              authenticated: false,
-              source: 'http-error',
+              authenticated: !isLoginPath && (isFeedPath || hasLoggedInDomSignals),
+              source: 'http-error-fallback',
             };
           }
 
@@ -49,14 +61,21 @@ export const checkLoginCommand: SiteCommand = {
             : undefined;
           const isUserLoggedIn = client?.isUserLoggedIn === true;
 
+          if (!isUserLoggedIn && !isLoginPath && (isFeedPath || hasLoggedInDomSignals)) {
+            return {
+              authenticated: true,
+              source: 'dom-path-fallback',
+            };
+          }
+
           return {
             authenticated: Boolean(isUserLoggedIn),
             source: 'api',
           };
         } catch {
           return {
-            authenticated: false,
-            source: 'fetch-failure',
+            authenticated: !isLoginPath && (isFeedPath || hasLoggedInDomSignals),
+            source: 'fetch-failure-fallback',
           };
         }
       },
