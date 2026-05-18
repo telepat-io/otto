@@ -63,6 +63,19 @@ otto commands list
 
 完整教程请查看[安装指南](https://docs.telepat.io/otto/installation)和[快速入门](https://docs.telepat.io/otto/quickstart)。
 
+## 可用站点命令
+
+可通过 `otto commands list --site <site>` 查看当前已连接节点上的实时命令面。
+
+| 站点 | 可用命令 |
+|---|---|
+| `reddit.com` | `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
+| `linkedin.com` | `getFeed`, `commentOnPost` |
+| `news.ycombinator.com` | `getFrontPage` |
+| `google.com` | `getSearchResults` |
+
+关于命令入参、行为说明与示例，请参阅[命令参考](https://docs.telepat.io/otto/commands)。
+
 ## 环境要求
 
 - Node.js 20+

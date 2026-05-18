@@ -94,7 +94,7 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 | Site | Commands |
 |---|---|
 | `reddit.com` | `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
-| `linkedin.com` | `getFeed` |
+| `linkedin.com` | `getFeed`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
 
@@ -119,6 +119,28 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 | Command | Key behavior |
 |---|---|
 | `getFeed` | Extracts LinkedIn feed posts with semantic filtering, canonical post URL capture via control-menu copy link, bounded scroll hydration, and timeout-policy scaling by `minReturnedPosts` |
+| `commentOnPost` | Navigates to a LinkedIn post URL, fills the in-page comment editor, submits comment, and confirms send by matching the newest rendered comment text |
+
+#### linkedin.com commentOnPost inputs
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `postUrl` | string | Yes | LinkedIn post URL on `linkedin.com`; normalized to canonical `https://www.linkedin.com/...` form. |
+| `commentBody` | string | Yes | Comment text to submit. Empty or whitespace-only values are rejected. |
+
+#### linkedin.com commentOnPost confirmation semantics
+
+- The command waits for a comment editor (`.ql-editor[contenteditable="true"]`) and injects `commentBody`.
+- It waits for a submit control to appear/be enabled (supports multiple submit button selectors).
+- After submit click, it retries reading the first `.comments-comment-item__main-content` node with short delays.
+- Success requires normalized rendered text to match normalized `commentBody`; otherwise returns deterministic unconfirmed diagnostics.
+
+#### linkedin.com commentOnPost examples
+
+```bash
+# Submit a top-level comment on a LinkedIn post
+otto test linkedin.com commentOnPost --payload '{"postUrl":"https://www.linkedin.com/posts/example_post-id","commentBody":"Looks great"}'
+```
 
 #### linkedin.com getFeed inputs
 

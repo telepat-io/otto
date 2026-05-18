@@ -63,6 +63,19 @@ otto commands list
 
 For the full walkthrough, see the [Installation](https://docs.telepat.io/otto/installation) and [Quickstart](https://docs.telepat.io/otto/quickstart) guides.
 
+## Available Site Commands
+
+Use `otto commands list --site <site>` to inspect the live command surface for your connected node.
+
+| Site | Available commands |
+|---|---|
+| `reddit.com` | `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
+| `linkedin.com` | `getFeed`, `commentOnPost` |
+| `news.ycombinator.com` | `getFrontPage` |
+| `google.com` | `getSearchResults` |
+
+For command payloads, behavior notes, and examples, see the [Commands Reference](https://docs.telepat.io/otto/commands).
+
 ## Requirements
 
 - Node.js 20+
