@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.0](https://github.com/telepat-io/otto/compare/v0.16.0...v0.17.0) (2026-05-18)
+
+
+### Features
+
+* add commentOnPost command for submitting comments on LinkedIn posts and enhance checkLogin command with improved authentication checks ([f8098ab](https://github.com/telepat-io/otto/commit/f8098ab54829af57c59441964f226bcc39a49b33))
+* implement handleRelayWsPreCommandMessage for handling various WebSocket messages ([8a6cb97](https://github.com/telepat-io/otto/commit/8a6cb97583dbbe5ebc10b1cd6cf7eb238176a765))
+* implement LinkedIn feed extraction command and enhance relay connection management ([ee5634c](https://github.com/telepat-io/otto/commit/ee5634c771a405bf2ffdd81b773276ca3eafaa24))
+
 ## [0.16.0](https://github.com/telepat-io/otto/compare/v0.15.0...v0.16.0) (2026-05-15)
 
 
