@@ -209,3 +209,16 @@ test('resolveCodexConfigPathForPlatform handles win32 and non-win32', () => {
   const linux = resolveCodexConfigPathForPlatform('linux', home);
   assert.equal(linux, '/home/tester/.codex/config.toml');
 });
+
+test('config path helpers use default AppData fallback when appData is omitted on win32', () => {
+  const home = '/home/tester';
+
+  const claude = resolveClaudeDesktopConfigPathForPlatform('win32', home);
+  assert.equal(claude, '/home/tester/AppData/Roaming/Claude/claude_desktop_config.json');
+
+  const gemini = resolveGeminiSettingsPathForPlatform('win32', home);
+  assert.equal(gemini, '/home/tester/AppData/Roaming/Gemini/settings.json');
+
+  const codex = resolveCodexConfigPathForPlatform('win32', home);
+  assert.equal(codex, '/home/tester/AppData/Roaming/codex/config.toml');
+});

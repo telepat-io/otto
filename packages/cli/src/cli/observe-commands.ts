@@ -4,6 +4,83 @@ import type WebSocket from 'ws';
 import type { OttoConfig } from '../config.js';
 import type { LogLevel, LogSource } from '../logs-options.js';
 
+type LogsFilterOpts = {
+  since?: unknown;
+  nodeId?: unknown;
+  requestId?: unknown;
+};
+
+type SubscribeNetworkOpts = {
+  tabSession: unknown;
+  site: unknown;
+  includeBody: unknown;
+  includeHeaders: unknown;
+  pattern?: unknown;
+  requestHost?: unknown;
+  mime?: unknown;
+};
+
+export function filterCommandsBySite<T extends { site?: string }>(commandsList: T[], site?: unknown): T[] {
+  if (typeof site !== 'string' || site.trim().length === 0) {
+    return commandsList;
+  }
+  const normalizedSite = site.toLowerCase();
+  return commandsList.filter((commandEntry) => String(commandEntry.site ?? '').toLowerCase() === normalizedSite);
+}
+
+export function buildSubscribeNetworkOptions(
+  opts: SubscribeNetworkOpts,
+  mode: 'network' | 'fetch' | 'hybrid',
+  maxBodyBytes: number,
+): NetworkInterceptListenerOptions {
+  const options: NetworkInterceptListenerOptions = {
+    tabSessionId: String(opts.tabSession),
+    site: String(opts.site),
+    mode,
+    includeBody: Boolean(opts.includeBody),
+    includeHeaders: Boolean(opts.includeHeaders),
+    maxBodyBytes,
+  };
+
+  if (Array.isArray(opts.pattern) && opts.pattern.length > 0) {
+    options.urlPatterns = opts.pattern;
+  }
+
+  if (Array.isArray(opts.requestHost) && opts.requestHost.length > 0) {
+    options.requestHostAllowlist = opts.requestHost;
+  }
+
+  if (Array.isArray(opts.mime) && opts.mime.length > 0) {
+    options.mimeTypes = opts.mime;
+  }
+
+  return options;
+}
+
+export function buildLogSearchParams(
+  opts: LogsFilterOpts,
+  level: LogLevel | undefined,
+  source: LogSource | undefined,
+  latest: number | undefined,
+): URLSearchParams {
+  const search = new URLSearchParams();
+  if (typeof opts.since === 'string' && opts.since.length > 0) search.set('since', opts.since);
+  if (level) search.set('level', level);
+  if (source) search.set('source', source);
+  if (latest) search.set('latest', String(latest));
+  if (typeof opts.nodeId === 'string' && opts.nodeId.length > 0) search.set('nodeId', opts.nodeId);
+  if (typeof opts.requestId === 'string' && opts.requestId.length > 0) search.set('requestId', opts.requestId);
+  return search;
+}
+
+export function normalizeEventType(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export function registerObserveCommands(params: {
   program: Command;
   loadConfig: () => OttoConfig;
@@ -79,9 +156,7 @@ export function registerObserveCommands(params: {
       };
 
       const commandsList = payload.data?.commands ?? [];
-      const filtered = opts.site
-        ? commandsList.filter((commandEntry) => String(commandEntry.site ?? '').toLowerCase() === String(opts.site).toLowerCase())
-        : commandsList;
+      const filtered = filterCommandsBySite(commandsList, opts.site);
 
       const output = {
         ...response,
@@ -122,26 +197,7 @@ export function registerObserveCommands(params: {
       const maxBodyBytes = params.parsePositiveNumberOption(opts.maxBodyBytes, '--max-body-bytes');
       const timeoutMs = params.parseMaybeNumber(opts.timeout, 30_000);
 
-      const options: NetworkInterceptListenerOptions = {
-        tabSessionId: String(opts.tabSession),
-        site: String(opts.site),
-        mode,
-        includeBody: Boolean(opts.includeBody),
-        includeHeaders: Boolean(opts.includeHeaders),
-        maxBodyBytes,
-      };
-
-      if (Array.isArray(opts.pattern) && opts.pattern.length > 0) {
-        options.urlPatterns = opts.pattern;
-      }
-
-      if (Array.isArray(opts.requestHost) && opts.requestHost.length > 0) {
-        options.requestHostAllowlist = opts.requestHost;
-      }
-
-      if (Array.isArray(opts.mime) && opts.mime.length > 0) {
-        options.mimeTypes = opts.mime;
-      }
+      const options = buildSubscribeNetworkOptions(opts, mode, maxBodyBytes);
 
       await params.subscribeNetworkListenerAndFollow(
         config,
@@ -194,13 +250,7 @@ export function registerObserveCommands(params: {
       const level = params.parseLogLevelOption(opts.level);
       const source = params.parseLogSourceOption(opts.source);
       const latest = params.parseLatestOption(opts.latest);
-      const search = new URLSearchParams();
-      if (opts.since) search.set('since', opts.since);
-      if (level) search.set('level', level);
-      if (source) search.set('source', source);
-      if (latest) search.set('latest', String(latest));
-      if (opts.nodeId) search.set('nodeId', opts.nodeId);
-      if (opts.requestId) search.set('requestId', opts.requestId);
+      const search = buildLogSearchParams(opts, level, source, latest);
       const result = await params.requestJson(`${base}/api/logs?${search.toString()}`);
       console.log(JSON.stringify(result, null, 2));
     });
@@ -215,9 +265,7 @@ export function registerObserveCommands(params: {
     .action(async (opts) => {
       const config = params.loadConfig();
       const level = params.parseLogLevelOption(opts.level);
-      const eventType = typeof opts.type === 'string' && opts.type.trim().length > 0
-        ? opts.type.trim()
-        : undefined;
+      const eventType = normalizeEventType(opts.type);
       const source = params.parseLogSourceOption(opts.source);
       const jsonOutput = Boolean(opts.json);
       if (process.stdout.isTTY && process.stdin.isTTY) {
@@ -253,13 +301,7 @@ export function registerObserveCommands(params: {
       const level = params.parseLogLevelOption(opts.level);
       const source = params.parseLogSourceOption(opts.source);
       const latest = params.parseLatestOption(opts.latest);
-      const search = new URLSearchParams();
-      if (opts.since) search.set('since', opts.since);
-      if (level) search.set('level', level);
-      if (source) search.set('source', source);
-      if (latest) search.set('latest', String(latest));
-      if (opts.nodeId) search.set('nodeId', opts.nodeId);
-      if (opts.requestId) search.set('requestId', opts.requestId);
+      const search = buildLogSearchParams(opts, level, source, latest);
 
       const response = await fetch(`${base}/api/logs/export?${search.toString()}`);
       if (!response.ok) {
