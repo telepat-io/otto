@@ -27,24 +27,36 @@ function createButtonStateMock() {
   let pendingAction: 'connect' | 'disconnect' | null = null;
 
   const render = (state: string, currentPendingAction: 'connect' | 'disconnect' | null) => {
+    const isVersionMismatch = state === 'version_mismatch';
     const isConnected = state === 'authenticated_connected';
     const isConnecting = !isConnected && (currentPendingAction === 'connect' || state === 'authenticated_connecting');
     const isDisconnecting = currentPendingAction === 'disconnect';
 
-    if (isDisconnecting) {
+    if (isVersionMismatch) {
+      button.textContent = 'Update Required';
+      button.disabled = true;
+      button.classList.delete('is-loading');
+      button.classList.delete('is-disconnect');
+    } else if (isDisconnecting) {
       button.textContent = 'Disconnecting...';
+      button.disabled = currentPendingAction !== null;
+      button.classList.add('is-loading');
+      button.classList.delete('is-disconnect');
     } else if (isConnected) {
       button.textContent = 'Disconnect';
+      button.disabled = currentPendingAction !== null;
+      button.classList.delete('is-loading');
+      button.classList.add('is-disconnect');
     } else if (isConnecting) {
       button.textContent = 'Connecting...';
+      button.disabled = currentPendingAction !== null;
+      button.classList.add('is-loading');
+      button.classList.delete('is-disconnect');
     } else {
       button.textContent = 'Connect';
-    }
-    button.disabled = currentPendingAction !== null;
-    if (isConnecting || isDisconnecting) {
-      button.classList.add('is-loading');
-    } else {
+      button.disabled = currentPendingAction !== null;
       button.classList.delete('is-loading');
+      button.classList.delete('is-disconnect');
     }
   };
 
@@ -180,4 +192,25 @@ test('pending action state survives sync calls and storage updates', () => {
   setBusy(null);
   assert.equal(getPendingAction(), null);
   assert.equal(button.disabled, false);
+});
+
+test('button shows Update Required and is disabled when version_mismatch state is active', () => {
+  const { button, sync } = createButtonStateMock();
+  sync('version_mismatch');
+  assert.equal(button.textContent, 'Update Required');
+  assert.equal(button.disabled, true);
+  assert.ok(!button.classList.has('is-loading'));
+  assert.ok(!button.classList.has('is-disconnect'));
+});
+
+test('version_mismatch button state survives storage update syncs', () => {
+  const { button, sync } = createButtonStateMock();
+  sync('version_mismatch');
+  assert.equal(button.textContent, 'Update Required');
+  assert.equal(button.disabled, true);
+
+  // Simulate multiple storage updates: version_mismatch state should persist
+  sync('version_mismatch');
+  assert.equal(button.textContent, 'Update Required');
+  assert.equal(button.disabled, true);
 });

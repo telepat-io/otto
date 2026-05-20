@@ -37,6 +37,7 @@ export type OnboardingViewModel = {
   nodeId: string;
   relayUrl: string;
   pairingCode?: string;
+  chipText: string;
   badgeText: string;
   badgeColor: string;
 };
@@ -60,6 +61,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
       detail: 'Set the node relay URL to begin pairing and relay connectivity.',
       nodeId,
       relayUrl: DEFAULT_NODE_RELAY_URL,
+      chipText: 'SET',
       badgeText: 'SET',
       badgeColor: '#4b5563',
     };
@@ -73,6 +75,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
       nodeId,
       relayUrl,
       pairingCode: snapshot.pairingCode,
+      chipText: 'ERR',
       badgeText: 'ERR',
       badgeColor: '#b42318',
     };
@@ -92,6 +95,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
           detail,
           nodeId,
           relayUrl,
+          chipText: 'UPDT',
           badgeText: 'UPDT',
           badgeColor: '#b45309',
         };
@@ -103,7 +107,8 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
         detail: 'Node is authenticated and connected to relay.',
         nodeId,
         relayUrl,
-        badgeText: 'OK',
+        chipText: 'OK',
+        badgeText: '',
         badgeColor: '#0f766e',
       };
     }
@@ -115,6 +120,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
         detail: 'Node token is available. Waiting for active relay socket. Auto-refreshing every 4s.',
         nodeId,
         relayUrl,
+        chipText: 'AUTH',
         badgeText: 'AUTH',
         badgeColor: '#1d4ed8',
       };
@@ -126,6 +132,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
       detail: 'Node token is available. Click Connect to open relay socket.',
       nodeId,
       relayUrl,
+      chipText: 'SET',
       badgeText: 'SET',
       badgeColor: '#4b5563',
     };
@@ -139,6 +146,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
       nodeId,
       relayUrl,
       pairingCode: snapshot.pairingCode,
+      chipText: 'PAIR',
       badgeText: 'PAIR',
       badgeColor: '#b45309',
     };
@@ -150,6 +158,7 @@ export function deriveOnboardingState(snapshot: OnboardingStorageSnapshot): Onbo
     detail: 'Background runtime is requesting a fresh pairing code from relay. Auto-refreshing every 4s.',
     nodeId,
     relayUrl,
+    chipText: 'PAIR',
     badgeText: 'PAIR',
     badgeColor: '#92400e',
   };

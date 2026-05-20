@@ -30,6 +30,7 @@ type DomRefs = {
   statusChip: HTMLSpanElement;
   stateTitle: HTMLDivElement;
   stateDetail: HTMLDivElement;
+  pairingSection: HTMLDivElement;
   pairingCode: HTMLDivElement;
   pairingCommandToast: HTMLDivElement;
   pairingCommand: HTMLPreElement;
@@ -80,6 +81,7 @@ function getDomRefs(): DomRefs {
     statusChip: byId<HTMLSpanElement>('stateChip'),
     stateTitle: byId<HTMLDivElement>('stateTitle'),
     stateDetail: byId<HTMLDivElement>('stateDetail'),
+    pairingSection: maybeById<HTMLDivElement>('pairingSection') ?? document.createElement('div'),
     pairingCode: byId<HTMLDivElement>('pairingCode'),
     pairingCommandToast: maybeById<HTMLDivElement>('pairingCommandToast') ?? document.createElement('div'),
     pairingCommand: byId<HTMLPreElement>('pairingCommand'),
@@ -293,6 +295,25 @@ async function loadSnapshot(): Promise<OnboardingStorageSnapshot> {
   return snapshot as OnboardingStorageSnapshot;
 }
 
+function chipForState(state: OnboardingState): string {
+  switch (state) {
+    case 'needs_relay_url':
+    case 'authenticated_disconnected':
+      return 'idle';
+    case 'requesting_pairing_code':
+    case 'waiting_for_pair_approval':
+      return 'pairing';
+    case 'authenticated_connecting':
+      return 'connecting';
+    case 'authenticated_connected':
+      return 'connected';
+    case 'version_mismatch':
+      return 'mismatch';
+    case 'error':
+      return 'error';
+  }
+}
+
 function render(
   snapshot: OnboardingStorageSnapshot,
   refs: DomRefs,
@@ -308,32 +329,58 @@ function render(
   refs.localDevLogRow.style.display = isLocal ? 'flex' : 'none';
   refs.localDevLogToggle.disabled = !isLocal;
   refs.localDevLogToggle.checked = isLocal && snapshot.localDevLogStreamingEnabled === true;
-  refs.statusChip.textContent = view.badgeText;
-  refs.statusChip.style.backgroundColor = view.badgeColor;
+  refs.statusChip.textContent = view.chipText;
+  refs.statusChip.dataset.chip = chipForState(view.state);
   refs.stateTitle.textContent = view.stateLabel;
-  refs.stateTitle.style.color = view.state === 'version_mismatch' ? '#92400e' : '#111827';
   refs.stateDetail.textContent = view.detail;
-  refs.stateDetail.style.color = view.state === 'version_mismatch' ? '#92400e' : '#334155';
   refs.nodeId.textContent = `Node ID: ${view.nodeId}`;
-  refs.pairingCode.style.display = showPairingStatus ? 'block' : 'none';
-  refs.pairingCode.textContent = view.pairingCode
-    ? `Pairing code: ${view.pairingCode}`
-    : 'Pairing code: waiting for challenge';
+  refs.pairingSection.hidden = !showPairingStatus;
+  refs.pairingCode.textContent = '';
+  if (view.pairingCode) {
+    const codeDisplay = document.createElement('div');
+    codeDisplay.className = 'pairing-code-display';
+    codeDisplay.textContent = view.pairingCode;
+    refs.pairingCode.appendChild(codeDisplay);
+  } else {
+    const waiting = document.createElement('div');
+    waiting.className = 'pairing-waiting';
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner';
+    waiting.appendChild(spinner);
+    waiting.appendChild(document.createTextNode('Requesting pairing code...'));
+    refs.pairingCode.appendChild(waiting);
+  }
 
+  const isVersionMismatch = view.state === 'version_mismatch';
   const isConnected = view.state === 'authenticated_connected';
   const isConnecting = !isConnected && (pendingAction === 'connect' || shouldPoll(view.state));
   const isDisconnecting = pendingAction === 'disconnect';
-  if (isDisconnecting) {
+
+  if (isVersionMismatch) {
+    refs.connectButton.textContent = 'Update Required';
+    refs.connectButton.disabled = true;
+    refs.connectButton.classList.remove('is-loading', 'is-disconnect');
+  } else if (isDisconnecting) {
     refs.connectButton.textContent = 'Disconnecting...';
+    refs.connectButton.disabled = pendingAction !== null;
+    refs.connectButton.classList.toggle('is-loading', true);
+    refs.connectButton.classList.toggle('is-disconnect', false);
   } else if (isConnected) {
     refs.connectButton.textContent = 'Disconnect';
+    refs.connectButton.disabled = pendingAction !== null;
+    refs.connectButton.classList.toggle('is-loading', false);
+    refs.connectButton.classList.toggle('is-disconnect', !isDisconnecting);
   } else if (isConnecting) {
     refs.connectButton.textContent = 'Connecting...';
+    refs.connectButton.disabled = pendingAction !== null;
+    refs.connectButton.classList.toggle('is-loading', true);
+    refs.connectButton.classList.toggle('is-disconnect', false);
   } else {
     refs.connectButton.textContent = 'Connect';
+    refs.connectButton.disabled = pendingAction !== null;
+    refs.connectButton.classList.toggle('is-loading', false);
+    refs.connectButton.classList.toggle('is-disconnect', false);
   }
-  refs.connectButton.disabled = pendingAction !== null;
-  refs.connectButton.classList.toggle('is-loading', isConnecting || isDisconnecting);
 
   if (view.pairingCode) {
     refs.pairingCommand.style.display = 'block';
@@ -426,23 +473,23 @@ async function sync(refs: DomRefs, currentPendingAction: 'connect' | 'disconnect
   const state = render(snapshot, refs, currentPendingAction);
 
   const aclVisible = Boolean(snapshot.nodeAccessToken);
-  refs.aclCard.style.display = aclVisible ? 'block' : 'none';
+  refs.aclCard.hidden = !aclVisible;
   if (aclVisible) {
     try {
       refs.aclStatus.textContent = 'Loading controller access list...';
       const acl = await listControllerAcl(snapshot);
-      refs.aclStatus.style.color = '#334155';
+      refs.aclStatus.style.color = '';
       refs.aclStatus.textContent = `Node ${acl.nodeId}: ${acl.clients.filter((client) => client.granted).length} granted / ${acl.clients.length} total`;
       renderAclRows(acl.clients, refs);
     } catch (error) {
       refs.aclStatus.textContent = error instanceof Error ? error.message : 'Failed to load controller access list.';
-      refs.aclStatus.style.color = '#b42318';
+      refs.aclStatus.style.color = '#FF5C8D';
       refs.aclList.innerHTML = '';
     }
   }
 
   if (state !== 'error') {
-    refs.relaySaveStatus.style.color = '#334155';
+    refs.relaySaveStatus.style.color = '';
   }
 }
 
@@ -546,7 +593,7 @@ export function mountOnboardingUi(surface: Surface): void {
       if (!isLocalRelayUrl(relayUrl)) {
         refs.localDevLogToggle.checked = false;
         await chrome.storage.local.set({ localDevLogStreamingEnabled: false });
-        showMessage('Local-dev relay logging is available only for localhost/127.0.0.1 relay URLs', '#b42318');
+        showMessage('Local-dev relay logging is available only for localhost/127.0.0.1 relay URLs', '#FF5C8D');
         return;
       }
 
@@ -565,7 +612,7 @@ export function mountOnboardingUi(surface: Surface): void {
         refs.localDevLogToggle.checked
           ? 'Local-dev relay log streaming enabled'
           : 'Local-dev relay log streaming disabled',
-        '#334155',
+        '',
       );
     })();
   });
@@ -574,17 +621,26 @@ export function mountOnboardingUi(surface: Surface): void {
     void (async () => {
       const current = await loadSnapshot();
       const currentState = deriveOnboardingState(current).state;
+      if (currentState === 'version_mismatch') {
+        showMessage(
+          current.relayVersion && current.extensionVersion
+            ? `Version mismatch: extension v${current.extensionVersion} and relay v${current.relayVersion}. Please update to continue.`
+            : 'Version mismatch detected. Please update to continue.',
+          '#b45309',
+        );
+        return;
+      }
       if (currentState === 'authenticated_connected') {
         setBusy('disconnect');
         try {
-          showMessage('Disconnecting from relay...', '#334155');
+          showMessage('Disconnecting from relay...', '');
           await disconnectRuntime(surface);
           await sync(refs, 'disconnect');
           await updatePollingForCurrentState();
-          showMessage('Disconnected from relay', '#0f5132');
+          showMessage('Disconnected from relay', '#06AC38');
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to disconnect relay.';
-          showMessage(message, '#b42318');
+          showMessage(message, '#FF5C8D');
         } finally {
           setBusy(null);
           await sync(refs, null);
@@ -596,14 +652,14 @@ export function mountOnboardingUi(surface: Surface): void {
       try {
         const rawInput = refs.relayInput.value.trim();
         await saveRelayUrl(rawInput, surface);
-        showMessage('Connecting to relay...', '#334155');
+        showMessage('Connecting to relay...', '');
         await refreshRuntime(surface);
         await sync(refs, 'connect');
         await updatePollingForCurrentState();
-        showMessage('Connection requested', '#0f5132');
+        showMessage('Connection requested', '#06AC38');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to connect relay.';
-        showMessage(message, '#b42318');
+        showMessage(message, '#FF5C8D');
       } finally {
         setBusy(null);
         await sync(refs, null);
@@ -635,7 +691,7 @@ export function mountOnboardingUi(surface: Surface): void {
         await sync(refs, pendingAction);
       } catch (error) {
         refs.aclStatus.textContent = error instanceof Error ? error.message : 'Failed to update controller access.';
-        refs.aclStatus.style.color = '#b42318';
+        refs.aclStatus.style.color = '#FF5C8D';
       } finally {
         target.disabled = false;
       }
@@ -675,6 +731,6 @@ export function mountOnboardingUi(surface: Surface): void {
   void (async () => {
     await sync(refs, null);
     await updatePollingForCurrentState();
-    showMessage('Click Connect to apply the relay URL.', '#334155');
+    showMessage('', '');
   })();
 }

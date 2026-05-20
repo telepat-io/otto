@@ -57,7 +57,8 @@ test('deriveOnboardingState returns authenticated_connected when auth socket sta
   });
 
   assert.equal(view.state, 'authenticated_connected');
-  assert.equal(view.badgeText, 'OK');
+  assert.equal(view.badgeText, '');
+  assert.equal(view.chipText, 'OK');
 });
 
 test('deriveOnboardingState returns version_mismatch when relay and extension versions differ', () => {
@@ -128,7 +129,8 @@ test('deriveOnboardingState returns connected when only one version is defined',
   });
 
   assert.equal(view.state, 'authenticated_connected');
-  assert.equal(view.badgeText, 'OK');
+  assert.equal(view.badgeText, '');
+  assert.equal(view.chipText, 'OK');
 });
 
 test('deriveOnboardingState returns requesting_pairing_code when no token or pairing code', () => {
