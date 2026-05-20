@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.0](https://github.com/telepat-io/otto/compare/v0.17.0...v0.18.0) (2026-05-20)
+
+
+### Features
+
+* new extension popup design ([3d98592](https://github.com/telepat-io/otto/commit/3d985925d546a14aa63766c3914b01262e139e90))
+* update extension icons with new designs ([7889bbb](https://github.com/telepat-io/otto/commit/7889bbb32240f747ec83c596841d4a424b969ac4))
+
 ## [0.17.0](https://github.com/telepat-io/otto/compare/v0.16.0...v0.17.0) (2026-05-18)
 
 
