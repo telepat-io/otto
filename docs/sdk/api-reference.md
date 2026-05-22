@@ -158,7 +158,7 @@ const result = await client.commands.run({
 |---|---|---|---|
 | `nodeId` | `string` | ✓ | Target node ID. |
 | `site` | `string` | ✓ | Site domain (e.g., `'reddit.com'`, `'linkedin.com'`). |
-| `command` | `string` | ✓ | Command identifier (e.g., `'getFeed'`, `'getChatMessages'`). |
+| `command` | `string` | ✓ | Command identifier (e.g., `'getPosts'`, `'getChatMessages'`). |
 | `input` | `Record<string, unknown>` | | Input payload for the command. |
 | `timeoutMs` | `number` | | Maximum wait time in milliseconds. Default: `30000`. |
 

@@ -94,7 +94,7 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 | Site | Commands |
 |---|---|
 | `reddit.com` | `getPosts`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
-| `linkedin.com` | `getFeed`, `commentOnPost` |
+| `linkedin.com` | `getPosts`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
 
@@ -118,7 +118,7 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 
 | Command | Key behavior |
 |---|---|
-| `getFeed` | Extracts LinkedIn feed posts with semantic filtering, canonical post URL capture via control-menu copy link, bounded scroll hydration, and timeout-policy scaling by `minReturnedPosts` |
+| `getPosts` | Extracts LinkedIn posts from the home feed or search results with semantic filtering, canonical post URL capture via control-menu copy link, bounded scroll hydration, and timeout-policy scaling by `minReturnedPosts`. Supports `source`, `keyword`, `sort`, and `t` inputs. |
 | `commentOnPost` | Navigates to a LinkedIn post URL, fills the in-page comment editor, submits comment, and confirms send by matching the newest rendered comment text |
 
 #### linkedin.com commentOnPost inputs
@@ -142,23 +142,27 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 otto test linkedin.com commentOnPost --payload '{"postUrl":"https://www.linkedin.com/posts/example_post-id","commentBody":"Looks great"}'
 ```
 
-#### linkedin.com getFeed inputs
+#### linkedin.com getPosts inputs
 
 | Field | Type | Default | Notes |
-|---|---|---|---|
+|---|---|---|---|---|
+| `source` | string | `home` | Feed source: `home` (default) or `search` |
+| `keyword` | string | — | Search keywords. Required when `source` is `search` |
+| `sort` | string | `top` | Sort order for search: `top` (relevance) or `latest` (date posted) |
+| `t` | string | `day` | Time filter for search: `day`, `week`, or `month` |
 | `minReturnedPosts` | number | `5` | Minimum number of posts to attempt to return. Runtime clamps to `1..200`. |
 | `getClipboardPermission` | boolean | `false` | Permission assist mode. Keeps page alive briefly to let user grant clipboard-read and retries extraction. In this mode, command targets one post. |
 
-#### linkedin.com getFeed output semantics
+#### linkedin.com getPosts output semantics
 
 - Returns `{ posts: content.post[] }`.
-- `title` is intentionally empty for LinkedIn feed posts.
+- `title` is intentionally empty for LinkedIn posts.
 - `content` is required and non-empty; posts with missing/empty content are dropped.
 - `url` is the canonical post link copied from the post control menu, not a profile URL.
 - `id` is normalized as `linkedin:<post-slug-from-url>`.
 - `author` carries normalized identity fields and preserves source profile URL in `author.originalEntity.profileUrl`.
 
-#### linkedin.com getFeed timeout policy
+#### linkedin.com getPosts timeout policy
 
 The command descriptor advertises timeout hints via `timeoutPolicy`:
 
@@ -168,23 +172,26 @@ The command descriptor advertises timeout hints via `timeoutPolicy`:
 
 Controllers can use this metadata when user timeout is left at default.
 
-#### linkedin.com getFeed auth and permission errors
+#### linkedin.com getPosts auth and permission errors
 
 - `manual_login_required`: user must log into LinkedIn manually, then rerun.
 - `clipboard_permission_prompt_pending`: clipboard permission is still in prompt state; allow permission and rerun with `getClipboardPermission=true`.
 - `clipboard_permission_denied`: clipboard permission denied; enable clipboard access in site settings and rerun.
 
-#### linkedin.com getFeed examples
+#### linkedin.com getPosts examples
 
 ```bash
-# Default extraction
-otto test linkedin.com getFeed
+# Default home feed extraction
+otto test linkedin.com getPosts
 
-# Request at least 15 posts
-otto test linkedin.com getFeed --payload '{"minReturnedPosts":15}'
+# Request at least 15 posts from home feed
+otto test linkedin.com getPosts --payload '{"minReturnedPosts":15}'
+
+# Search for posts
+otto test linkedin.com getPosts --payload '{"source":"search","keyword":"aluminum purchasing","sort":"top","t":"week"}'
 
 # Permission assist flow for clipboard-read
-otto test linkedin.com getFeed --payload '{"getClipboardPermission":true}'
+otto test linkedin.com getPosts --payload '{"getClipboardPermission":true}'
 ```
 
 ## Command network interception API

@@ -84,10 +84,10 @@ This opens a managed tab, runs the `getPosts` command on `reddit.com`, streams r
 You can also run LinkedIn feed extraction:
 
 ```bash
-otto test linkedin.com getFeed --payload '{"minReturnedPosts":15}'
+otto test linkedin.com getPosts --payload '{"minReturnedPosts":15}'
 ```
 
-LinkedIn `getFeed` supports timeout scaling metadata tied to `minReturnedPosts`, so default timeout behavior can adapt to larger feed targets.
+LinkedIn `getPosts` supports timeout scaling metadata tied to `minReturnedPosts`, so default timeout behavior can adapt to larger feed targets.
 
 ## Verify success
 
@@ -100,7 +100,7 @@ A successful run prints command output JSON and exits with code `0`. If you see 
 For LinkedIn-specific clipboard URL extraction prompts, if you see a clipboard permission error rerun with:
 
 ```bash
-otto test linkedin.com getFeed --payload '{"getClipboardPermission":true}'
+otto test linkedin.com getPosts --payload '{"getClipboardPermission":true}'
 ```
 
 ## Next steps

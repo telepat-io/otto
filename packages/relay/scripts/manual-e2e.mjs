@@ -10,7 +10,7 @@ const extractSelector = process.env.OTTO_E2E_EXTRACT_SELECTOR ?? 'title';
 const commandTimeoutMs = Number(process.env.OTTO_E2E_COMMAND_TIMEOUT_MS ?? '10000');
 const runCommand = process.env.OTTO_E2E_RUN_COMMAND === '1';
 const commandSite = process.env.OTTO_E2E_COMMAND_SITE ?? 'reddit.com';
-const commandId = process.env.OTTO_E2E_COMMAND_ID ?? 'getFeed';
+const commandId = process.env.OTTO_E2E_COMMAND_ID ?? 'getPosts';
 
 function logStep(message) {
   console.log(`\n[manual-e2e] ${message}`);

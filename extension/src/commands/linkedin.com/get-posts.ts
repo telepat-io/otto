@@ -1,7 +1,8 @@
 import type { Post } from '@telepat/otto-protocol';
 import type { SiteCommand } from '../types.js';
 
-const LINKEDIN_FEED_URL = 'https://www.linkedin.com/feed/';
+const LINKEDIN_HOME_URL = 'https://www.linkedin.com/feed/';
+const LINKEDIN_SEARCH_URL = 'https://www.linkedin.com/search/results/content/';
 const DEFAULT_MIN_RETURNED_POSTS = 5;
 const MAX_MIN_RETURNED_POSTS = 200;
 const MAX_SCROLL_PASSES = 24;
@@ -12,16 +13,40 @@ const POST_SCROLL_LOAD_TIMEOUT_MS = 4_000;
 const POST_SCROLL_LOAD_POLL_MS = 200;
 const CLIPBOARD_PERMISSION_WAIT_WINDOW_MS = 30_000;
 
-export const getFeedCommand: SiteCommand = {
+const VALID_SOURCES = ['home', 'search'];
+const VALID_SORTS = ['top', 'latest'];
+const VALID_T = ['day', 'week', 'month'];
+
+const SORT_MAP: Record<string, string> = {
+  top: 'relevance',
+  latest: 'date_posted',
+};
+
+const T_MAP: Record<string, string> = {
+  day: 'past-24h',
+  week: 'past-week',
+  month: 'past-month',
+};
+
+function buildSearchUrl(keyword: string, sort: string, t: string): string {
+  const url = new URL(LINKEDIN_SEARCH_URL);
+  url.searchParams.set('keywords', keyword);
+  url.searchParams.set('origin', 'FACETED_SEARCH');
+  url.searchParams.set('sortBy', JSON.stringify([SORT_MAP[sort]]));
+  url.searchParams.set('datePosted', JSON.stringify([T_MAP[t]]));
+  return url.toString();
+}
+
+export const getPostsCommand: SiteCommand = {
   metadata: {
     site: 'linkedin.com',
-    id: 'getFeed',
-    displayName: 'Get LinkedIn Feed',
-    description: 'Extracts post summaries from the LinkedIn feed page.',
-    tags: ['feed', 'linkedin'],
+    id: 'getPosts',
+    displayName: 'Get LinkedIn Posts',
+    description: 'Extracts LinkedIn posts from the home feed or search results with configurable sort and time filters.',
+    tags: ['feed', 'posts', 'linkedin'],
     requiresAuth: true,
     requiresDebuggerFocus: true,
-    preloadHost: LINKEDIN_FEED_URL,
+    preloadHost: LINKEDIN_HOME_URL,
     timeoutPolicy: {
       defaultMs: 60_000,
       scaling: {
@@ -34,9 +59,33 @@ export const getFeedCommand: SiteCommand = {
     },
     inputFields: [
       {
+        name: 'source',
+        type: 'string',
+        description: 'Feed source: home (default) or search.',
+        optional: true,
+      },
+      {
+        name: 'keyword',
+        type: 'string',
+        description: 'Search keywords. Required when source is search.',
+        optional: true,
+      },
+      {
+        name: 'sort',
+        type: 'string',
+        description: 'Sort order for search source: top (default) or latest.',
+        optional: true,
+      },
+      {
+        name: 't',
+        type: 'string',
+        description: 'Time filter for search source: day (default), week, or month.',
+        optional: true,
+      },
+      {
         name: 'minReturnedPosts',
         type: 'number',
-        description: 'Minimum number of feed posts to attempt to return by scrolling and loading additional feed items.',
+        description: 'Minimum number of posts to attempt to return by scrolling and loading additional items.',
         optional: true,
       },
       {
@@ -48,6 +97,27 @@ export const getFeedCommand: SiteCommand = {
     ],
   },
   async execute(ctx, input) {
+    const source = typeof input.source === 'string' ? input.source.trim() : 'home';
+    if (!VALID_SOURCES.includes(source)) {
+      throw new Error(`getPosts source must be one of: ${VALID_SOURCES.join(', ')}`);
+    }
+
+    const keywordRaw = typeof input.keyword === 'string' ? input.keyword.trim() : '';
+    const keyword = keywordRaw || null;
+    if (source === 'search' && !keyword) {
+      throw new Error('getPosts requires keyword when source is search');
+    }
+
+    const sort = typeof input.sort === 'string' ? input.sort.trim() : 'top';
+    if (source === 'search' && !VALID_SORTS.includes(sort)) {
+      throw new Error(`getPosts sort must be one of: ${VALID_SORTS.join(', ')}`);
+    }
+
+    const t = typeof input.t === 'string' ? input.t.trim() : 'day';
+    if (source === 'search' && !VALID_T.includes(t)) {
+      throw new Error(`getPosts t must be one of: ${VALID_T.join(', ')}`);
+    }
+
     const getClipboardPermission = input.getClipboardPermission === true;
     const minReturnedPostsRaw = input.minReturnedPosts;
     const minReturnedPosts = typeof minReturnedPostsRaw === 'number' && Number.isFinite(minReturnedPostsRaw)
@@ -56,6 +126,11 @@ export const getFeedCommand: SiteCommand = {
     const boundedMinReturnedPosts = getClipboardPermission
       ? 1
       : Math.max(1, Math.min(MAX_MIN_RETURNED_POSTS, Math.floor(minReturnedPosts)));
+
+    if (source === 'search') {
+      const searchUrl = buildSearchUrl(keyword!, sort, t);
+      await ctx.navigateTab(searchUrl);
+    }
 
     const result = await ctx.executeScript(
       /* c8 ignore start */
@@ -69,6 +144,7 @@ export const getFeedCommand: SiteCommand = {
         postScrollLoadPollMs: number,
         allowClipboardPermissionWindow: boolean,
         clipboardPermissionWaitWindowMs: number,
+        source: string,
       ) => {
         const FEED_LOAD_TIMEOUT_MS = 8_000;
         const FEED_LOAD_POLL_MS = 250;
@@ -258,7 +334,7 @@ export const getFeedCommand: SiteCommand = {
           return [];
         }
 
-        const getFeedContainers = (): Array<{ container: Element; sourceIndex: number }> => Array
+        const getPostContainers = (): Array<{ container: Element; sourceIndex: number }> => Array
           .from(feedSection.querySelectorAll('[role="listitem"]'))
           .flatMap((container, sourceIndex) => {
             const headingTexts = Array.from(container.querySelectorAll('h2 span'))
@@ -560,7 +636,7 @@ export const getFeedCommand: SiteCommand = {
               content: contentHtml,
               meta: {
                 site: 'linkedin.com',
-                source: 'linkedin.com/feed',
+                source: source === 'search' ? 'linkedin.com/search' : 'linkedin.com/home',
                 authorProfileUrl: profileUrl,
                 postedAgo,
               },
@@ -629,12 +705,12 @@ export const getFeedCommand: SiteCommand = {
           return clipboardPermissionError;
         }
 
-        const waitForAdditionalFeedContainers = async (baselineCount: number): Promise<number> => {
+        const waitForAdditionalPostContainers = async (baselineCount: number): Promise<number> => {
           const deadline = Date.now() + postScrollLoadTimeoutMs;
           let latestCount = baselineCount;
 
           while (Date.now() < deadline) {
-            latestCount = getFeedContainers().length;
+            latestCount = getPostContainers().length;
             if (latestCount > baselineCount) {
               return latestCount;
             }
@@ -651,7 +727,7 @@ export const getFeedCommand: SiteCommand = {
           }
 
           let previousDocumentHeight = document.documentElement.scrollHeight;
-          const initialContainers = getFeedContainers();
+          const initialContainers = getPostContainers();
           let previousContainerCount = initialContainers.length;
           let stagnantPasses = 0;
           const seenContainerSignatures = new Set<string>();
@@ -662,7 +738,7 @@ export const getFeedCommand: SiteCommand = {
           }
 
           for (let pass = 0; pass <= maxScrollPasses; pass += 1) {
-            const currentContainers = getFeedContainers();
+            const currentContainers = getPostContainers();
             const newCurrentSignatures = updateSeenValidPostSignatures(seenContainerSignatures, currentContainers);
             if (seenContainerSignatures.size >= targetMinReturnedPosts) {
               return;
@@ -675,12 +751,12 @@ export const getFeedCommand: SiteCommand = {
             window.scrollTo({ top: document.documentElement.scrollHeight, left: 0, behavior: 'auto' });
             await sleep(scrollWaitMs);
 
-            await waitForAdditionalFeedContainers(currentContainers.length);
+            await waitForAdditionalPostContainers(currentContainers.length);
             if (seenContainerSignatures.size >= targetMinReturnedPosts) {
               return;
             }
 
-            const postScrollContainers = getFeedContainers();
+            const postScrollContainers = getPostContainers();
             const postScrollCount = postScrollContainers.length;
             const newPostScrollSignatures = updateSeenValidPostSignatures(seenContainerSignatures, postScrollContainers);
             if (seenContainerSignatures.size >= targetMinReturnedPosts) {
@@ -709,12 +785,12 @@ export const getFeedCommand: SiteCommand = {
 
         await scrollUntilTargetCount();
 
-        const feedContainers = getFeedContainers();
+        const postContainers = getPostContainers();
 
         const posts: unknown[] = [];
         const emittedSignatures = new Set<string>();
 
-        for (const entry of feedContainers) {
+        for (const entry of postContainers) {
           const candidate = extractPostCandidate(entry.container, entry.sourceIndex);
           if (!candidate) {
             continue;
@@ -764,6 +840,7 @@ export const getFeedCommand: SiteCommand = {
         POST_SCROLL_LOAD_POLL_MS,
         getClipboardPermission,
         CLIPBOARD_PERMISSION_WAIT_WINDOW_MS,
+        source,
       ],
     );
 

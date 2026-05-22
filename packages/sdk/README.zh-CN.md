@@ -171,7 +171,7 @@ const result = await client.commands.run({
 |---|---|---|---|
 | `nodeId` | `string` | ✓ | 目标节点 ID |
 | `site` | `string` | ✓ | 目标站点域名（例如 `'reddit.com'`） |
-| `command` | `string` | ✓ | 命令标识符（例如 `'getFeed'`） |
+| `command` | `string` | ✓ | 命令标识符（例如 `'getPosts'`） |
 | `input` | `Record<string, unknown>` | | 命令输入参数 |
 | `timeoutMs` | `number` | | 最大等待时间（毫秒），默认 `30000` |
 

@@ -1726,7 +1726,7 @@ test('command.run scope is allowed while command.test and other command actions 
       replayNonce: 'command_scope_nonce_1',
       payload: {
         site: 'reddit.com',
-        command: 'getFeed',
+        command: 'getPosts',
       },
     },
   }));
@@ -1765,7 +1765,7 @@ test('command.run scope is allowed while command.test and other command actions 
       replayNonce: 'command_scope_nonce_3',
       payload: {
         site: 'reddit.com',
-        command: 'getFeed',
+        command: 'getPosts',
       },
     },
   }));
@@ -3922,7 +3922,7 @@ test('command.run commands keep per-tab queue invariants', async (t) => {
       waitPolicy: 'fail_fast',
       payload: {
         site: 'reddit.com',
-        command: 'getFeed',
+        command: 'getPosts',
       },
     },
   }));
@@ -3947,7 +3947,7 @@ test('command.run commands keep per-tab queue invariants', async (t) => {
       waitPolicy: 'wait_with_timeout',
       payload: {
         site: 'reddit.com',
-        command: 'getFeed',
+        command: 'getPosts',
       },
     },
   }));

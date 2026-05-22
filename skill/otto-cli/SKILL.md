@@ -263,23 +263,28 @@ Chat operations for Reddit direct messages and chat rooms.
 
 ### LinkedIn (`linkedin.com`)
 
-#### `getFeed`
+#### `getPosts`
 
-Extracts LinkedIn feed posts with semantic filtering and bounded scroll.
+Extracts LinkedIn posts from the home feed or search results with semantic filtering, configurable sort and time filters, and bounded scroll.
 
 **Inputs:**
 | Parameter | Type | Default | Notes |
-|---|---|---|---|
+|---|---|---|---|---|
+| `source` | string | `home` | Feed source: `home` or `search` |
+| `keyword` | string | — | Search keywords. Required when `source` is `search` |
+| `sort` | string | `top` | Sort order for search: `top` (relevance) or `latest` (date posted) |
+| `t` | string | `day` | Time filter for search: `day`, `week`, or `month` |
 | `minReturnedPosts` | number | `5` | Minimum posts to return (1–200) |
 | `getClipboardPermission` | boolean | `false` | Permission assist mode |
 
 **Returns:**
-- `content.post[]` — Array of post entities with title, author, engagement (likes, comments, shares)
+- `content.post[]` — Array of post entities with title, author, engagement
 
 **Example:**
 ```bash
-otto test linkedin.com getFeed --json
-otto test linkedin.com getFeed --payload '{"minReturnedPosts":15}' --json
+otto test linkedin.com getPosts --json
+otto test linkedin.com getPosts --payload '{"minReturnedPosts":15}' --json
+otto test linkedin.com getPosts --payload '{"source":"search","keyword":"aluminum purchasing","sort":"top","t":"week"}' --json
 ```
 
 #### `commentOnPost`
@@ -431,7 +436,7 @@ Do not use this skill when:
 | --- | --- | --- |
 | Relay URL | No | Defaults to `ws://127.0.0.1:8787?role=controller`. Override for remote deployments. |
 | Site | Yes (for commands) | The website to automate (e.g. "reddit.com"). |
-| Command | Yes (for commands) | The site-specific command to run (e.g. "getFeed"). |
+| Command | Yes (for commands) | The site-specific command to run (e.g. "getPosts"). |
 | Node ID | No | Auto-resolved if only one node is connected. |
 | Tab session | No | For scoped tab execution. Obtained from `primitive.tab.open`. |
 | Auth mode | No | `auto` (default), `strict_fail`, or `skip`. |

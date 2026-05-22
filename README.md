@@ -72,7 +72,7 @@ Use `otto commands list --site <site>` to inspect the live command surface for y
 | Site | Available commands |
 |---|---|
 | `reddit.com` | `getPosts`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
-| `linkedin.com` | `getFeed`, `commentOnPost` |
+| `linkedin.com` | `getPosts`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
 
@@ -84,6 +84,20 @@ Use `otto commands list --site <site>` to inspect the live command surface for y
 | DOM extraction | `extract_text`, `extract_markdown`, `extract_clean_html`, `extract_distilled_html`, `extract_html` |
 | Page | `screenshot` (viewport or full-page) |
 | High-level | `otto extract-content [url]` (recommended for markdown/HTML extraction) |
+
+### Supported Sources
+
+Both Reddit and LinkedIn `getPosts` commands support configurable sources:
+
+| Site | Source | Description |
+|---|---|---|
+| `reddit.com` | `home` (default) | Personalized home feed |
+| `reddit.com` | `subreddit` | Subreddit listing (requires `subreddit` param) |
+| `reddit.com` | `user` | User's submitted posts (requires `username` param) |
+| `linkedin.com` | `home` (default) | Personalized home feed |
+| `linkedin.com` | `search` | Keyword search results (requires `keyword` param, supports `sort` and `t`) |
+
+Reddit `getPosts` supports `sort` (`best`, `hot`, `new`, `top`, `rising`) and `t` (`hour`, `day`, `week`, `month`, `year`, `all`) on home and subreddit sources. LinkedIn `getPosts` supports `sort` (`top`, `latest`) and `t` (`day`, `week`, `month`) on search source.
 
 For command payloads, behavior notes, and examples, see the [Commands Reference](https://docs.telepat.io/otto/commands).
 

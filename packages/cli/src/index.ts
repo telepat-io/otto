@@ -1832,7 +1832,7 @@ program
   .command('test')
   .description('Run a website command for local developer testing')
   .argument('<site>', 'Website domain, for example reddit.com')
-  .argument('<command>', 'Command id, for example getFeed')
+  .argument('<command>', 'Command id, for example getPosts')
   .option('--node-id <id>', 'Override target node id')
   .option('--tab-session <id>', 'Use an existing tabSessionId instead of auto-opening a tab')
   .option('--payload <json>', 'Command input JSON object', '{}')

@@ -154,7 +154,7 @@ test('runCmdCommand scales command.run timeout from descriptor policy when defau
               commands: [
                 {
                   site: 'linkedin.com',
-                  id: 'getFeed',
+                  id: 'getPosts',
                   timeoutPolicy: {
                     defaultMs: 60_000,
                     scaling: {
@@ -176,7 +176,7 @@ test('runCmdCommand scales command.run timeout from descriptor policy when defau
     },
     parseJsonObject: () => ({
       site: 'linkedin.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: { minReturnedPosts: 15 },
     }),
     showAclMissingGrantHint: () => {},
@@ -219,7 +219,7 @@ test('runCmdCommand keeps explicit non-default timeout for command.run', async (
     },
     parseJsonObject: () => ({
       site: 'linkedin.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: { minReturnedPosts: 15 },
     }),
     showAclMissingGrantHint: () => {},

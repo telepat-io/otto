@@ -88,6 +88,31 @@ otto listener subscribe-network \
 
 ---
 
+## 跨平台内容提取
+
+使用统一的 `getPosts` 命令接口从多个平台提取帖子。Reddit 和 LinkedIn 均支持可配置的来源、排序和时间过滤：
+
+```bash
+# Reddit 主页信息流
+otto test reddit.com getPosts --payload '{"source":"home","sort":"hot"}'
+
+# Reddit 子版块带时间过滤
+otto test reddit.com getPosts --payload '{"source":"subreddit","subreddit":"programming","sort":"top","t":"week"}'
+
+# LinkedIn 主页信息流
+otto test linkedin.com getPosts --payload '{"source":"home"}'
+
+# LinkedIn 关键词搜索带排序和时间过滤
+otto test linkedin.com getPosts --payload '{"source":"search","keyword":"aluminum purchasing","sort":"top","t":"week"}'
+```
+
+| 平台 | 来源 | 排序选项 | 时间过滤 |
+|---|---|---|---|
+| Reddit | `home`、`subreddit`、`user` | `best`、`hot`、`new`、`top`、`rising` | `hour`、`day`、`week`、`month`、`year`、`all` |
+| LinkedIn | `home`、`search` | `top`、`latest` | `day`、`week`、`month` |
+
+---
+
 ## 站点范围的命令包
 
 为任何域名编写自定义、可复用的命令。命令在扩展运行时内部执行，并且是按站点划分的，因此 Reddit 的 `getChatMessages` 和 LinkedIn 的 `getChatMessages` 是独立、可预测且可测试的。

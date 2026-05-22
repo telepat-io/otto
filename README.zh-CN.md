@@ -72,7 +72,7 @@ otto commands list
 | 站点 | 可用命令 |
 |---|---|
 | `reddit.com` | `getPosts`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
-| `linkedin.com` | `getFeed`, `commentOnPost` |
+| `linkedin.com` | `getPosts`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
 
@@ -84,6 +84,20 @@ otto commands list
 | DOM 提取 | `extract_text`, `extract_markdown`, `extract_clean_html`, `extract_distilled_html`, `extract_html` |
 | 页面 | `screenshot`（视口或完整页面） |
 | 高级接口 | `otto extract-content [url]`（推荐用于 markdown/HTML 提取） |
+
+### 支持的来源
+
+Reddit 和 LinkedIn 的 `getPosts` 命令均支持可配置的来源：
+
+| 站点 | 来源 | 说明 |
+|---|---|---|
+| `reddit.com` | `home`（默认） | 个性化主页信息流 |
+| `reddit.com` | `subreddit` | 子版块列表（需要 `subreddit` 参数） |
+| `reddit.com` | `user` | 用户发布的帖子（需要 `username` 参数） |
+| `linkedin.com` | `home`（默认） | 个性化主页信息流 |
+| `linkedin.com` | `search` | 关键词搜索结果（需要 `keyword` 参数，支持 `sort` 和 `t`） |
+
+Reddit `getPosts` 在主页和子版块来源上支持 `sort`（`best`、`hot`、`new`、`top`、`rising`）和 `t`（`hour`、`day`、`week`、`month`、`year`、`all`）。LinkedIn `getPosts` 在搜索来源上支持 `sort`（`top`、`latest`）和 `t`（`day`、`week`、`month`）。
 
 关于命令入参、行为说明与示例，请参阅[命令参考](https://docs.telepat.io/otto/commands)。
 

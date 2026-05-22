@@ -100,6 +100,31 @@ Use `clean_html` for selector building and DOM debugging, and `markdown` for sum
 
 ---
 
+## Multi-Platform Content Extraction
+
+Extract posts from multiple platforms with a unified `getPosts` command interface. Both Reddit and LinkedIn support configurable sources, sort orders, and time filters:
+
+```bash
+# Reddit home feed
+otto test reddit.com getPosts --payload '{"source":"home","sort":"hot"}'
+
+# Reddit subreddit with time filter
+otto test reddit.com getPosts --payload '{"source":"subreddit","subreddit":"programming","sort":"top","t":"week"}'
+
+# LinkedIn home feed
+otto test linkedin.com getPosts --payload '{"source":"home"}'
+
+# LinkedIn keyword search with sort and time filter
+otto test linkedin.com getPosts --payload '{"source":"search","keyword":"aluminum purchasing","sort":"top","t":"week"}'
+```
+
+| Platform | Sources | Sort Options | Time Filters |
+|---|---|---|---|
+| Reddit | `home`, `subreddit`, `user` | `best`, `hot`, `new`, `top`, `rising` | `hour`, `day`, `week`, `month`, `year`, `all` |
+| LinkedIn | `home`, `search` | `top`, `latest` | `day`, `week`, `month` |
+
+---
+
 ## Site-Scoped Command Bundles
 
 Author custom, reusable commands for any domain. Commands run inside the extension runtime and are site-scoped, so `getChatMessages` for Reddit and `getChatMessages` for LinkedIn are separate, predictable, and testable.

@@ -54,7 +54,7 @@ otto pair <code>    # approves pairing after user enters code
 otto client register --name my-agent
 otto client login
 otto commands list
-otto test reddit.com getFeed
+otto test reddit.com getPosts
 ```
 
 ---
@@ -91,7 +91,7 @@ Action surface:
 | Listener | `listener.subscribe`, `listener.unsubscribe` |
 
 Bundled sites:
-- `reddit.com`: `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost`
+- `reddit.com`: `getPosts`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost`
 - `news.ycombinator.com`: `getFrontPage`
 
 Runtime execution order: resolve site bundle → validate tab URL → validate inputs → auth preflight → execute.

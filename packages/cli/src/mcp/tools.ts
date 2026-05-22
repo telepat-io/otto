@@ -20,7 +20,7 @@ export const ottoCmdToolInputSchema = {
 
 export const ottoTestToolInputSchema = {
   site: z.string().min(1).describe('Site identifier (e.g. "reddit.com").'),
-  command: z.string().min(1).describe('Command name on the site (e.g. "getFeed", "getChatMessages").'),
+  command: z.string().min(1).describe('Command name on the site (e.g. "getPosts", "getChatMessages").'),
   nodeId: z.string().optional().describe('Target node ID.'),
   payload: z.string().optional().describe('JSON payload string for the command input.'),
   timeout: z.coerce.number().int().positive().optional().describe('Command timeout in milliseconds.'),

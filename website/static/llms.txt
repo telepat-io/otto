@@ -29,7 +29,7 @@ otto pair <code>
 otto client register --name my-agent
 otto client login
 otto commands list
-otto test reddit.com getFeed
+otto test reddit.com getPosts
 ```
 
 ## Command execution
@@ -39,7 +39,7 @@ otto test reddit.com getFeed
 otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}'
 
 # Run a site command
-otto cmd --action command.run --tab-session <id> --payload '{"site":"reddit.com","command":"getFeed"}'
+otto cmd --action command.run --tab-session <id> --payload '{"site":"reddit.com","command":"getPosts"}'
 
 # Stream-capable command
 otto test reddit.com getChatMessages --stream-follow-ms 30000 --json

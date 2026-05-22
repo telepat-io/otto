@@ -94,7 +94,7 @@ Otto 的命令执行精心设计顺序以实现确定性失败：
 | 站点 | 命令 |
 |---|---|
 | `reddit.com` | `getPosts`、`getUserInfo`、`sendChatMessage`、`getChatMessages`、`commentOnPost` |
-| `linkedin.com` | `getFeed`、`commentOnPost` |
+| `linkedin.com` | `getPosts`、`commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
 
@@ -118,7 +118,7 @@ Otto 的命令执行精心设计顺序以实现确定性失败：
 
 | 命令 | 关键行为 |
 |---|---|
-| `getFeed` | 提取 LinkedIn Feed 帖子，带语义过滤、通过控制菜单复制链接获取规范帖子 URL、有界滚动补充和按 `minReturnedPosts` 缩放超时策略 |
+| `getPosts` | 提取 LinkedIn 帖子，支持主页信息流或搜索结果，带语义过滤、通过控制菜单复制链接获取规范帖子 URL、有界滚动补充和按 `minReturnedPosts` 缩放超时策略 |
 | `commentOnPost` | 导航到 LinkedIn 帖子 URL，填写页内评论编辑器，提交评论，并通过匹配最新渲染的评论文本确认发送 |
 
 #### linkedin.com commentOnPost 输入
@@ -142,23 +142,27 @@ Otto 的命令执行精心设计顺序以实现确定性失败：
 otto test linkedin.com commentOnPost --payload '{"postUrl":"https://www.linkedin.com/posts/example_post-id","commentBody":"Looks great"}'
 ```
 
-#### linkedin.com getFeed 输入
+#### linkedin.com getPosts 输入
 
 | 字段 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
+|---|---|---|---|---|
+| `source` | string | `home` | 来源：`home`（默认）或 `search` |
+| `keyword` | string | — | 搜索关键词。`source` 为 `search` 时必填 |
+| `sort` | string | `top` | 搜索排序：`top`（相关性）或 `latest`（发布日期） |
+| `t` | string | `day` | 搜索时间过滤：`day`、`week` 或 `month` |
 | `minReturnedPosts` | number | `5` | 尝试返回的最小帖子数。运行时限制在 `1..200`。 |
 | `getClipboardPermission` | boolean | `false` | 权限辅助模式。保持页面短暂存活使用户授予剪贴板读取权限并重试提取。在此模式下，命令只针对一篇帖子。 |
 
-#### linkedin.com getFeed 输出语义
+#### linkedin.com getPosts 输出语义
 
 - 返回 `{ posts: content.post[] }`。
-- `title` 对于 LinkedIn Feed 帖子故意留空。
+- `title` 对于 LinkedIn 帖子故意留空。
 - `content` 为必填且非空；缺失或内容为空的帖子将被丢弃。
 - `url` 是从帖子控制菜单复制的规范帖子链接，而非个人资料 URL。
 - `id` 规范化为 `linkedin:<post-slug-from-url>`。
 - `author` 携带规范化的身份字段，并在 `author.originalEntity.profileUrl` 中保留源个人资料 URL。
 
-#### linkedin.com getFeed 超时策略
+#### linkedin.com getPosts 超时策略
 
 命令描述符通过 `timeoutPolicy` 公告超时提示：
 
@@ -168,23 +172,26 @@ otto test linkedin.com commentOnPost --payload '{"postUrl":"https://www.linkedin
 
 控制器可在用户超时保持默认值时使用此元数据。
 
-#### linkedin.com getFeed 认证和权限错误
+#### linkedin.com getPosts 认证和权限错误
 
 - `manual_login_required`：用户必须手动登录 LinkedIn，然后重新运行。
 - `clipboard_permission_prompt_pending`：剪贴板权限仍处于提示状态；允许权限后以 `getClipboardPermission=true` 重试。
 - `clipboard_permission_denied`：剪贴板权限被拒绝；在站点设置中启用剪贴板访问后重试。
 
-#### linkedin.com getFeed 示例
+#### linkedin.com getPosts 示例
 
 ```bash
-# 默认提取
-otto test linkedin.com getFeed
+# 默认主页信息流提取
+otto test linkedin.com getPosts
 
 # 请求至少 15 篇帖子
-otto test linkedin.com getFeed --payload '{"minReturnedPosts":15}'
+otto test linkedin.com getPosts --payload '{"minReturnedPosts":15}'
+
+# 搜索帖子
+otto test linkedin.com getPosts --payload '{"source":"search","keyword":"aluminum purchasing","sort":"top","t":"week"}'
 
 # 剪贴板读取的权限辅助流程
-otto test linkedin.com getFeed --payload '{"getClipboardPermission":true}'
+otto test linkedin.com getPosts --payload '{"getClipboardPermission":true}'
 ```
 
 ## 命令网络拦截 API
