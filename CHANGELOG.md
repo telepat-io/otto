@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/telepat-io/otto/compare/v0.18.0...v0.19.0) (2026-05-22)
+
+
+### Features
+
+* rename Reddit command from getFeed to getPosts, add sources ([0422597](https://github.com/telepat-io/otto/commit/0422597c5c834f1884528cbfa92d65c6ba4c0cca))
+
 ## [0.18.0](https://github.com/telepat-io/otto/compare/v0.17.0...v0.18.0) (2026-05-20)
 
 
