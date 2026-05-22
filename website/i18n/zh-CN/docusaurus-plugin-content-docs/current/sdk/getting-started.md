@@ -87,7 +87,7 @@ console.log(nodes);
 const result = await client.commands.run({
   nodeId: nodes[0].nodeId,
   site: 'reddit.com',
-  command: 'getFeed',
+  command: 'getPosts',
   input: { subreddit: 'typescript', limit: 10 },
 });
 
@@ -124,7 +124,7 @@ async function main() {
     const result = await client.commands.run({
       nodeId: nodes[0].nodeId,
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: { subreddit: 'typescript', limit: 5 },
     });
     console.log(JSON.stringify(result.data, null, 2));

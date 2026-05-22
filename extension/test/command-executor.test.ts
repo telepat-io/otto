@@ -859,7 +859,7 @@ test('command.run rejects site mismatch for current tab URL', async () => {
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'auto',
     })),
@@ -890,7 +890,7 @@ test('command.run waits for committed tab URL before site validation', async () 
   const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: {},
     authMode: 'auto',
   }));
@@ -898,7 +898,7 @@ test('command.run waits for committed tab URL before site validation', async () 
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     posts: [{ kind: 'content.post', id: 'post-ready', title: 'Ready', author: 'eve' }],
   });
 });
@@ -918,7 +918,7 @@ test('command.run returns transient tab_url_not_ready when committed URL never a
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'auto',
     })),
@@ -949,7 +949,7 @@ test('command.run redirects to login when auth check fails in auto mode', async 
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'auto',
     })),
@@ -978,7 +978,7 @@ test('command.run executes when authenticated and returns posts', async () => {
   const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: {},
     authMode: 'auto',
   }));
@@ -986,7 +986,7 @@ test('command.run executes when authenticated and returns posts', async () => {
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     posts: [{ kind: 'content.post', id: 'post-hello', title: 'Hello', author: 'alice' }],
   });
 });
@@ -1006,7 +1006,7 @@ test('command.run enables debugger focus emulation for opted-in commands', async
   await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: {},
     authMode: 'auto',
   }));
@@ -1062,7 +1062,7 @@ test('command.run fails deterministically when debugger API is unavailable for o
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'auto',
     })),
@@ -1095,7 +1095,7 @@ test('command.run fails deterministically when debugger attach conflicts for opt
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'auto',
     })),
@@ -1109,7 +1109,7 @@ test('command.run fails deterministically when debugger attach conflicts for opt
   );
 });
 
-test('command.run getFeed accepts optional minReturnedPosts input', async () => {
+test('command.run getPosts accepts optional minReturnedPosts input', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -1124,7 +1124,7 @@ test('command.run getFeed accepts optional minReturnedPosts input', async () => 
   const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: { minReturnedPosts: 35 },
     authMode: 'auto',
   }));
@@ -1132,12 +1132,12 @@ test('command.run getFeed accepts optional minReturnedPosts input', async () => 
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     posts: [{ kind: 'content.post', id: 'post-min', title: 'Min', author: 'alice' }],
   });
 });
 
-test('legacy command.reddit_feed action is routed via command runtime', async () => {
+test('legacy command.reddit_posts action is routed via command runtime', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -1149,14 +1149,14 @@ test('legacy command.reddit_feed action is routed via command runtime', async ()
     scriptResults: [{ authenticated: true }, { posts: [{ kind: 'content.post', id: 'post-legacy', title: 'Legacy', author: 'bob' }] }],
   });
 
-  const result = await executeCommand(chromeApi, buildCommand('command.reddit_feed', {
+  const result = await executeCommand(chromeApi, buildCommand('command.reddit_posts', {
     tabSessionId: 'tab_alpha',
   }));
 
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     posts: [{ kind: 'content.post', id: 'post-legacy', title: 'Legacy', author: 'bob' }],
   });
 });
@@ -2205,7 +2205,7 @@ test('command.run getSearchResults returns empty results when page script return
   assert.equal(data.query, 'unparseable query');
 });
 
-test('command.run getFeed filters out invalid post objects', async () => {
+test('command.run get-posts filters out invalid post objects', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: { tab_alpha: 11 },
@@ -2224,7 +2224,7 @@ test('command.run getFeed filters out invalid post objects', async () => {
   const result = await executeCommand(chromeApi, buildCommand('command.run', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: {},
     authMode: 'auto',
   }));
@@ -2380,7 +2380,7 @@ test('command.run rejects unknown site', async () => {
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'unknown.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'skip',
     })),
@@ -2427,7 +2427,7 @@ test('command.run surfaces generic debugger focus errors', async () => {
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'auto',
     })),
@@ -2514,7 +2514,7 @@ test('command.run rejects unexpected input fields before execute', async () => {
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: { unexpected: true },
       authMode: 'auto',
     })),
@@ -2583,7 +2583,7 @@ test('command.run rejects invalid input field types before execute', async () =>
   );
 });
 
-test('command.run rejects non-number getFeed minReturnedPosts before execute', async () => {
+test('command.run rejects non-number get-posts minReturnedPosts before execute', async () => {
   const { chromeApi } = createChromeMock({
     sessionSeed: {
       tabSessions: {
@@ -2598,7 +2598,7 @@ test('command.run rejects non-number getFeed minReturnedPosts before execute', a
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: { minReturnedPosts: '20' },
       authMode: 'auto',
     })),
@@ -2804,7 +2804,7 @@ test('command.test falls back to execute when command test hook is absent', asyn
   const result = await executeCommand(chromeApi, buildCommand('command.test', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: {},
     authMode: 'auto',
   }));
@@ -2812,7 +2812,7 @@ test('command.test falls back to execute when command test hook is absent', asyn
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     posts: [{ kind: 'content.post', id: 'post-fallback', title: 'Fallback', author: 'zoe' }],
   });
 });
@@ -2835,7 +2835,7 @@ test('command.test falls back to execute and honors preloadHost compatibility', 
   const result = await executeCommand(chromeApi, buildCommand('command.test', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: {},
     authMode: 'strict_fail',
   }));
@@ -2844,7 +2844,7 @@ test('command.test falls back to execute and honors preloadHost compatibility', 
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     posts: [{ kind: 'content.post', id: 'post-fallback-2', title: 'from fallback execute', author: 'otto' }],
   });
 });
@@ -2968,7 +2968,7 @@ test('command.test waits for preload document readiness before execute fallback'
   const result = await executeCommand(chromeApi, buildCommand('command.test', {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: {},
     authMode: 'strict_fail',
   }));
@@ -2976,7 +2976,7 @@ test('command.test waits for preload document readiness before execute fallback'
   assert.deepEqual(result.data, {
     tabSessionId: 'tab_alpha',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     posts: [{ kind: 'content.post', id: 'post-ready-test', title: 'Ready in test', author: 'otto' }],
   });
 
@@ -3710,7 +3710,7 @@ test('command.run rejects empty site', async () => {
     () => executeCommand(chromeApi, buildCommand('command.run', {
       tabSessionId: 'tab_alpha',
       site: '',
-      command: 'getFeed',
+      command: 'getPosts',
       input: {},
       authMode: 'skip',
     })),

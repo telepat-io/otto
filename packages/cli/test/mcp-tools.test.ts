@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { z } from 'zod';
+import { MOCK_SITE, MOCK_COMMAND_ID } from './test-command-mock.js';
 import {
   ottoStatusToolInputSchema,
   ottoCommandsListToolInputSchema,
@@ -49,7 +50,7 @@ test('otto_commands_list schema accepts empty input', () => {
 });
 
 test('otto_commands_list schema accepts optional fields', () => {
-  assert.equal(validateSchema(ottoCommandsListToolInputSchema, { nodeId: 'node_1', site: 'reddit.com', timeout: 5000 }), true);
+  assert.equal(validateSchema(ottoCommandsListToolInputSchema, { nodeId: 'node_1', site: MOCK_SITE, timeout: 5000 }), true);
 });
 
 test('otto_cmd schema requires action', () => {
@@ -69,14 +70,14 @@ test('otto_cmd schema accepts all optional fields', () => {
 
 test('otto_test schema requires site and command', () => {
   assert.equal(validateSchema(ottoTestToolInputSchema, {}), false);
-  assert.equal(validateSchema(ottoTestToolInputSchema, { site: 'reddit.com' }), false);
-  assert.equal(validateSchema(ottoTestToolInputSchema, { site: 'reddit.com', command: 'getFeed' }), true);
+  assert.equal(validateSchema(ottoTestToolInputSchema, { site: MOCK_SITE }), false);
+  assert.equal(validateSchema(ottoTestToolInputSchema, { site: MOCK_SITE, command: MOCK_COMMAND_ID }), true);
 });
 
 test('otto_test schema accepts all optional fields', () => {
   assert.equal(validateSchema(ottoTestToolInputSchema, {
-    site: 'reddit.com',
-    command: 'getFeed',
+    site: MOCK_SITE,
+    command: MOCK_COMMAND_ID,
     nodeId: 'node_1',
     payload: '{"minReturnedPosts":10}',
     timeout: 30000,
@@ -92,8 +93,8 @@ test('otto_test schema accepts all optional fields', () => {
 
 test('otto_test schema rejects invalid authMode', () => {
   assert.equal(validateSchema(ottoTestToolInputSchema, {
-    site: 'reddit.com',
-    command: 'getFeed',
+    site: MOCK_SITE,
+    command: MOCK_COMMAND_ID,
     authMode: 'invalid',
   }), false);
 });
@@ -160,13 +161,13 @@ test('otto_logs_export schema accepts empty input', () => {
 test('otto_listener_subscribe_network schema requires tabSession and site', () => {
   assert.equal(validateSchema(ottoListenerSubscribeNetworkToolInputSchema, {}), false);
   assert.equal(validateSchema(ottoListenerSubscribeNetworkToolInputSchema, { tabSession: 'tab_1' }), false);
-  assert.equal(validateSchema(ottoListenerSubscribeNetworkToolInputSchema, { tabSession: 'tab_1', site: 'reddit.com' }), true);
+  assert.equal(validateSchema(ottoListenerSubscribeNetworkToolInputSchema, { tabSession: 'tab_1', site: MOCK_SITE }), true);
 });
 
 test('otto_listener_subscribe_network schema accepts all optional fields', () => {
   assert.equal(validateSchema(ottoListenerSubscribeNetworkToolInputSchema, {
     tabSession: 'tab_1',
-    site: 'reddit.com',
+    site: MOCK_SITE,
     pattern: 'https://*.reddit.com/*',
     requestHost: 'api.reddit.com',
     mode: 'network',
@@ -183,7 +184,7 @@ test('otto_listener_subscribe_network schema accepts all optional fields', () =>
 test('otto_listener_subscribe_network schema rejects invalid mode', () => {
   assert.equal(validateSchema(ottoListenerSubscribeNetworkToolInputSchema, {
     tabSession: 'tab_1',
-    site: 'reddit.com',
+    site: MOCK_SITE,
     mode: 'invalid',
   }), false);
 });

@@ -44,7 +44,7 @@ otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}
 
 # Run a site command (use tabSessionId from tab.open result)
 otto cmd --action command.run \
-  --payload '{"site":"reddit.com","command":"getFeed"}' \
+  --payload '{"site":"reddit.com","command":"getPosts"}' \
   --tab-session <tabSessionId>
 ```
 

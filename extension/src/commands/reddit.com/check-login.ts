@@ -31,6 +31,9 @@ export const checkLoginCommand: SiteCommand = {
     const authState = await ctx.executeScript(
       /* c8 ignore start */
       async () => {
+        const CHECK_LOGIN_MAX_ATTEMPTS = 4;
+        const CHECK_LOGIN_RETRY_DELAY_MS = 1500;
+
         const fallbackSelectors = [
           'a[href*="/logout"]',
           'button[aria-label*="Open user menu"]',
@@ -38,48 +41,54 @@ export const checkLoginCommand: SiteCommand = {
           '[data-testid="user-dropdown-toggle"]',
         ];
 
-        const fallbackAuthenticated = fallbackSelectors.some((selector) => Boolean(document.querySelector(selector)));
+        const checkDomFallback = (): boolean =>
+          fallbackSelectors.some((selector) => Boolean(document.querySelector(selector)));
 
-        try {
-          const response = await fetch('https://www.reddit.com/api/me.json', {
-            credentials: 'include',
-            cache: 'no-store',
-          });
+        const tryApiMe = async (): Promise<{ authenticated: boolean; username?: string; id?: string; avatar?: string; source: string } | null> => {
+          try {
+            const response = await fetch('https://www.reddit.com/api/me.json', {
+              credentials: 'include',
+              cache: 'no-store',
+            });
 
-          if (!response.ok) {
-            return {
-              authenticated: fallbackAuthenticated,
-              source: fallbackAuthenticated ? 'dom-fallback' : 'api',
-            };
+            if (!response.ok) {
+              return null;
+            }
+
+            const body = await response.json() as { data?: Record<string, unknown> };
+            const data = body?.data;
+            const username = typeof data?.name === 'string' ? data.name : undefined;
+
+            if (username) {
+              const id = typeof data?.id === 'string' ? data.id : undefined;
+              const snoovatar = typeof data?.snoovatar_img === 'string' ? data.snoovatar_img : undefined;
+              const icon = typeof data?.icon_img === 'string' ? data.icon_img : undefined;
+              return { authenticated: true, username, id, avatar: snoovatar || icon, source: 'api' };
+            }
+
+            return null;
+          } catch {
+            return null;
+          }
+        };
+
+        for (let attempt = 0; attempt < CHECK_LOGIN_MAX_ATTEMPTS; attempt++) {
+          const apiResult = await tryApiMe();
+          if (apiResult && apiResult.authenticated) {
+            return apiResult;
           }
 
-          const body = await response.json() as { data?: Record<string, unknown> };
-          const data = body?.data;
-          const username = typeof data?.name === 'string' ? data.name : undefined;
-          const id = typeof data?.id === 'string' ? data.id : undefined;
-          const snoovatar = typeof data?.snoovatar_img === 'string' ? data.snoovatar_img : undefined;
-          const icon = typeof data?.icon_img === 'string' ? data.icon_img : undefined;
-
-          if (username) {
-            return {
-              authenticated: true,
-              username,
-              id,
-              avatar: snoovatar || icon,
-              source: 'api',
-            };
+          const fallbackAuthenticated = checkDomFallback();
+          if (fallbackAuthenticated) {
+            return { authenticated: true, source: 'dom-fallback' };
           }
 
-          return {
-            authenticated: fallbackAuthenticated,
-            source: fallbackAuthenticated ? 'dom-fallback' : 'api',
-          };
-        } catch {
-          return {
-            authenticated: fallbackAuthenticated,
-            source: 'dom-fallback',
-          };
+          if (attempt < CHECK_LOGIN_MAX_ATTEMPTS - 1) {
+            await new Promise((resolve) => { setTimeout(resolve, CHECK_LOGIN_RETRY_DELAY_MS); });
+          }
         }
+
+        return { authenticated: false, source: 'api' };
       },
       /* c8 ignore stop */
       [],

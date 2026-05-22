@@ -129,7 +129,7 @@ Every `command` payload must identify a target node and include replay protectio
 | `command.list` | Advertise site command metadata |
 | `command.run` | Execute command logic |
 | `command.test` | Execute test hook; falls back to `execute` when none declared |
-| `command.reddit_feed` | Legacy alias for `command.run` with `site=reddit.com, command=getFeed` |
+| `command.reddit_posts` | Legacy alias for `command.run` with `site=reddit.com, command=getPosts` |
 | `primitive.tab.open` | Open a managed tab |
 | `primitive.tab.close` | Close a managed tab |
 | `primitive.tab.navigate` | Navigate a managed tab |
@@ -200,7 +200,7 @@ These interfaces map to the primitive DOM actions above and provide one consolid
 
 Current version: `1.0`. Additive changes are preferred; breaking changes require a new major version.
 
-`command.reddit_feed` alias is maintained during migration to `command.run`.
+`command.reddit_posts` alias is maintained during migration to `command.run`.
 
 ## Next steps
 

@@ -6,17 +6,18 @@ import {
   normalizeHostLike,
   toHttpsUrl,
 } from '../src/command-open-url.js';
+import { MOCK_SITE, MOCK_COMMAND_ID, MOCK_PRELOAD_HOST } from './test-command-mock.js';
 
-test('resolveCommandAutoOpenUrl returns about:blank when descriptor has no preloadHost', () => {
-  const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', []);
-  assert.equal(result, 'https://reddit.com');
+test('resolveCommandAutoOpenUrl returns host when descriptor has no preloadHost', () => {
+  const result = resolveCommandAutoOpenUrl(MOCK_SITE, MOCK_COMMAND_ID, []);
+  assert.equal(result, 'https://example.com');
 });
 
 test('resolveCommandAutoOpenUrl uses preloadHost when available', () => {
-  const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', [
-    { site: 'reddit.com', id: 'getFeed', preloadHost: 'old.reddit.com' },
+  const result = resolveCommandAutoOpenUrl(MOCK_SITE, MOCK_COMMAND_ID, [
+    { site: MOCK_SITE, id: MOCK_COMMAND_ID, preloadHost: MOCK_PRELOAD_HOST },
   ]);
-  assert.equal(result, 'https://old.reddit.com');
+  assert.equal(result, 'https://old.example.com');
 });
 
 test('resolveCommandAutoOpenUrl returns about:blank when no preloadHost is present even for bare host', () => {
@@ -26,28 +27,28 @@ test('resolveCommandAutoOpenUrl returns about:blank when no preloadHost is prese
 
 test('resolveCommandDescriptor finds matching descriptor', () => {
   const descriptors = [
-    { site: 'reddit.com', id: 'getFeed' },
+    { site: MOCK_SITE, id: MOCK_COMMAND_ID },
     { site: 'google.com', id: 'search' },
   ];
-  const result = resolveCommandDescriptor('reddit.com', 'getFeed', descriptors);
+  const result = resolveCommandDescriptor(MOCK_SITE, MOCK_COMMAND_ID, descriptors);
   assert.ok(result);
-  assert.equal(result?.site, 'reddit.com');
+  assert.equal(result?.site, MOCK_SITE);
 });
 
 test('resolveCommandDescriptor normalizes www prefix', () => {
-  const descriptors = [{ site: 'reddit.com', id: 'getFeed' }];
-  const result = resolveCommandDescriptor('www.reddit.com', 'getFeed', descriptors);
+  const descriptors = [{ site: MOCK_SITE, id: MOCK_COMMAND_ID }];
+  const result = resolveCommandDescriptor('www.example.com', MOCK_COMMAND_ID, descriptors);
   assert.ok(result);
 });
 
 test('resolveCommandDescriptor returns undefined for missing command', () => {
-  const result = resolveCommandDescriptor('reddit.com', 'missing', []);
+  const result = resolveCommandDescriptor(MOCK_SITE, 'missing', []);
   assert.equal(result, undefined);
 });
 
 test('resolveCommandDescriptor returns undefined when site matches but id does not', () => {
-  const descriptors = [{ site: 'reddit.com', id: 'getFeed' }];
-  const result = resolveCommandDescriptor('reddit.com', 'search', descriptors);
+  const descriptors = [{ site: MOCK_SITE, id: MOCK_COMMAND_ID }];
+  const result = resolveCommandDescriptor(MOCK_SITE, 'search', descriptors);
   assert.equal(result, undefined);
 });
 
@@ -80,27 +81,27 @@ test('toHttpsUrl adds https to bare host', () => {
 });
 
 test('resolveCommandDescriptor matches descriptor with undefined site', () => {
-  const descriptors = [{ id: 'getFeed' } as { site?: string; id?: string }];
-  const result = resolveCommandDescriptor('reddit.com', 'getFeed', descriptors);
+  const descriptors = [{ id: MOCK_COMMAND_ID } as { site?: string; id?: string }];
+  const result = resolveCommandDescriptor(MOCK_SITE, MOCK_COMMAND_ID, descriptors);
   assert.equal(result, undefined);
 });
 
 test('resolveCommandDescriptor matches descriptor with undefined id', () => {
-  const descriptors = [{ site: 'reddit.com' } as { site?: string; id?: string }];
-  const result = resolveCommandDescriptor('reddit.com', 'getFeed', descriptors);
+  const descriptors = [{ site: MOCK_SITE } as { site?: string; id?: string }];
+  const result = resolveCommandDescriptor(MOCK_SITE, MOCK_COMMAND_ID, descriptors);
   assert.equal(result, undefined);
 });
 
 test('resolveCommandDescriptor returns undefined for empty descriptors', () => {
-  const result = resolveCommandDescriptor('reddit.com', 'getFeed', []);
+  const result = resolveCommandDescriptor(MOCK_SITE, MOCK_COMMAND_ID, []);
   assert.equal(result, undefined);
 });
 
-test('resolveCommandAutoOpenUrl returns about:blank when descriptor has no preloadHost', () => {
-  const result = resolveCommandAutoOpenUrl('reddit.com', 'getFeed', [{ site: 'reddit.com', id: 'getFeed' }]);
-  assert.equal(result, 'https://reddit.com');
+test('resolveCommandAutoOpenUrl returns host when descriptor has no preloadHost and descriptor array provided', () => {
+  const result = resolveCommandAutoOpenUrl(MOCK_SITE, MOCK_COMMAND_ID, [{ site: MOCK_SITE, id: MOCK_COMMAND_ID }]);
+  assert.equal(result, 'https://example.com');
 });
 
 test('normalizeHostLike strips www prefix from bare hostname', () => {
-  assert.equal(normalizeHostLike('www.reddit.com'), 'reddit.com');
+  assert.equal(normalizeHostLike('www.example.com'), MOCK_SITE);
 });

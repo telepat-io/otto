@@ -89,7 +89,7 @@ otto cmd --action primitive.dom.extract_text --tab-session <tabSessionId>
 otto cmd --action primitive.page.screenshot --payload '{"url":"https://example.com"}'
 
 # 直接运行站点命令
-otto cmd --action command.run --payload '{"site":"reddit.com","command":"getFeed"}'
+otto cmd --action command.run --payload '{"site":"reddit.com","command":"getPosts"}'
 ```
 
 ### 退出码
@@ -136,10 +136,10 @@ otto test <site> <command> [options]
 
 ```bash
 # 运行简单站点命令测试
-otto test reddit.com getFeed
+otto test reddit.com getPosts
 
 # 带负载运行
-otto test reddit.com getFeed --payload '{"limit":5}'
+otto test reddit.com getPosts --payload '{"limit":5}'
 
 # 流跟踪聊天命令 45 秒
 otto test reddit.com getChatMessages --stream-follow-ms 45000
@@ -148,7 +148,7 @@ otto test reddit.com getChatMessages --stream-follow-ms 45000
 otto test reddit.com getChatMessages --stream-probe --stream-follow-ms 45000 --json
 
 # 测试后保持标签页打开
-otto test reddit.com getFeed --wait-for-interrupt
+otto test reddit.com getPosts --wait-for-interrupt
 ```
 
 ### 流跟踪行为

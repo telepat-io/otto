@@ -2,61 +2,136 @@ import type { Post } from '@telepat/otto-protocol';
 import type { SiteCommand } from '../types.js';
 
 const DEFAULT_MIN_RETURNED_POSTS = 20;
-const MAX_MIN_RETURNED_POSTS = 200;
-const MAX_POST_URLS_TO_FETCH = 250;
+const MAX_MIN_RETURNED_POSTS = 100;
 const MAX_CONCURRENT_FETCHES = 4;
 const FETCH_TIMEOUT_MS = 8_000;
-const MAX_SCROLL_PASSES = 24;
-const SCROLL_WAIT_MS = 650;
-const STAGNANT_SCROLL_PASSES_TO_STOP = 3;
 
-export const getFeedCommand: SiteCommand = {
+const VALID_SOURCES = ['home', 'subreddit', 'user'];
+const VALID_SORTS = ['best', 'hot', 'new', 'top', 'rising'];
+const VALID_T = ['hour', 'day', 'week', 'month', 'year', 'all'];
+
+export const getPostsCommand: SiteCommand = {
   metadata: {
     site: 'reddit.com',
-    id: 'getFeed',
-    displayName: 'Get Reddit Feed',
-    description: 'Extracts lightweight post summaries from the active Reddit feed page.',
-    tags: ['feed', 'reddit'],
+    id: 'getPosts',
+    displayName: 'Get Reddit Posts',
+    description: 'Fetches Reddit posts via the JSON API from home feed, subreddit listings, or user submitted posts with configurable sort and time filters.',
+    tags: ['feed', 'posts', 'reddit'],
     requiresAuth: true,
     requiresDebuggerFocus: true,
-    preloadHost: 'reddit.com',
+    preloadHost: 'www.reddit.com',
+    timeoutPolicy: {
+      defaultMs: 60_000,
+      scaling: {
+        inputField: 'minReturnedPosts',
+        baseMs: 45_000,
+        perUnitMs: 2_000,
+        minMs: 45_000,
+        maxMs: 300_000,
+      },
+    },
     inputFields: [
+      {
+        name: 'source',
+        type: 'string',
+        description: 'Feed source: home (default), subreddit, or user.',
+        optional: true,
+      },
+      {
+        name: 'subreddit',
+        type: 'string',
+        description: 'Subreddit name without r/ prefix. Required when source is subreddit.',
+        optional: true,
+      },
+      {
+        name: 'username',
+        type: 'string',
+        description: 'Reddit username without u/ prefix. Required when source is user.',
+        optional: true,
+      },
+      {
+        name: 'sort',
+        type: 'string',
+        description: 'Sort order for home and subreddit sources: best (default), hot, new, top, rising.',
+        optional: true,
+      },
+      {
+        name: 't',
+        type: 'string',
+        description: 'Time filter when sort is top: hour, day (default), week, month, year, all.',
+        optional: true,
+      },
       {
         name: 'minReturnedPosts',
         type: 'number',
-        description: 'Minimum number of feed posts to attempt to return by scrolling and loading additional pages.',
+        description: 'Minimum number of posts to return (default 20, max 100). Also used as the API page limit.',
         optional: true,
       },
     ],
   },
   async execute(ctx, input) {
+    const source = typeof input.source === 'string' ? input.source.trim() : 'home';
+    if (!VALID_SOURCES.includes(source)) {
+      throw new Error(`getPosts source must be one of: ${VALID_SOURCES.join(', ')}`);
+    }
+
+    const subredditRaw = typeof input.subreddit === 'string' ? input.subreddit.trim() : '';
+    const subreddit = subredditRaw.replace(/^r\//, '') || null;
+    if (source === 'subreddit' && !subreddit) {
+      throw new Error('getPosts requires subreddit when source is subreddit');
+    }
+
+    const usernameRaw = typeof input.username === 'string' ? input.username.trim() : '';
+    const username = usernameRaw.replace(/^u\//, '') || null;
+    if (source === 'user' && !username) {
+      throw new Error('getPosts requires username when source is user');
+    }
+
+    const sort = typeof input.sort === 'string' ? input.sort.trim() : 'best';
+    if (!VALID_SORTS.includes(sort)) {
+      throw new Error(`getPosts sort must be one of: ${VALID_SORTS.join(', ')}`);
+    }
+
+    const t = typeof input.t === 'string' ? input.t.trim() : 'day';
+    if (!VALID_T.includes(t)) {
+      throw new Error(`getPosts t must be one of: ${VALID_T.join(', ')}`);
+    }
+
     const minReturnedPostsRaw = input.minReturnedPosts;
     const minReturnedPosts = typeof minReturnedPostsRaw === 'number' && Number.isFinite(minReturnedPostsRaw)
       ? minReturnedPostsRaw
       : DEFAULT_MIN_RETURNED_POSTS;
     const boundedMinReturnedPosts = Math.max(1, Math.min(MAX_MIN_RETURNED_POSTS, Math.floor(minReturnedPosts)));
-    const targetPostUrlCount = Math.max(
-      boundedMinReturnedPosts,
-      Math.min(MAX_POST_URLS_TO_FETCH, Math.ceil(boundedMinReturnedPosts * 1.5)),
-    );
 
     const result = await ctx.executeScript(
       /* c8 ignore start */
       async (
-        minPostUrlCount: number,
-        maxPostUrlsToFetch: number,
+        requestLimit: number,
         maxConcurrentFetches: number,
         fetchTimeoutMs: number,
-        maxScrollPasses: number,
-        scrollWaitMs: number,
-        stagnantPassesToStop: number,
+        source: string,
+        subreddit: string | null,
+        username: string | null,
+        sort: string,
+        t: string,
       ) => {
         type GenericRecord = Record<string, unknown>;
         type RedditListingNode = { kind?: unknown; data?: GenericRecord };
 
-        const sleep = (delayMs: number): Promise<void> => new Promise((resolve) => {
-          window.setTimeout(resolve, delayMs);
-        });
+        const MAX_RETRIES = 3;
+        const BASE_BACKOFF_MS = 2000;
+        const INTER_REQUEST_DELAY_MS = 500;
+
+        const parseRateLimitReset = (headers: Headers): number | null => {
+          const resetStr = headers.get('x-ratelimit-reset');
+          if (resetStr !== null) {
+            const reset = Number(resetStr);
+            if (Number.isFinite(reset) && reset > 0) {
+              return reset * 1000;
+            }
+          }
+          return null;
+        };
 
         const toIsoFromSeconds = (value: unknown): string | undefined => {
           if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -111,13 +186,15 @@ export const getFeedCommand: SiteCommand = {
           }
         };
 
-        const appendJsonSuffix = (value: string): string => {
+        const appendJsonSuffix = (value: string, requestLimit: number): string => {
           const parsed = new URL(value);
           if (!parsed.pathname.endsWith('.json')) {
             parsed.pathname = parsed.pathname.endsWith('/')
               ? `${parsed.pathname.slice(0, -1)}.json`
               : `${parsed.pathname}.json`;
           }
+          parsed.searchParams.set('limit', String(requestLimit));
+          parsed.searchParams.set('raw_json', '1');
           return parsed.toString();
         };
 
@@ -260,141 +337,122 @@ export const getFeedCommand: SiteCommand = {
           };
         };
 
-        const collectPostUrlsWithinFeedRoot = (feedRoot: Element, limit: number): string[] => {
-          const cappedLimit = Math.max(1, limit);
-          const rows = Array.from(feedRoot.querySelectorAll('shreddit-post, [data-testid="post-container"]'));
-          const urls = new Set<string>();
-
-          const addUrl = (candidateHref: string | null | undefined): void => {
-            if (!candidateHref) {
-              return;
-            }
-            const normalized = normalizeRedditUrl(candidateHref);
-            if (!normalized || !normalized.includes('/comments/')) {
-              return;
-            }
-            urls.add(normalized);
-          };
-
-          for (const row of rows) {
-            if (urls.size >= cappedLimit) {
-              break;
-            }
-
-            const anchors = Array.from(row.querySelectorAll('a[href*="/comments/"]'));
-            for (const anchor of anchors) {
-              addUrl(anchor.getAttribute('href'));
-              if (urls.size >= cappedLimit) {
-                break;
-              }
-            }
+        const buildFeedJsonUrl = (source: string, subreddit: string | null, username: string | null, sort: string, t: string, requestLimit: number): string => {
+          let pathname: string;
+          if (source === 'user') {
+            pathname = `/user/${encodeURIComponent(username ?? '')}/submitted`;
+          } else if (source === 'subreddit') {
+            pathname = `/r/${encodeURIComponent(subreddit ?? '')}/${sort}`;
+          } else {
+            pathname = `/${sort}`;
           }
 
-          if (urls.size < cappedLimit) {
-            const allAnchors = Array.from(feedRoot.querySelectorAll('a[href*="/comments/"]'));
-            for (const anchor of allAnchors) {
-              addUrl(anchor.getAttribute('href'));
-              if (urls.size >= cappedLimit) {
-                break;
-              }
-            }
+          pathname = pathname.replace(/\/+$/, '');
+          const params = new URLSearchParams();
+          params.set('limit', String(requestLimit));
+          params.set('raw_json', '1');
+          if (sort === 'top' && t) {
+            params.set('t', t);
           }
 
-          return Array.from(urls).slice(0, cappedLimit);
-        };
-
-        const collectPostUrlsWithPagination = async (
-          minCount: number,
-          hardCap: number,
-          scrollPassLimit: number,
-          scrollDelayMs: number,
-          maxStagnantPasses: number,
-        ): Promise<string[]> => {
-          const feedRoot = document.querySelector('#main-content');
-          if (!feedRoot) {
-            return [];
-          }
-
-          const cappedTarget = Math.max(1, Math.min(hardCap, minCount));
-          let previousDocumentHeight = document.documentElement.scrollHeight;
-          let previousFeedHeight = feedRoot.scrollHeight;
-          let previousCount = 0;
-          let stagnantPasses = 0;
-
-          for (let pass = 0; pass <= scrollPassLimit; pass += 1) {
-            const currentUrls = collectPostUrlsWithinFeedRoot(feedRoot, hardCap);
-            const currentCount = currentUrls.length;
-            if (currentCount >= cappedTarget) {
-              return currentUrls;
-            }
-
-            const lastItem = feedRoot.lastElementChild;
-            if (lastItem instanceof HTMLElement) {
-              lastItem.scrollIntoView({ block: 'end', inline: 'nearest' });
-            }
-            window.scrollTo({ top: document.documentElement.scrollHeight, left: 0, behavior: 'auto' });
-            await sleep(scrollDelayMs);
-
-            const postWaitUrls = collectPostUrlsWithinFeedRoot(feedRoot, hardCap);
-            const postWaitCount = postWaitUrls.length;
-            if (postWaitCount >= cappedTarget) {
-              return postWaitUrls;
-            }
-
-            const nextDocumentHeight = document.documentElement.scrollHeight;
-            const nextFeedHeight = feedRoot.scrollHeight;
-            const madeProgress = postWaitCount > previousCount
-              || nextDocumentHeight > previousDocumentHeight
-              || nextFeedHeight > previousFeedHeight;
-
-            previousDocumentHeight = nextDocumentHeight;
-            previousFeedHeight = nextFeedHeight;
-            previousCount = postWaitCount;
-
-            stagnantPasses = madeProgress ? 0 : stagnantPasses + 1;
-            if (stagnantPasses >= maxStagnantPasses) {
-              break;
-            }
-          }
-
-          return collectPostUrlsWithinFeedRoot(feedRoot, hardCap);
+          return `https://www.reddit.com${pathname}.json?${params.toString()}`;
         };
 
         const fetchJsonWithTimeout = async (url: string, timeoutMs: number): Promise<unknown> => {
-          const controller = new AbortController();
-          const timer = window.setTimeout(() => {
-            controller.abort();
-          }, timeoutMs);
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            const controller = new AbortController();
+            const timer = window.setTimeout(() => {
+              controller.abort();
+            }, timeoutMs);
 
-          try {
-            const response = await fetch(url, {
-              method: 'GET',
-              credentials: 'include',
-              cache: 'no-store',
-              headers: {
-                Accept: 'application/json',
-              },
-              signal: controller.signal,
-            });
+            try {
+              const response = await fetch(url, {
+                method: 'GET',
+                credentials: 'include',
+                cache: 'no-store',
+                headers: {
+                  Accept: 'application/json',
+                },
+                signal: controller.signal,
+              });
 
-            if (!response.ok) {
+              if (response.status === 429) {
+                const resetMs = parseRateLimitReset(response.headers);
+                const delayMs = resetMs !== null
+                  ? resetMs + 1000
+                  : Math.pow(2, attempt) * BASE_BACKOFF_MS;
+                await new Promise((resolve) => {
+                  setTimeout(resolve, delayMs);
+                });
+                continue;
+              }
+
+              if (!response.ok) {
+                return null;
+              }
+
+              return await response.json();
+            } catch {
               return null;
+            } finally {
+              window.clearTimeout(timer);
             }
-
-            return await response.json();
-          } catch {
-            return null;
-          } finally {
-            window.clearTimeout(timer);
           }
+
+          return null;
         };
 
-        const postUrls = await collectPostUrlsWithPagination(
-          minPostUrlCount,
-          maxPostUrlsToFetch,
-          maxScrollPasses,
-          scrollWaitMs,
-          stagnantPassesToStop,
+        const collectPostUrlsFromJsonFeed = async (
+          feedJsonUrl: string,
+          minCount: number,
+          timeoutMs: number,
+        ): Promise<string[]> => {
+          const collected: string[] = [];
+          let after: string | null = null;
+
+          while (collected.length < minCount) {
+            const pageUrl = after
+              ? `${feedJsonUrl}&after=${encodeURIComponent(after)}`
+              : feedJsonUrl;
+
+            const payload = await fetchJsonWithTimeout(pageUrl, timeoutMs);
+            if (!payload || typeof payload !== 'object') {
+              break;
+            }
+
+            const listing = (payload as { data?: { children?: unknown[]; after?: string | null } }).data;
+            const children = Array.isArray(listing?.children) ? listing.children : [];
+            after = typeof listing?.after === 'string' && listing.after.length > 0 ? listing.after : null;
+
+            for (const child of children) {
+              if (!child || typeof child !== 'object') {
+                continue;
+              }
+
+              const node = child as { kind?: string; data?: { permalink?: string } };
+              if (node.kind !== 't3' || !node.data?.permalink) {
+                continue;
+              }
+
+              const normalized = normalizeRedditUrl(node.data.permalink);
+              if (normalized && normalized.includes('/comments/')) {
+                collected.push(normalized);
+              }
+            }
+
+            if (!after || children.length === 0) {
+              break;
+            }
+          }
+
+          return collected;
+        };
+
+        const feedJsonUrl = buildFeedJsonUrl(source, subreddit, username, sort, t, requestLimit);
+        const postUrls = await collectPostUrlsFromJsonFeed(
+          feedJsonUrl,
+          requestLimit,
+          fetchTimeoutMs,
         );
         if (postUrls.length === 0) {
           return { posts: [] };
@@ -413,11 +471,15 @@ export const getFeedCommand: SiteCommand = {
             }
 
             const postUrl = postUrls[index];
-            const jsonUrl = appendJsonSuffix(postUrl);
+            const jsonUrl = appendJsonSuffix(postUrl, requestLimit);
             const payload = await fetchJsonWithTimeout(jsonUrl, fetchTimeoutMs);
             const mapped = mapPostPayload(payload, postUrl);
             if (mapped) {
               outputPosts.push(mapped);
+            }
+
+            if (index + 1 < postUrls.length) {
+              await new Promise((resolve) => { setTimeout(resolve, INTER_REQUEST_DELAY_MS); });
             }
           }
         };
@@ -430,13 +492,14 @@ export const getFeedCommand: SiteCommand = {
       },
       /* c8 ignore stop */
       [
-        targetPostUrlCount,
-        MAX_POST_URLS_TO_FETCH,
+        boundedMinReturnedPosts,
         MAX_CONCURRENT_FETCHES,
         FETCH_TIMEOUT_MS,
-        MAX_SCROLL_PASSES,
-        SCROLL_WAIT_MS,
-        STAGNANT_SCROLL_PASSES_TO_STOP,
+        source,
+        subreddit,
+        username,
+        sort,
+        t,
       ],
     );
 

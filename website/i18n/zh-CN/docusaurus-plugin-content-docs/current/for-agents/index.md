@@ -106,7 +106,7 @@ otto commands list --json
 
 ```bash
 otto commands list --json
-otto test reddit.com getFeed --json
+otto test reddit.com getPosts --json
 otto logs list --source all --latest 100 --json
 otto setup --non-interactive
 ```

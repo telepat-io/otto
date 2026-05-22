@@ -57,7 +57,7 @@ function createDeps(
   };
 }
 
-test('runTestCommand defaults reddit getFeed minReturnedPosts to 20 when missing', async () => {
+test('runTestCommand defaults reddit getPosts minReturnedPosts to 20 when missing', async () => {
   const captured: CapturedSendPayload = {};
   const previousExitCode = process.exitCode;
 
@@ -65,7 +65,7 @@ test('runTestCommand defaults reddit getFeed minReturnedPosts to 20 when missing
     process.exitCode = undefined;
     await runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         tabSession: 'tab_1',
         payload: '{}',
@@ -81,7 +81,7 @@ test('runTestCommand defaults reddit getFeed minReturnedPosts to 20 when missing
   assert.deepEqual(captured.input, { minReturnedPosts: 20 });
 });
 
-test('runTestCommand keeps explicit reddit getFeed minReturnedPosts value', async () => {
+test('runTestCommand keeps explicit reddit getPosts minReturnedPosts value', async () => {
   const captured: CapturedSendPayload = {};
   const previousExitCode = process.exitCode;
 
@@ -89,7 +89,7 @@ test('runTestCommand keeps explicit reddit getFeed minReturnedPosts value', asyn
     process.exitCode = undefined;
     await runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         tabSession: 'tab_1',
         payload: '{"minReturnedPosts":35}',

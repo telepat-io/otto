@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Command } from 'commander';
+import { MOCK_SITE } from './test-command-mock.js';
 import {
   buildLogSearchParams,
   buildSubscribeNetworkOptions,
@@ -11,7 +12,7 @@ import {
 
 test('filterCommandsBySite returns all commands when site is missing or blank', () => {
   const commands = [
-    { id: 'a', site: 'reddit.com' },
+    { id: 'a', site: MOCK_SITE },
     { id: 'b', site: 'news.ycombinator.com' },
   ];
 
@@ -22,11 +23,11 @@ test('filterCommandsBySite returns all commands when site is missing or blank', 
 
 test('filterCommandsBySite filters case-insensitively', () => {
   const commands = [
-    { id: 'a', site: 'reddit.com' },
+    { id: 'a', site: MOCK_SITE },
     { id: 'b', site: 'news.ycombinator.com' },
   ];
 
-  const filtered = filterCommandsBySite(commands, 'REDDIT.COM');
+  const filtered = filterCommandsBySite(commands, 'EXAMPLE.COM');
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0]?.id, 'a');
 });
@@ -34,7 +35,7 @@ test('filterCommandsBySite filters case-insensitively', () => {
 test('buildSubscribeNetworkOptions includes optional arrays only when present', () => {
   const withOptionals = buildSubscribeNetworkOptions({
     tabSession: 'tab_1',
-    site: 'reddit.com',
+    site: MOCK_SITE,
     includeBody: true,
     includeHeaders: true,
     pattern: ['https://example.com/*'],
@@ -44,7 +45,7 @@ test('buildSubscribeNetworkOptions includes optional arrays only when present', 
 
   assert.deepEqual(withOptionals, {
     tabSessionId: 'tab_1',
-    site: 'reddit.com',
+    site: MOCK_SITE,
     mode: 'hybrid',
     includeBody: true,
     includeHeaders: true,
@@ -127,7 +128,7 @@ test('commands list accepts --json and applies site filter', async () => {
         payload: {
           data: {
             commands: [
-              { id: 'reddit.getFeed', site: 'reddit.com' },
+              { id: 'example.sample-cmd', site: MOCK_SITE },
               { id: 'hn.getFrontPage', site: 'news.ycombinator.com' },
             ],
           },
@@ -150,7 +151,7 @@ test('commands list accepts --json and applies site filter', async () => {
       followLogsOnce: async () => {},
     });
 
-    await program.parseAsync(['commands', 'list', '--json', '--site', 'reddit.com'], { from: 'user' });
+    await program.parseAsync(['commands', 'list', '--json', '--site', MOCK_SITE], { from: 'user' });
 
     const parsed = JSON.parse(output) as {
       payload: {
@@ -160,7 +161,7 @@ test('commands list accepts --json and applies site filter', async () => {
       };
     };
     assert.equal(parsed.payload.data.commands.length, 1);
-    assert.equal(parsed.payload.data.commands[0]?.site, 'reddit.com');
+    assert.equal(parsed.payload.data.commands[0]?.site, MOCK_SITE);
   } finally {
     console.log = originalLog;
   }
@@ -229,7 +230,7 @@ test('commands list without site filter returns all commands', async () => {
         payload: {
           data: {
             commands: [
-              { id: 'reddit.getFeed', site: 'reddit.com' },
+              { id: 'example.sample-cmd', site: MOCK_SITE },
               { id: 'hn.getFrontPage', site: 'news.ycombinator.com' },
             ],
           },
@@ -472,7 +473,7 @@ test('listener subscribe-network builds options and forwards to subscriber', asy
       'listener',
       'subscribe-network',
       '--tab-session', 'tab_123',
-      '--site', 'reddit.com',
+      '--site', MOCK_SITE,
       '--pattern', 'https://a.example/*',
       '--request-host', 'a.example',
       '--mode', 'hybrid',
@@ -486,7 +487,7 @@ test('listener subscribe-network builds options and forwards to subscriber', asy
     assert.equal(call?.timeoutMs, 45_000);
     assert.deepEqual(call?.options, {
       tabSessionId: 'tab_123',
-      site: 'reddit.com',
+      site: MOCK_SITE,
       mode: 'hybrid',
       includeBody: true,
       includeHeaders: true,

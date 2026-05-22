@@ -101,7 +101,7 @@ curl -sS -X POST "$OTTO_RELAY_HTTP_URL/api/auth/refresh" \
     "targetNodeId": "node_local_1",
     "tabSessionId": "tab_abc",
     "action": "command.run",
-    "payload": {"site": "reddit.com", "command": "getFeed"},
+    "payload": {"site": "reddit.com", "command": "getPosts"},
     "replayNonce": "nonce_cmd_run_1"
   }
 }

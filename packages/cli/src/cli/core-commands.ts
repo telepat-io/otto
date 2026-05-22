@@ -228,7 +228,7 @@ export function registerCoreCommands(program: Command, deps: RegisterCoreCommand
         extension: nextConfig.extension,
         pairingReady: Boolean(nextConfig.controllerAccessToken),
         nextSteps: nextConfig.controllerAccessToken
-          ? ['Open extension popup to confirm node status', 'otto commands list', 'otto test reddit.com getFeed']
+          ? ['Open extension popup to confirm node status', 'otto commands list', 'otto test reddit.com getPosts']
           : [
               'Open extension popup and confirm pairing code is visible',
               'otto authcode',

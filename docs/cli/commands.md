@@ -89,7 +89,7 @@ otto cmd --action primitive.dom.extract_text --tab-session <tabSessionId>
 otto cmd --action primitive.page.screenshot --payload '{"url":"https://example.com"}'
 
 # Run a site command directly
-otto cmd --action command.run --payload '{"site":"reddit.com","command":"getFeed"}'
+otto cmd --action command.run --payload '{"site":"reddit.com","command":"getPosts"}'
 ```
 
 ### Exit codes
@@ -136,10 +136,10 @@ otto test <site> <command> [options]
 
 ```bash
 # Run a simple site command test
-otto test reddit.com getFeed
+otto test reddit.com getPosts
 
 # Run with payload
-otto test reddit.com getFeed --payload '{"limit":5}'
+otto test reddit.com getPosts --payload '{"limit":5}'
 
 # Stream-follow a chat command for 45 seconds
 otto test reddit.com getChatMessages --stream-follow-ms 45000
@@ -148,7 +148,7 @@ otto test reddit.com getChatMessages --stream-follow-ms 45000
 otto test reddit.com getChatMessages --stream-probe --stream-follow-ms 45000 --json
 
 # Keep the tab open after test
-otto test reddit.com getFeed --wait-for-interrupt
+otto test reddit.com getPosts --wait-for-interrupt
 ```
 
 ### Stream follow behavior

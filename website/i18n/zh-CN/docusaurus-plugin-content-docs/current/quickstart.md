@@ -76,10 +76,10 @@ otto commands list
 ### 5. 运行命令
 
 ```bash
-otto test reddit.com getFeed
+otto test reddit.com getPosts
 ```
 
-此命令会打开一个被管理的标签页，在 `reddit.com` 上运行 `getFeed` 命令，流式传输结果，并在完成时关闭标签页。
+此命令会打开一个被管理的标签页，在 `reddit.com` 上运行 `getPosts` 命令，流式传输结果，并在完成时关闭标签页。
 
 ## 验证成功
 
@@ -87,7 +87,7 @@ otto test reddit.com getFeed
 
 1. 标签页保持打开。
 2. 在浏览器中手动完成登录。
-3. 重新运行：`otto test reddit.com getFeed`
+3. 重新运行：`otto test reddit.com getPosts`
 
 ## 下一步
 

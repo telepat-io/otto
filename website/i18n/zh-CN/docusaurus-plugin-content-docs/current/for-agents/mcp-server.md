@@ -138,7 +138,7 @@ otto mcp
     "name": "otto_cmd",
     "arguments": {
       "action": "command.run",
-      "payload": "{\"site\":\"reddit.com\",\"command\":\"getFeed\"}"
+      "payload": "{\"site\":\"reddit.com\",\"command\":\"getPosts\"}"
     }
   }
 }

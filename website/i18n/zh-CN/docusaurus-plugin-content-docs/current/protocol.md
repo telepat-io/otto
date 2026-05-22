@@ -129,7 +129,7 @@ sequenceDiagram
 | `command.list` | 公告站点命令元数据 |
 | `command.run` | 执行命令逻辑 |
 | `command.test` | 执行测试钩子；未声明时回退到 `execute` |
-| `command.reddit_feed` | `command.run` 的旧版别名，`site=reddit.com, command=getFeed` |
+| `command.reddit_posts` | `command.run` 的旧版别名，`site=reddit.com, command=getPosts` |
 | `primitive.tab.open` | 打开受管理标签页 |
 | `primitive.tab.close` | 关闭受管理标签页 |
 | `primitive.tab.navigate` | 导航受管理标签页 |
@@ -200,7 +200,7 @@ sequenceDiagram
 
 当前版本：`1.0`。优先使用加法式变更；破坏性变更需要新的主版本号。
 
-`command.reddit_feed` 别名在迁移到 `command.run` 期间保留。
+`command.reddit_posts` 别名在迁移到 `command.run` 期间保留。
 
 ## 下一步
 

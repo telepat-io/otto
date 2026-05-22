@@ -114,7 +114,7 @@ test('rememberReplayResponse compacts oversized responses to avoid quota failure
     action: 'command.test',
     data: {
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       posts: [
         {
           kind: 'content.post',

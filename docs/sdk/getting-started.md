@@ -99,7 +99,7 @@ Nodes that appear here are both connected to the relay and have granted your con
 const result = await client.commands.run({
   nodeId: nodes[0].nodeId,
   site: 'reddit.com',
-  command: 'getFeed',
+  command: 'getPosts',
   input: { subreddit: 'typescript', limit: 10 },
 });
 
@@ -138,7 +138,7 @@ async function main() {
     const result = await client.commands.run({
       nodeId: nodes[0].nodeId,
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: { subreddit: 'typescript', limit: 5 },
     });
 

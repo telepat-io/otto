@@ -146,7 +146,7 @@ Executes a command on a node and waits for the result.
 const result = await client.commands.run({
   nodeId: 'node_local_1',
   site: 'reddit.com',
-  command: 'getFeed',
+  command: 'getPosts',
   input: { subreddit: 'typescript', limit: 10 },
   timeoutMs: 30000,
 });
@@ -369,7 +369,7 @@ class OttoCommandError extends OttoError {
 import { OttoError, OttoAuthError, OttoTimeoutError, OttoCommandError } from '@telepat/otto-sdk';
 
 try {
-  await client.commands.run({ nodeId, site: 'reddit.com', command: 'getFeed' });
+  await client.commands.run({ nodeId, site: 'reddit.com', command: 'getPosts' });
 } catch (err) {
   if (err instanceof OttoAuthError) {
     // Credentials are wrong or token was revoked

@@ -178,7 +178,7 @@ Readiness checklist:
 1. CLI responds: `otto --help`
 2. Relay running: `otto status`
 3. Node connected and controller authenticated: `otto commands list --json`
-4. Command execution works: `otto test reddit.com getFeed --json`
+4. Command execution works: `otto test reddit.com getPosts --json`
 
 Expected success signals:
 
@@ -190,7 +190,7 @@ Expected success signals:
 
 ### Reddit (`reddit.com`)
 
-#### `getFeed`
+#### `getPosts`
 
 Extracts the Reddit feed with configurable post count and optional clipboard permission assist.
 
@@ -205,8 +205,8 @@ Extracts the Reddit feed with configurable post count and optional clipboard per
 
 **Example:**
 ```bash
-otto test reddit.com getFeed --json
-otto test reddit.com getFeed --payload '{"minReturnedPosts":10}' --json
+otto test reddit.com getPosts --json
+otto test reddit.com getPosts --payload '{"minReturnedPosts":10}' --json
 ```
 
 #### `getUserInfo`
@@ -483,10 +483,10 @@ Common operations:
 otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}'
 
 # Run a site command
-otto cmd --action command.run --tab-session <tabSessionId> --payload '{"site":"reddit.com","command":"getFeed"}'
+otto cmd --action command.run --tab-session <tabSessionId> --payload '{"site":"reddit.com","command":"getPosts"}'
 
 # Test a Reddit command
-otto test reddit.com getFeed --json
+otto test reddit.com getPosts --json
 
 # Test a LinkedIn command
 otto test linkedin.com commentOnPost --payload '{"postUrl":"https://www.linkedin.com/posts/...","commentBody":"Great post!"}' --json

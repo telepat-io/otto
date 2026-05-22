@@ -1972,7 +1972,7 @@ export async function executeCommand(chromeApi: ChromeLike, command: CommandPayl
       };
     }
     case 'command.run':
-    case 'command.reddit_feed': {
+    case 'command.reddit_posts': {
       const tabSessionId = String(command.payload.tabSessionId ?? command.tabSessionId ?? '');
       const tabId = await resolveTabId(chromeApi, tabSessionId);
       const data = await runCommandAction(chromeApi, command, tabId, tabSessionId);

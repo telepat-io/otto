@@ -101,7 +101,7 @@ async function runWithErrorHandling() {
     const result = await client.commands.run({
       nodeId: nodes[0].nodeId,
       site: 'reddit.com',
-      command: 'getFeed',
+      command: 'getPosts',
       input: { subreddit: 'programming' },
       timeoutMs: 15_000,
     });
@@ -203,7 +203,7 @@ export default {
       const result = await client.commands.run({
         nodeId: nodes[0].nodeId,
         site: 'reddit.com',
-        command: 'getFeed',
+        command: 'getPosts',
         input: { subreddit, limit: 25 },
         timeoutMs: 20_000,
       });
@@ -225,8 +225,8 @@ Run the SDK in a GitHub Actions workflow, Temporal worker, or any scheduled job.
 import { OttoClient, OttoError } from '@telepat/otto-sdk';
 
 const SITES: Array<{ site: string; command: string; input: Record<string, unknown> }> = [
-  { site: 'reddit.com', command: 'getFeed', input: { subreddit: 'typescript' } },
-  { site: 'reddit.com', command: 'getFeed', input: { subreddit: 'javascript' } },
+  { site: 'reddit.com', command: 'getPosts', input: { subreddit: 'typescript' } },
+  { site: 'reddit.com', command: 'getPosts', input: { subreddit: 'javascript' } },
 ];
 
 async function main() {
@@ -374,13 +374,13 @@ async function getRedditFeed(
   const result = await client.commands.run({
     nodeId,
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
     input: input as Record<string, unknown>,
     timeoutMs: 20_000,
   });
 
   if (!result.ok) {
-    throw new Error(`getFeed failed: ${result.error}`);
+    throw new Error(`getPosts failed: ${result.error}`);
   }
 
   return result.data as GetFeedOutput;

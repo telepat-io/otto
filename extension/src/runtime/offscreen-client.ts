@@ -301,7 +301,7 @@ async function connect(): Promise<void> {
             'primitive.dom.extract_text',
             'command.list',
             'command.run',
-            'command.reddit_feed',
+            'command.reddit_posts',
           ],
         }),
       ),

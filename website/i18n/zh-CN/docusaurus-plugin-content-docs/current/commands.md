@@ -31,7 +31,7 @@ Otto 命令服务于两类受众：实现扩展包的命令作者，以及通过
 | 原始标签页 | `primitive.tab.open`、`primitive.tab.close`、`primitive.tab.navigate`、`primitive.tab.query` |
 | 原始 DOM | `primitive.dom.extract_text`、`primitive.dom.extract_html`、`primitive.dom.extract_clean_html`、`primitive.dom.extract_distilled_html`、`primitive.dom.extract_markdown` |
 | 原始页面 | `primitive.page.screenshot` |
-| 命令 | `command.list`、`command.run`、`command.test`、`command.reddit_feed`（旧版别名） |
+| 命令 | `command.list`、`command.run`、`command.test`、`command.reddit_posts`（旧版别名） |
 | 监听器 | `listener.subscribe`、`listener.unsubscribe` |
 | 常用 CLI 入口 | `otto commands list`、`otto test <site> <command>`、`otto extract-content [url]`、`otto cmd --action ...` |
 
@@ -93,7 +93,7 @@ Otto 的命令执行精心设计顺序以实现确定性失败：
 
 | 站点 | 命令 |
 |---|---|
-| `reddit.com` | `getFeed`、`getUserInfo`、`sendChatMessage`、`getChatMessages`、`commentOnPost` |
+| `reddit.com` | `getPosts`、`getUserInfo`、`sendChatMessage`、`getChatMessages`、`commentOnPost` |
 | `linkedin.com` | `getFeed`、`commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
@@ -108,7 +108,7 @@ Otto 的命令执行精心设计顺序以实现确定性失败：
 
 | 命令 | 关键行为 |
 |---|---|
-| `getFeed` | 通过 `.json` 补充帖子永久链接；支持 `minReturnedPosts`；返回 `content.post` 树 |
+| `getPosts` | 通过 `.json` 补充帖子永久链接；支持 `minReturnedPosts`；返回 `content.post` 树 |
 | `getUserInfo` | 按用户名/ID 查找或默认当前会话；返回 `entity.user` |
 | `sendChatMessage` | 支持 `roomId` 直接发送或基于用户名创建房间 + 通过 Shadow DOM 发送 |
 | `commentOnPost` | 导航到帖子 URL；填写 `shreddit-composer`；提交顶级评论 |

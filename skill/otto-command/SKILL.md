@@ -422,7 +422,7 @@ Use this when you need direct primitive checks while debugging command behavior.
 otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}' --json
 
 # Reuse that tab in command.run for stable iteration without tab churn
-otto cmd --action command.run --payload '{"site":"reddit.com","command":"getFeed","tabSessionId":"<tabSessionId>"}' --json
+otto cmd --action command.run --payload '{"site":"reddit.com","command":"getPosts","tabSessionId":"<tabSessionId>"}' --json
 
 # Query current tab metadata
 otto cmd --action primitive.tab.query --payload '{"tabSessionId":"<tabSessionId>"}' --json
@@ -519,7 +519,7 @@ Command actions:
 - `command.list`
 - `command.run`
 - `command.test`
-- `command.reddit_feed` (legacy alias)
+- `command.reddit_posts` (legacy alias)
 
 Primitive tab actions:
 - `primitive.tab.open`

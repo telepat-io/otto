@@ -31,7 +31,7 @@ Otto commands serve two audiences: command authors implementing extension bundle
 | Primitive tab | `primitive.tab.open`, `primitive.tab.close`, `primitive.tab.navigate`, `primitive.tab.query` |
 | Primitive DOM | `primitive.dom.extract_text`, `primitive.dom.extract_html`, `primitive.dom.extract_clean_html`, `primitive.dom.extract_distilled_html`, `primitive.dom.extract_markdown` |
 | Primitive page | `primitive.page.screenshot` |
-| Command | `command.list`, `command.run`, `command.test`, `command.reddit_feed` (legacy alias) |
+| Command | `command.list`, `command.run`, `command.test`, `command.reddit_posts` (legacy alias) |
 | Listener | `listener.subscribe`, `listener.unsubscribe` |
 | Common CLI entrypoints | `otto commands list`, `otto test <site> <command>`, `otto extract-content [url]`, `otto cmd --action ...` |
 
@@ -93,7 +93,7 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 
 | Site | Commands |
 |---|---|
-| `reddit.com` | `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
+| `reddit.com` | `getPosts`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
 | `linkedin.com` | `getFeed`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |
@@ -108,7 +108,7 @@ Commands requiring auth never automate credential entry. In `authMode=auto`, run
 
 | Command | Key behavior |
 |---|---|
-| `getFeed` | Hydrates post permalinks via `.json`; supports `minReturnedPosts`; returns `content.post` trees |
+| `getPosts` | Fetches Reddit posts via JSON API from home feed, subreddits, or user submitted; supports source, sort, t, and minReturnedPosts inputs; returns `content.post` trees |
 | `getUserInfo` | Looks up by username/ID or defaults to current session; returns `entity.user` |
 | `sendChatMessage` | Supports `roomId` direct send or username-based room create + send via Shadow DOM |
 | `commentOnPost` | Navigates to post URL; fills `shreddit-composer`; submits top-level comment |

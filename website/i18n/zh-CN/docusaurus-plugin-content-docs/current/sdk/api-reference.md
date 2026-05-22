@@ -99,7 +99,7 @@ interface CommandDescriptor {
 const result = await client.commands.run({
   nodeId: 'node_local_1',
   site: 'reddit.com',
-  command: 'getFeed',
+  command: 'getPosts',
   input: { subreddit: 'typescript', limit: 10 },
   timeoutMs: 30000,
 });
@@ -237,7 +237,7 @@ import {
 
 ```typescript
 try {
-  await client.commands.run({ nodeId, site: 'reddit.com', command: 'getFeed' });
+  await client.commands.run({ nodeId, site: 'reddit.com', command: 'getPosts' });
 } catch (err) {
   if (err instanceof OttoAuthError) { /* ... */ }
   else if (err instanceof OttoTimeoutError) { /* ... */ }

@@ -104,7 +104,7 @@ export interface CommandDescriptor {
   timeoutPolicy?: CommandTimeoutPolicy;
 }
 
-export type CommandAction = 'command.list' | 'command.run' | 'command.test' | 'command.reddit_feed';
+export type CommandAction = 'command.list' | 'command.run' | 'command.test' | 'command.reddit_posts';
 
 export interface CommandRunPayload {
   site: string;

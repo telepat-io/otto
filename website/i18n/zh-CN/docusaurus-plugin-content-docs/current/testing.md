@@ -91,7 +91,7 @@ keywords:
 | `OTTO_E2E_COMMAND_TIMEOUT_MS` | `10000` | 命令超时预算 |
 | `OTTO_E2E_RUN_COMMAND` | 不设置 (`0`) | 设为 `1` 以包含 `command.run` |
 | `OTTO_E2E_COMMAND_SITE` | `reddit.com` | 手动命令运行的站点 |
-| `OTTO_E2E_COMMAND_ID` | `getFeed` | 手动命令运行的命令 id |
+| `OTTO_E2E_COMMAND_ID` | `getPosts` | 手动命令运行的命令 id |
 | `OTTO_CONTROLLER_ACCESS_TOKEN` | 不设置 | 提供后跳过自动配对批准 |
 
 ## Setup 及设置验证重点

@@ -95,7 +95,7 @@ otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}
 # 使用返回的 tabSessionId 运行站点命令
 otto cmd --action command.run \
   --tab-session <tabSessionId> \
-  --payload '{"site":"reddit.com","command":"getFeed"}'
+  --payload '{"site":"reddit.com","command":"getPosts"}'
 
 # 使用 otto test 运行支持流的命令
 otto test reddit.com getChatMessages --stream-follow-ms 30000 --json

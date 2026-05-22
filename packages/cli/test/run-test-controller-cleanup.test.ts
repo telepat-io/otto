@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Envelope } from '@telepat/otto-protocol';
 import { runTestCommand } from '../src/cli/run-test.js';
+import { MOCK_SITE, MOCK_COMMAND_ID } from './test-command-mock.js';
 import { createSocketClosedWhileWaitingError } from '../src/cli/socket-errors.js';
 
 type SpyCalls = {
@@ -101,7 +102,7 @@ test('runTestCommand keeps auto-registered controller by default', async () => {
   try {
     process.exitCode = undefined;
     await runTestCommand(
-      'reddit.com',
+      MOCK_SITE,
       'getChatMessages',
       {
         tabSession: 'tab_1',
@@ -129,7 +130,7 @@ test('runTestCommand removes auto-registered controller when cleanup flag is ena
   try {
     process.exitCode = undefined;
     await runTestCommand(
-      'reddit.com',
+      MOCK_SITE,
       'getChatMessages',
       {
         tabSession: 'tab_1',
@@ -155,7 +156,7 @@ test('runTestCommand shows friendly alert when socket closes before response', a
   try {
     process.exitCode = undefined;
     await runTestCommand(
-      'reddit.com',
+      MOCK_SITE,
       'getChatMessages',
       {
         payload: '{}',
@@ -220,7 +221,7 @@ test('runTestCommand waits for interrupt on command.test error when wait-for-int
     showAclMissingGrantHint: () => {},
     showTestFailureFooterAlert: async () => {},
     sendCommandCancelWithSocket: async () => {},
-    resolveTestInfo: async () => ({ openUrl: 'https://www.reddit.com' }),
+    resolveTestInfo: async () => ({ openUrl: 'https://www.example.com' }),
     sendCommandWithSocket: () => ({
       requestId: 'req_1',
       response: Promise.resolve({
@@ -228,7 +229,7 @@ test('runTestCommand waits for interrupt on command.test error when wait-for-int
         payload: {
           code: 'manual_login_required',
           action: 'command.test',
-          message: 'Manual login required for reddit.com; complete login and rerun getFeed',
+          message: 'Manual login required for example.com; complete login and rerun sample-cmd',
         },
       } as Envelope),
     }),
@@ -240,8 +241,8 @@ test('runTestCommand waits for interrupt on command.test error when wait-for-int
   try {
     process.exitCode = undefined;
     const runPromise = runTestCommand(
-      'reddit.com',
-      'getFeed',
+      MOCK_SITE,
+      MOCK_COMMAND_ID,
       {
         payload: '{}',
         timeout: '30000',
@@ -311,7 +312,7 @@ test('runTestCommand cleans up config when auto-registered clientId matches', as
   try {
     process.exitCode = undefined;
     await runTestCommand(
-      'reddit.com',
+      MOCK_SITE,
       'getChatMessages',
       {
         tabSession: 'tab_1',
@@ -378,7 +379,7 @@ test('runTestCommand logs cleanup failure without throwing', async () => {
   try {
     process.exitCode = undefined;
     await runTestCommand(
-      'reddit.com',
+      MOCK_SITE,
       'getChatMessages',
       {
         tabSession: 'tab_1',
@@ -437,7 +438,7 @@ test('runTestCommand prints forbidden_action hint for command.test scope error',
     showAclMissingGrantHint: () => {},
     showTestFailureFooterAlert: async () => {},
     sendCommandCancelWithSocket: async () => {},
-    resolveTestInfo: async () => ({ openUrl: 'https://www.reddit.com' }),
+    resolveTestInfo: async () => ({ openUrl: 'https://www.example.com' }),
     sendCommandWithSocket: () => ({
       requestId: 'req_1',
       response: Promise.resolve({
@@ -456,8 +457,8 @@ test('runTestCommand prints forbidden_action hint for command.test scope error',
   try {
     process.exitCode = undefined;
     await runTestCommand(
-      'reddit.com',
-      'getFeed',
+      MOCK_SITE,
+      MOCK_COMMAND_ID,
       {
         tabSession: 'tab_1',
         payload: '{}',

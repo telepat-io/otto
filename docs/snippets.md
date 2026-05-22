@@ -101,7 +101,7 @@ Minimum replay-safe `command.run` envelope:
     "targetNodeId": "node_local_1",
     "tabSessionId": "tab_abc",
     "action": "command.run",
-    "payload": {"site": "reddit.com", "command": "getFeed"},
+    "payload": {"site": "reddit.com", "command": "getPosts"},
     "replayNonce": "nonce_cmd_run_1"
   }
 }

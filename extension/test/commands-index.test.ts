@@ -31,7 +31,7 @@ test('listCommandDescriptors returns commands from all bundles', () => {
   const descriptors = listCommandDescriptors();
   assert.ok(descriptors.length > 0);
   const ids = descriptors.map((d) => d.id);
-  assert.ok(ids.includes('getFeed'));
+  assert.ok(ids.includes('getPosts'));
   assert.ok(ids.includes('getSearchResults'));
   assert.ok(ids.includes('getFrontPage'));
 });
@@ -49,9 +49,9 @@ test('findSiteBundle returns undefined for unknown site', () => {
 
 test('findSiteCommand returns command by id', () => {
   const bundle = findSiteBundle('reddit.com')!;
-  const command = findSiteCommand(bundle, 'getFeed');
+  const command = findSiteCommand(bundle, 'getPosts');
   assert.ok(command);
-  assert.equal(command.metadata.id, 'getFeed');
+  assert.equal(command.metadata.id, 'getPosts');
 });
 
 test('findSiteCommand returns undefined for unknown command', () => {

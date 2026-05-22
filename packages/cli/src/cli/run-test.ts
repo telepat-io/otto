@@ -5,7 +5,7 @@ import { resolveCleanupSocketStrategy } from '../test-cleanup.js';
 import type { OttoConfig } from '../config.js';
 import { toSocketCloseAlertPayload } from './socket-errors.js';
 
-const DEFAULT_TEST_TIMEOUT_MS = 30_000;
+export const DEFAULT_TEST_TIMEOUT_MS = 30_000;
 
 type CommandTimeoutScalingPolicyLike = {
   inputField?: string;
@@ -20,19 +20,19 @@ type CommandTimeoutPolicyLike = {
   scaling?: CommandTimeoutScalingPolicyLike;
 };
 
-type CommandDescriptorLike = {
+export type CommandDescriptorLike = {
   site?: string;
   id?: string;
   timeoutPolicy?: CommandTimeoutPolicyLike;
 };
 
-function applyTestInputDefaults(site: string, command: string, input: Record<string, unknown>): Record<string, unknown> {
+export function applyTestInputDefaults(site: string, command: string, input: Record<string, unknown>): Record<string, unknown> {
   const normalizedSite = site.trim().toLowerCase();
   const normalizedCommand = command.trim();
 
   if (
     normalizedSite === 'reddit.com'
-    && normalizedCommand === 'getFeed'
+    &&     normalizedCommand === 'getPosts'
     && !Object.prototype.hasOwnProperty.call(input, 'minReturnedPosts')
   ) {
     return {
@@ -44,7 +44,7 @@ function applyTestInputDefaults(site: string, command: string, input: Record<str
   return input;
 }
 
-function clampTimeout(timeoutMs: number, minMs?: number, maxMs?: number): number {
+export function clampTimeout(timeoutMs: number, minMs?: number, maxMs?: number): number {
   let value = timeoutMs;
   if (typeof minMs === 'number' && Number.isFinite(minMs)) {
     value = Math.max(value, minMs);
@@ -55,7 +55,7 @@ function clampTimeout(timeoutMs: number, minMs?: number, maxMs?: number): number
   return Math.max(1_000, Math.floor(value));
 }
 
-function resolveDescriptorTimeoutMs(
+export function resolveDescriptorTimeoutMs(
   descriptor: CommandDescriptorLike | undefined,
   input: Record<string, unknown>,
   fallbackMs: number,

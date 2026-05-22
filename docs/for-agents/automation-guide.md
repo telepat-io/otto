@@ -95,7 +95,7 @@ otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}
 # Run a site command using the returned tabSessionId
 otto cmd --action command.run \
   --tab-session <tabSessionId> \
-  --payload '{"site":"reddit.com","command":"getFeed"}'
+  --payload '{"site":"reddit.com","command":"getPosts"}'
 
 # Run with otto test for stream-capable commands
 otto test reddit.com getChatMessages --stream-follow-ms 30000 --json
@@ -200,5 +200,5 @@ otto agent install claude  # or cursor, vscode, etc.
 
 **Run a site command:**
 ```json
-{ "name": "otto_cmd", "arguments": { "action": "command.run", "tabSession": "tab_abc", "payload": "{\"site\":\"reddit.com\",\"command\":\"getFeed\"}" } }
+{ "name": "otto_cmd", "arguments": { "action": "command.run", "tabSession": "tab_abc", "payload": "{\"site\":\"reddit.com\",\"command\":\"getPosts\"}" } }
 ```

@@ -1,55 +1,56 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createCommandTestStreamRenderer } from '../src/test-stream/format.js';
+import { MOCK_SITE, MOCK_COMMAND_ID } from './test-command-mock.js';
 
 test('renderCommandResponse renders cancelled outcome', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, durationMs: 100, commandOutcome: 'cancelled' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines[0].includes('cancelled'));
 });
 
 test('renderCommandResponse renders timed_out outcome', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: false, durationMs: 100, commandOutcome: 'timed_out' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines[0].includes('timed_out'));
 });
 
 test('renderCommandResponse renders unknown outcome', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: false, durationMs: 100, commandOutcome: 'unknown' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines[0].includes('unknown'));
 });
 
 test('renderCommandResponse renders warnings', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, durationMs: 100, warnings: ['warn1', '', 'warn2'] } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('warn1')));
   assert.ok(lines.some((l) => l.includes('warn2')));
 });
 
 test('renderCommandResponse renders unknown message type', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'ping', payload: {} } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines[0].includes('ping'));
 });
 
 test('renderSubscribeResponse renders unknown message type', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderSubscribeResponse(
     { messageType: 'ping', payload: {} } as import('@telepat/otto-protocol').Envelope,
     'network.http_intercept',
@@ -59,7 +60,7 @@ test('renderSubscribeResponse renders unknown message type', () => {
 });
 
 test('renderListenerUpdate handles missing data', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -72,7 +73,7 @@ test('renderListenerUpdate handles missing data', () => {
 });
 
 test('renderListenerUpdate handles non-domain-object data', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -85,7 +86,7 @@ test('renderListenerUpdate handles non-domain-object data', () => {
 });
 
 test('renderTerminalResponse renders unknown message type', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderTerminalResponse(
     { messageType: 'ping', payload: {} } as import('@telepat/otto-protocol').Envelope,
   );
@@ -94,10 +95,10 @@ test('renderTerminalResponse renders unknown message type', () => {
 
 test('renderCommandResponse with color disabled via NO_COLOR', () => {
   process.env.NO_COLOR = '1';
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, commandOutcome: 'completed' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   delete process.env.NO_COLOR;
   assert.ok(lines[0].includes('completed'));
@@ -105,61 +106,61 @@ test('renderCommandResponse with color disabled via NO_COLOR', () => {
 });
 
 test('renderCommandResponse with explicit useColor false', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false, useColor: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false, useColor: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, commandOutcome: 'completed' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(!lines[0].includes('\u001b['));
 });
 
 test('renderCommandResponse with explicit useColor true', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false, useColor: true });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false, useColor: true });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, commandOutcome: 'completed' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines[0].includes('\u001b['));
 });
 
 test('renderCommandResponse renders user profile data', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: { kind: 'entity.user', id: 'u1', platform: 'reddit', displayName: 'User', username: 'user', stats: { followers: 10, posts: 5 } } } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('User')));
 });
 
 test('renderCommandResponse renders post collection', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: { posts: [{ title: 'Post 1', author: { id: 'a1' }, community: 'r/test', score: 42, commentCount: 3 }] } } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('Post 1')));
 });
 
 test('renderCommandResponse renders array data', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: [1, 2, 3] } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('array(3)')));
 });
 
 test('renderCommandResponse renders primitive data', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: 'hello' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('hello')));
 });
 
 test('renderListenerUpdate handles chat.message', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -180,7 +181,7 @@ test('renderListenerUpdate handles chat.message', () => {
 });
 
 test('renderListenerUpdate handles chat.typing', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -199,7 +200,7 @@ test('renderListenerUpdate handles chat.typing', () => {
 });
 
 test('renderListenerUpdate handles chat.participant', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -219,7 +220,7 @@ test('renderListenerUpdate handles chat.participant', () => {
 });
 
 test('renderListenerUpdate handles chat.message_deleted', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -238,7 +239,7 @@ test('renderListenerUpdate handles chat.message_deleted', () => {
 });
 
 test('renderTerminalResponse renders result', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderTerminalResponse(
     { messageType: 'result', payload: { ok: true, commandOutcome: 'completed', durationMs: 100 } } as import('@telepat/otto-protocol').Envelope,
   );
@@ -247,7 +248,7 @@ test('renderTerminalResponse renders result', () => {
 });
 
 test('renderTerminalResponse renders error', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderTerminalResponse(
     { messageType: 'error', payload: { code: 'test_error', message: 'something went wrong' } } as import('@telepat/otto-protocol').Envelope,
   );
@@ -256,15 +257,15 @@ test('renderTerminalResponse renders error', () => {
 });
 
 test('renderCommandResponse returns raw JSON when jsonOutput is true', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: true });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: true });
   const msg = { messageType: 'result', payload: { ok: true } } as import('@telepat/otto-protocol').Envelope;
-  const lines = renderer.renderCommandResponse(msg, 'getFeed');
+  const lines = renderer.renderCommandResponse(msg, MOCK_COMMAND_ID);
   assert.equal(lines.length, 1);
   assert.ok(lines[0].includes('"ok": true'));
 });
 
 test('renderSubscribeResponse returns raw JSON when jsonOutput is true', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: true });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: true });
   const msg = { messageType: 'result', payload: { ok: true } } as import('@telepat/otto-protocol').Envelope;
   const lines = renderer.renderSubscribeResponse(msg, 'network.http_intercept');
   assert.equal(lines.length, 1);
@@ -272,7 +273,7 @@ test('renderSubscribeResponse returns raw JSON when jsonOutput is true', () => {
 });
 
 test('renderSubscribeResponse renders result', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderSubscribeResponse(
     { messageType: 'result', payload: {} } as import('@telepat/otto-protocol').Envelope,
     'network.http_intercept',
@@ -281,7 +282,7 @@ test('renderSubscribeResponse renders result', () => {
 });
 
 test('renderSubscribeResponse renders error', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderSubscribeResponse(
     { messageType: 'error', payload: { code: 'sub_err', message: 'failed' } } as import('@telepat/otto-protocol').Envelope,
     'network.http_intercept',
@@ -291,7 +292,7 @@ test('renderSubscribeResponse renders error', () => {
 });
 
 test('renderListenerUpdate returns raw JSON when jsonOutput is true', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: true });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: true });
   const msg = {
     messageType: 'event',
     payload: { type: 'listener_update', data: { kind: 'chat.message' } },
@@ -302,7 +303,7 @@ test('renderListenerUpdate returns raw JSON when jsonOutput is true', () => {
 });
 
 test('renderListenerUpdate handles generic domain object', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -315,7 +316,7 @@ test('renderListenerUpdate handles generic domain object', () => {
 });
 
 test('renderListenerUpdate handles chat.message without conversation', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -334,7 +335,7 @@ test('renderListenerUpdate handles chat.message without conversation', () => {
 });
 
 test('renderListenerUpdate handles chat.typing without conversation', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -352,7 +353,7 @@ test('renderListenerUpdate handles chat.typing without conversation', () => {
 });
 
 test('renderListenerUpdate handles chat.participant without displayName', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -370,7 +371,7 @@ test('renderListenerUpdate handles chat.participant without displayName', () => 
 });
 
 test('renderListenerUpdate handles chat.message_deleted without deletedBy', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -388,7 +389,7 @@ test('renderListenerUpdate handles chat.message_deleted without deletedBy', () =
 });
 
 test('renderTerminalResponse returns raw JSON when jsonOutput is true', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: true });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: true });
   const msg = { messageType: 'result', payload: { ok: true } } as import('@telepat/otto-protocol').Envelope;
   const lines = renderer.renderTerminalResponse(msg);
   assert.equal(lines.length, 1);
@@ -396,7 +397,7 @@ test('renderTerminalResponse returns raw JSON when jsonOutput is true', () => {
 });
 
 test('renderTerminalResponse renders unknown message type', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderTerminalResponse(
     { messageType: 'ping', payload: {} } as import('@telepat/otto-protocol').Envelope,
   );
@@ -404,62 +405,62 @@ test('renderTerminalResponse renders unknown message type', () => {
 });
 
 test('renderCommandResponse handles missing commandOutcome and durationMs', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines[0].includes('completed'));
   assert.ok(!lines[0].includes('ms'));
 });
 
 test('renderCommandResponse handles non-array warnings', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, warnings: 'bad' } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(!lines.some((l) => l.includes('warning')));
 });
 
 test('renderCommandResponse renders empty post collection', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: { posts: [] } } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('posts=0')));
 });
 
 test('renderCommandResponse renders post collection with non-record post', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: { posts: ['bad'] } } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('bad')));
 });
 
 test('renderCommandResponse renders post with minimal fields', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: { posts: [{}] } } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('(untitled)')));
 });
 
 test('renderCommandResponse renders user profile with minimal fields', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: { kind: 'entity.user', id: 'u1', platform: 'reddit' } } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('u1')));
 });
 
 test('renderListenerUpdate ignores non-listener-update event', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderListenerUpdate(
     { messageType: 'event', payload: { type: 'other' } } as import('@telepat/otto-protocol').Envelope,
   );
@@ -467,7 +468,7 @@ test('renderListenerUpdate ignores non-listener-update event', () => {
 });
 
 test('renderListenerUpdate uses default updateType', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: { type: 'listener_update', data: { kind: 'chat.message', id: 'm1', from: { id: 'u1' }, to: { id: 'u2' }, message: 'hi' } },
@@ -476,7 +477,7 @@ test('renderListenerUpdate uses default updateType', () => {
 });
 
 test('renderListenerUpdate handles chat.message with no displayName on from/to', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -496,7 +497,7 @@ test('renderListenerUpdate handles chat.message with no displayName on from/to',
 });
 
 test('renderListenerUpdate handles chat.typing with conversation', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -515,7 +516,7 @@ test('renderListenerUpdate handles chat.typing with conversation', () => {
 });
 
 test('renderListenerUpdate handles chat.participant without displayName', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -533,7 +534,7 @@ test('renderListenerUpdate handles chat.participant without displayName', () => 
 });
 
 test('renderListenerUpdate handles chat.message_deleted with conversation and no deletedBy', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getChatMessages', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: 'getChatMessages', jsonOutput: false });
   const lines = renderer.renderListenerUpdate({
     messageType: 'event',
     payload: {
@@ -552,7 +553,7 @@ test('renderListenerUpdate handles chat.message_deleted with conversation and no
 });
 
 test('renderTerminalResponse handles missing durationMs', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderTerminalResponse(
     { messageType: 'result', payload: { ok: true, commandOutcome: 'completed' } } as import('@telepat/otto-protocol').Envelope,
   );
@@ -561,10 +562,10 @@ test('renderTerminalResponse handles missing durationMs', () => {
 });
 
 test('renderCommandResponse renders user profile with all fields', () => {
-  const renderer = createCommandTestStreamRenderer({ site: 'reddit.com', command: 'getFeed', jsonOutput: false });
+  const renderer = createCommandTestStreamRenderer({ site: MOCK_SITE, command: MOCK_COMMAND_ID, jsonOutput: false });
   const lines = renderer.renderCommandResponse(
     { messageType: 'result', payload: { ok: true, data: { kind: 'entity.user', id: 'u1', platform: 'reddit', displayName: 'User', profileUrl: 'http://example.com', createdAt: '2024-01-01', flags: ['mod'], stats: { followers: 10, posts: 5 } } } } as import('@telepat/otto-protocol').Envelope,
-    'getFeed',
+    MOCK_COMMAND_ID,
   );
   assert.ok(lines.some((l) => l.includes('profileUrl')));
   assert.ok(lines.some((l) => l.includes('createdAt')));

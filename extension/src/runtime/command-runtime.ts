@@ -120,10 +120,10 @@ async function emitCommandDebugLog(
 }
 
 function parseCommandRunPayload(command: CommandPayload): CommandRun {
-  if (command.action === 'command.reddit_feed') {
+  if (command.action === 'command.reddit_posts') {
     return {
       site: 'reddit.com',
-      commandId: 'getFeed',
+      commandId: 'getPosts',
       input: {},
       authMode: 'auto',
     };

@@ -35,7 +35,7 @@ console.log(nodes);
 const result = await client.commands.run({
   nodeId: nodes[0].nodeId,
   site: 'reddit.com',
-  command: 'getFeed',
+  command: 'getPosts',
   input: { subreddit: 'typescript', limit: 10 },
 });
 console.log(result);
@@ -159,8 +159,8 @@ interface CommandDescriptor {
 const result = await client.commands.run({
   nodeId: 'node_xyz',
   site: 'reddit.com',
-  command: 'getFeed',
-  input: { subreddit: 'typescript', limit: 10 },
+   command: 'getPosts',
+   input: { subreddit: 'typescript', limit: 10 },
   timeoutMs: 30000,
 });
 ```
@@ -284,7 +284,7 @@ try {
   const result = await client.commands.run({
     nodeId: 'node_xyz',
     site: 'reddit.com',
-    command: 'getFeed',
+    command: 'getPosts',
   });
 } catch (error) {
   if (error instanceof OttoAuthError) {
@@ -345,7 +345,7 @@ export default {
       const result = await client.commands.run({
         nodeId: nodes[0].nodeId,
         site: 'reddit.com',
-        command: 'getFeed',
+        command: 'getPosts',
         input: { subreddit: 'typescript', limit: 25 },
       });
 

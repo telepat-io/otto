@@ -91,7 +91,7 @@ Run `npm run e2e:manual` after relay and extension node are connected.
 | `OTTO_E2E_COMMAND_TIMEOUT_MS` | `10000` | Command timeout budget |
 | `OTTO_E2E_RUN_COMMAND` | unset (`0`) | Set to `1` to include `command.run` |
 | `OTTO_E2E_COMMAND_SITE` | `reddit.com` | Site for manual command run |
-| `OTTO_E2E_COMMAND_ID` | `getFeed` | Command id for manual command run |
+| `OTTO_E2E_COMMAND_ID` | `getPosts` | Command id for manual command run |
 | `OTTO_CONTROLLER_ACCESS_TOKEN` | unset | Skip automatic pairing approval when provided |
 
 ## Setup and settings validation focus

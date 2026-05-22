@@ -71,7 +71,7 @@ Use `otto commands list --site <site>` to inspect the live command surface for y
 
 | Site | Available commands |
 |---|---|
-| `reddit.com` | `getFeed`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
+| `reddit.com` | `getPosts`, `getUserInfo`, `sendChatMessage`, `getChatMessages`, `commentOnPost` |
 | `linkedin.com` | `getFeed`, `commentOnPost` |
 | `news.ycombinator.com` | `getFrontPage` |
 | `google.com` | `getSearchResults` |

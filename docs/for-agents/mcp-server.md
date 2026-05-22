@@ -138,7 +138,7 @@ You can also request connected node IDs with `nodes: true`:
     "name": "otto_cmd",
     "arguments": {
       "action": "command.run",
-      "payload": "{\"site\":\"reddit.com\",\"command\":\"getFeed\"}"
+      "payload": "{\"site\":\"reddit.com\",\"command\":\"getPosts\"}"
     }
   }
 }

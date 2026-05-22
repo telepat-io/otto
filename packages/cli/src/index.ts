@@ -44,6 +44,12 @@ import {
 } from './client-secret-store.js';
 import { resolveCleanupSocketStrategy } from './test-cleanup.js';
 import { createSocketClosedWhileWaitingError, toSocketCloseAlertPayload } from './cli/socket-errors.js';
+import {
+  applyTestInputDefaults,
+  resolveDescriptorTimeoutMs,
+  DEFAULT_TEST_TIMEOUT_MS,
+  type CommandDescriptorLike as CommandTimeoutDescriptor,
+} from './cli/run-test.js';
 import { buildExtractContentRequest, parseExtractContentFormat } from './content-extraction.js';
 
 type CommandDescriptorLike = {
@@ -1338,7 +1344,7 @@ program
       extension: nextConfig.extension,
       pairingReady: Boolean(nextConfig.controllerAccessToken),
       nextSteps: nextConfig.controllerAccessToken
-        ? ['Open extension popup to confirm node status', 'otto commands list', 'otto test reddit.com getFeed']
+        ? ['Open extension popup to confirm node status', 'otto commands list', 'otto test reddit.com getPosts']
         : [
             'Open extension popup and confirm pairing code is visible',
             'otto authcode',
@@ -1859,7 +1865,11 @@ program
       ? parsePositiveNumberOption(opts.streamPollIntervalMs, '--stream-poll-interval-ms')
       : undefined;
     const jsonOutput = Boolean(opts.json) || isJsonOutput(config);
-    const commandInput = parseJsonObject(opts.payload, '--payload');
+    const commandInput = applyTestInputDefaults(
+      site,
+      command,
+      parseJsonObject(opts.payload, '--payload'),
+    );
     const ws = await openControllerSocket(config);
     const stopHeartbeat = startControllerHeartbeat(ws);
     const renderer = createCommandTestStreamRenderer({
@@ -1899,13 +1909,13 @@ program
           action: 'primitive.tab.close',
           tabSession: openedTabSessionId,
           payload: { tabSessionId: openedTabSessionId },
-          timeoutMs,
+          timeoutMs: resolvedTimeoutMs,
         })
         : await runCommandOnce(config, targetNodeId, {
           action: 'primitive.tab.close',
           tabSession: openedTabSessionId,
           payload: { tabSessionId: openedTabSessionId },
-          timeoutMs,
+          timeoutMs: resolvedTimeoutMs,
         });
 
       for (const line of renderer.renderCommandResponse(closeResponse, 'primitive.tab.close')) {
@@ -1986,14 +1996,35 @@ program
     process.once('SIGINT', onSigint);
     process.once('SIGTERM', onSigterm);
 
+    let resolvedTimeoutMs = timeoutMs;
+    if (Number.isFinite(timeoutMs) && timeoutMs === DEFAULT_TEST_TIMEOUT_MS) {
+      const listResponse = await runCommandWithSocket(ws, targetNodeId, {
+        action: 'command.list',
+        payload: {},
+        timeoutMs,
+        signal: commandAbortController.signal,
+      });
+
+      if (listResponse.messageType === 'result') {
+        const payload = listResponse.payload as { data?: { commands?: CommandTimeoutDescriptor[] } };
+        const descriptors = Array.isArray(payload.data?.commands) ? payload.data?.commands : [];
+        const descriptor = descriptors.find((entry) => {
+          return String(entry.site ?? '').toLowerCase() === String(site).toLowerCase()
+            && String(entry.id ?? '') === String(command);
+        });
+
+        resolvedTimeoutMs = resolveDescriptorTimeoutMs(descriptor, commandInput, timeoutMs);
+      }
+    }
+
     try {
-      const testInfo = await resolveTestInfo(config, targetNodeId, site, command, timeoutMs, ws);
+      const testInfo = await resolveTestInfo(config, targetNodeId, site, command, resolvedTimeoutMs, ws);
 
       if (!tabSessionId) {
         const openResponse = await runCommandWithSocket(ws, targetNodeId, {
           action: 'primitive.tab.open',
           payload: { url: testInfo.openUrl },
-          timeoutMs,
+          timeoutMs: resolvedTimeoutMs,
           signal: commandAbortController.signal,
         });
 
@@ -2043,7 +2074,7 @@ program
           input: commandInput,
           authMode: opts.authMode,
         },
-        timeoutMs,
+        timeoutMs: resolvedTimeoutMs,
         signal: commandAbortController.signal,
       });
       activeCommandTestRequestId = testCommand.requestId;
@@ -2140,7 +2171,7 @@ program
                 input: commandInput,
                 authMode: opts.authMode,
               },
-              timeoutMs,
+              timeoutMs: resolvedTimeoutMs,
               signal: commandAbortController.signal,
             });
 
@@ -2157,7 +2188,7 @@ program
           command,
           streamListener.listener,
           streamOptions,
-          timeoutMs,
+          resolvedTimeoutMs,
           jsonOutput,
           streamFollowMs,
           probe,
@@ -2531,9 +2562,9 @@ program
         try {
           await runCommandOnce(config, targetNodeId, {
             action: 'primitive.tab.close',
-            tabSession: openedTabSessionId,
-            payload: { tabSessionId: openedTabSessionId },
-            timeoutMs,
+          tabSession: openedTabSessionId,
+          payload: { tabSessionId: openedTabSessionId },
+          timeoutMs,
           });
         } catch {
           // Best-effort cleanup for auto-opened extraction tabs.

@@ -12,7 +12,7 @@ otto cmd --action primitive.tab.open --payload '{"url":"https://www.reddit.com"}
 # Returns: { tabSessionId: "...", ... }
 
 # Step 2: Run command on that tab
-otto cmd --action command.run --tab-session <tabSessionId> --payload '{"site":"reddit.com","command":"getFeed"}' --json
+otto cmd --action command.run --tab-session <tabSessionId> --payload '{"site":"reddit.com","command":"getPosts"}' --json
 ```
 
 ## Pattern 2: Quick test flow
@@ -20,7 +20,7 @@ otto cmd --action command.run --tab-session <tabSessionId> --payload '{"site":"r
 For development/testing, `otto test` combines tab open + command execution:
 
 ```bash
-otto test reddit.com getFeed --json
+otto test reddit.com getPosts --json
 ```
 
 ## Pattern 3: Streaming command output
@@ -98,10 +98,10 @@ otto setup --relay-url ws://127.0.0.1:8787?role=controller --non-interactive
 
 # All commands use --json for machine parsing
 otto commands list --json
-otto test reddit.com getFeed --json
+otto test reddit.com getPosts --json
 
 # Enforce caller-side timeouts
-timeout 60 otto test reddit.com getFeed --json
+timeout 60 otto test reddit.com getPosts --json
 ```
 
 ## Pattern 9: Multi-machine deployment
@@ -127,7 +127,7 @@ For automated test flows that need a controller:
 
 ```bash
 # otto test auto-registers if no controller exists
-otto test reddit.com getFeed --controller-name "test-runner" --json
+otto test reddit.com getPosts --controller-name "test-runner" --json
 
 # Clean up after test
 # (use --cleanup-test-controller when available)
@@ -172,7 +172,7 @@ otto client status --json
 otto commands list --json
 
 # Step 7: Run a test command
-otto test reddit.com getFeed --json
+otto test reddit.com getPosts --json
 ```
 
 ## Pattern 12: Empty nodes recovery

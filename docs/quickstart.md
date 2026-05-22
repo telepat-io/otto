@@ -76,10 +76,10 @@ Expected output: a JSON array of available commands from the connected node.
 ### 5. Run a command
 
 ```bash
-otto test reddit.com getFeed
+otto test reddit.com getPosts
 ```
 
-This opens a managed tab, runs the `getFeed` command on `reddit.com`, streams results, and closes the tab on completion.
+This opens a managed tab, runs the `getPosts` command on `reddit.com`, streams results, and closes the tab on completion.
 
 You can also run LinkedIn feed extraction:
 
@@ -95,7 +95,7 @@ A successful run prints command output JSON and exits with code `0`. If you see 
 
 1. The tab stays open.
 2. Complete login manually in the browser.
-3. Rerun: `otto test reddit.com getFeed`
+3. Rerun: `otto test reddit.com getPosts`
 
 For LinkedIn-specific clipboard URL extraction prompts, if you see a clipboard permission error rerun with:
 

@@ -40,7 +40,7 @@ test('runTestCommand throws on invalid authMode', async () => {
   await assert.rejects(
     runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         payload: '{}',
         timeout: '30000',
@@ -104,7 +104,7 @@ test('runTestCommand handles open tab error', async () => {
     process.exitCode = undefined;
     await runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         payload: '{}',
         timeout: '30000',
@@ -165,7 +165,7 @@ test('runTestCommand throws when tabSessionId missing after open', async () => {
   await assert.rejects(
     runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         payload: '{}',
         timeout: '30000',
@@ -229,7 +229,7 @@ test('runTestCommand waits for interrupt when no stream and waitForInterrupt ena
     process.exitCode = undefined;
     const runPromise = runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         payload: '{}',
         timeout: '30000',
@@ -292,7 +292,7 @@ test('runTestCommand handles non-socket error', async () => {
     await assert.rejects(
       runTestCommand(
         'reddit.com',
-        'getFeed',
+        'getPosts',
         {
           payload: '{}',
           timeout: '30000',
@@ -358,7 +358,7 @@ test('runTestCommand uses jsonOutput from config', async () => {
     process.exitCode = undefined;
     await runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         tabSession: 'tab_json_1',
         payload: '{}',
@@ -530,7 +530,7 @@ test('runTestCommand reconnects for tab close when socket not open', async () =>
     process.exitCode = undefined;
     await runTestCommand(
       'reddit.com',
-      'getFeed',
+      'getPosts',
       {
         payload: '{}',
         timeout: '30000',

@@ -38,7 +38,7 @@ export const DEFAULT_CONTROLLER_SCOPES: string[] =
     'command.list',
     'command.run',
     'command.test',
-    'command.reddit_feed',
+    'command.reddit_posts',
     'listener.subscribe',
     'listener.unsubscribe',
   ];
