@@ -18,10 +18,11 @@ const config = {
   onBrokenLinks: 'throw',
   i18n: {
     defaultLocale: 'en',
-    locales: ['en', 'zh-CN'],
+    locales: ['en', 'zh-CN', 'de'],
     localeConfigs: {
       en: { label: 'English' },
-      'zh-CN': { label: '简体中文' }
+      'zh-CN': { label: '简体中文' },
+      de: { label: 'Deutsch' }
     }
   },
   markdown: {

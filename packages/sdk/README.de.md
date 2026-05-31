@@ -1,8 +1,6 @@
 # @telepat/otto-sdk
 
-[🇺🇸 English](./README.md) | [🇨🇳 简体中文](./README.zh-CN.md) | [🇩🇪 Deutsch](./README.de.md)
-
-TypeScript SDK for integrating 3rd-party JavaScript applications as Otto controllers. Control browser nodes, execute commands, stream listener updates, and manage permissions—all via a clean, type-safe API.
+TypeScript SDK zur Integration von Drittanbieter-JavaScript-Anwendungen als Otto-Controller. Steuern Sie Browser-Nodes, führen Sie Befehle aus, streamen Sie Listener-Updates und verwalten Sie Berechtigungen — alles über eine saubere, typsichere API.
 
 ## Installation
 
@@ -10,83 +8,83 @@ TypeScript SDK for integrating 3rd-party JavaScript applications as Otto control
 npm install @telepat/otto-sdk
 ```
 
-Requires Node.js 22+ or any edge runtime with native `fetch` and `WebSocket` support (Cloudflare Workers, Deno, etc.).
+Erfordert Node.js 22+ oder eine beliebige Edge-Runtime mit nativer `fetch`- und `WebSocket`-Unterstützung (Cloudflare Workers, Deno usw.).
 
-## Quick Start
+## Schnellstart
 
 ```typescript
 import { OttoClient } from '@telepat/otto-sdk';
 
-// Create a client with your relay URL and controller credentials
+// Client mit Relay-URL und Controller-Anmeldeinformationen erstellen
 const client = new OttoClient({
   relayUrl: 'wss://relay.example.com',
   clientId: 'clt_xxxxxxxxxx',
   clientSecret: 'cs_yyyyyyyyyyyyyyyyyy',
 });
 
-// Connect to the relay
+// Mit dem Relay verbinden
 await client.connect();
 
-// List connected nodes you have access to
+// Verbundene Nodes auflisten, auf die Sie Zugriff haben
 const nodes = await client.nodes.list();
 console.log(nodes);
 
-// Execute a command on a node
+// Befehl auf einem Node ausführen
 const result = await client.commands.run({
   nodeId: nodes[0].nodeId,
   site: 'reddit.com',
-  command: 'search_posts',,
+  command: 'search_posts',
   input: { query: 'typescript' },
 });
 console.log(result);
 
-// Stream listener updates
+// Listener-Updates streamen
 const stream = client.listeners.subscribe({
   nodeId: nodes[0].nodeId,
   listener: 'network.http_intercept',
   options: { site: 'example.com' },
 });
 
-// Use async iteration
+// Asynchrone Iteration verwenden
 for await (const event of stream) {
-  console.log('Received:', event);
+  console.log('Empfangen:', event);
 }
 
-// Or use EventEmitter-style callbacks
+// Oder EventEmitter-artige Callbacks verwenden
 stream.on('data', (event) => {
-  console.log('Received:', event);
+  console.log('Empfangen:', event);
 });
 
 stream.on('error', (error) => {
-  console.error('Stream error:', error);
+  console.error('Stream-Fehler:', error);
 });
 
 stream.on('end', () => {
-  console.log('Stream ended');
+  console.log('Stream beendet');
 });
 ```
 
-## API Reference
+## API-Referenz
 
 ### `OttoClient`
 
-Main SDK class for interacting with the Otto relay.
+Haupt-SDK-Klasse für die Interaktion mit dem Otto-Relay.
 
-#### Constructor
+#### Konstruktor
 
 ```typescript
 new OttoClient(options: {
-  relayUrl: string;        // WebSocket URL (e.g., 'wss://relay.example.com')
-  clientId: string;        // Controller client ID (from relay registration)
-  clientSecret: string;    // Controller client secret (from relay registration)
+  relayUrl: string;        // WebSocket-URL (z. B. 'wss://relay.example.com')
+  clientId: string;        // Controller-Client-ID (aus der Relay-Registrierung)
+  clientSecret: string;    // Controller-Client-Secret (aus der Relay-Registrierung)
 })
 ```
 
-#### Methods
+#### Methoden
 
 ##### `connect(): Promise<void>`
 
-Establishes connection to the relay and authenticates. Called automatically on first API call if not already connected.
+Stellt die Verbindung zum Relay her und authentifiziert sich. Wird beim ersten API-Aufruf automatisch aufgerufen, falls noch nicht verbunden.
 
 ```typescript
 await client.connect();
@@ -94,7 +92,7 @@ await client.connect();
 
 ##### `disconnect(): Promise<void>`
 
-Closes the WebSocket connection gracefully.
+Schließt die WebSocket-Verbindung ordnungsgemäß.
 
 ```typescript
 await client.disconnect();
@@ -102,18 +100,18 @@ await client.disconnect();
 
 ### `client.nodes`
 
-Node listing and management.
+Node-Auflistung und -Verwaltung.
 
 #### `list(): Promise<Node[]>`
 
-Returns all nodes you have ACL-granted access to and are currently connected to the relay.
+Gibt alle Nodes zurück, auf die Sie ACL-Zugriff haben und die derzeit mit dem Relay verbunden sind.
 
 ```typescript
 const nodes = await client.nodes.list();
 // [{ nodeId: 'node_xyz' }, ...]
 ```
 
-**Returns:**
+**Rückgabetyp:**
 ```typescript
 interface Node {
   nodeId: string;
@@ -122,17 +120,17 @@ interface Node {
 
 ### `client.commands`
 
-Command execution on nodes.
+Befehlsausführung auf Nodes.
 
 #### `list(options: { nodeId: string }): Promise<CommandDescriptor[]>`
 
-Lists all available commands on a node.
+Listet alle verfügbaren Befehle auf einem Node auf.
 
 ```typescript
 const commands = await client.commands.list({ nodeId: 'node_xyz' });
 ```
 
-**Returns:**
+**Rückgabetyp:**
 ```typescript
 interface CommandDescriptor {
   site: string;
@@ -147,7 +145,7 @@ interface CommandDescriptor {
 
 #### `run(options: { nodeId: string; site: string; command: string; input?: Record<string, unknown>; timeoutMs?: number }): Promise<CommandResult>`
 
-Executes a command on a node and waits for the result.
+Führt einen Befehl auf einem Node aus und wartet auf das Ergebnis.
 
 ```typescript
 const result = await client.commands.run({
@@ -159,7 +157,7 @@ const result = await client.commands.run({
 });
 ```
 
-**Returns:**
+**Rückgabetyp:**
 ```typescript
 interface CommandResult {
   ok: boolean;
@@ -170,15 +168,15 @@ interface CommandResult {
 }
 ```
 
-**Throws:** `OttoCommandError` if the command fails or times out.
+**Wirft:** `OttoCommandError`, wenn der Befehl fehlschlägt oder eine Zeitüberschreitung auftritt.
 
 ### `client.listeners`
 
-Streaming listener subscriptions for real-time events.
+Streaming-Listener-Abonnements für Echtzeit-Ereignisse.
 
 #### `subscribe(options: { nodeId: string; listener: string; options?: Record<string, unknown> }): StreamSession`
 
-Subscribes to a listener stream on a node.
+Abonniert einen Listener-Stream auf einem Node.
 
 ```typescript
 const stream = client.listeners.subscribe({
@@ -188,42 +186,42 @@ const stream = client.listeners.subscribe({
 });
 ```
 
-**Returns:** `StreamSession` — implements both `AsyncIterable` and `EventEmitter` patterns.
+**Rückgabetyp:** `StreamSession` — implementiert sowohl `AsyncIterable`- als auch `EventEmitter`-Muster.
 
 #### `StreamSession` API
 
-Async iteration:
+Asynchrone Iteration:
 ```typescript
 for await (const event of stream) {
   console.log(event);
 }
 ```
 
-EventEmitter-style:
+EventEmitter-Stil:
 ```typescript
 stream.on('data', (event) => { });
 stream.on('error', (error) => { });
 stream.on('end', () => { });
 ```
 
-Unsubscribe:
+Abbestellen:
 ```typescript
 await stream.unsubscribe();
 ```
 
 ### `client.pairing`
 
-Pairing workflows for node setup.
+Pairing-Workflows für die Node-Einrichtung.
 
 #### `listPending(): Promise<PairingChallenge[]>`
 
-Lists pending pairing challenges awaiting approval.
+Listet ausstehende Pairing-Challenges auf, die auf Genehmigung warten.
 
 ```typescript
 const pending = await client.pairing.listPending();
 ```
 
-**Returns:**
+**Rückgabetyp:**
 ```typescript
 interface PairingChallenge {
   challengeId: string;
@@ -236,15 +234,15 @@ interface PairingChallenge {
 
 #### `approve(options: { code: string }): Promise<void>`
 
-Approves a pairing challenge by its 6-digit code.
+Genehmigt eine Pairing-Challenge anhand ihres 6-stelligen Codes.
 
 ```typescript
 await client.pairing.approve({ code: '123456' });
 ```
 
-## Error Handling
+## Fehlerbehandlung
 
-The SDK exposes specific error types for better error handling:
+Das SDK stellt spezifische Fehlertypen für eine bessere Fehlerbehandlung bereit:
 
 ```typescript
 import { OttoError, OttoAuthError, OttoTimeoutError, OttoCommandError } from '@telepat/otto-sdk';
@@ -253,25 +251,25 @@ try {
   const result = await client.commands.run({ /* ... */ });
 } catch (error) {
   if (error instanceof OttoAuthError) {
-    console.error('Authentication failed:', error.message);
+    console.error('Authentifizierung fehlgeschlagen:', error.message);
   } else if (error instanceof OttoTimeoutError) {
-    console.error('Command timed out');
+    console.error('Befehl hat Zeitüberschreitung');
   } else if (error instanceof OttoCommandError) {
-    console.error('Command execution failed:', error.message);
+    console.error('Befehlsausführung fehlgeschlagen:', error.message);
   }
 }
 ```
 
-## Edge Runtime Compatibility
+## Edge-Runtime-Kompatibilität
 
-The SDK is compatible with edge runtimes (Cloudflare Workers, Deno, etc.) and uses only native APIs:
+Das SDK ist mit Edge-Runtimes (Cloudflare Workers, Deno usw.) kompatibel und verwendet ausschließlich native APIs:
 
-- Native `fetch` for HTTP requests
-- Native `WebSocket` for streaming
-- No Node.js-specific modules
+- Natives `fetch` für HTTP-Anfragen
+- Natives `WebSocket` für Streaming
+- Keine Node.js-spezifischen Module
 
 ```typescript
-// Works in Cloudflare Workers
+// Funktioniert in Cloudflare Workers
 import { OttoClient } from '@telepat/otto-sdk';
 
 export default {
@@ -284,16 +282,16 @@ export default {
 };
 ```
 
-## Relay Registration
+## Relay-Registrierung
 
-To use this SDK, you must first register a controller client with the relay:
+Um dieses SDK zu verwenden, müssen Sie zunächst einen Controller-Client beim Relay registrieren:
 
-1. Via the Otto CLI:
+1. Über die Otto-CLI:
    ```bash
    otto setup --non-interactive --controller-name "My App"
    ```
 
-2. Or programmatically by making an HTTP request (requires `OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION=1` on the relay):
+2. Oder programmatisch per HTTP-Anfrage (erfordert `OTTO_ALLOW_REMOTE_CONTROLLER_REGISTRATION=1` auf dem Relay):
    ```typescript
    const response = await fetch('http://relay.example.com/api/controller/register', {
      method: 'POST',
@@ -306,6 +304,6 @@ To use this SDK, you must first register a controller client with the relay:
    const { clientId, clientSecret } = await response.json();
    ```
 
-## License
+## Lizenz
 
 MIT

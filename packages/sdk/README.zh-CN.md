@@ -2,7 +2,7 @@
 
 用于将第三方 JavaScript 应用程序集成为 Otto 控制器的 TypeScript SDK。通过简洁、类型安全的 API 控制浏览器节点、执行命令、流式传输监听器更新并管理权限。
 
-[English](./README.md) | 中文
+[🇺🇸 English](./README.md) | 中文 | [🇩🇪 Deutsch](./README.de.md)
 
 ## 安装
 
