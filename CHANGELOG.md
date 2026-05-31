@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/telepat-io/otto/compare/v0.19.0...v0.20.0) (2026-05-31)
+
+
+### Features
+
+* update 'getPosts' for LinkedIn integration, search support ([ce912c9](https://github.com/telepat-io/otto/commit/ce912c9eb42c5f63f4e3a3acdc735a1de151191b))
+
 ## [0.19.0](https://github.com/telepat-io/otto/compare/v0.18.0...v0.19.0) (2026-05-22)
 
 
