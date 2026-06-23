@@ -2643,12 +2643,38 @@ program
     }
   });
 
-program
-  .command('mcp')
-  .description('Start the MCP server on stdio for agent access')
+const mcpCmd = program.command('mcp').description('Model Context Protocol server operations');
+
+mcpCmd
+  .command('serve')
+  .description('Start the Otto MCP server over stdio transport (for agent access)')
   .action(async () => {
     const { startOttoMcpServer } = await import('./mcp/server.js');
     await startOttoMcpServer();
+  });
+
+mcpCmd
+  .command('serve-http')
+  .description('Start the Otto MCP server over Streamable HTTP transport')
+  .requiredOption('--api-key <key>', 'API key for bearer authentication (or set OTTO_MCP_API_KEY)', process.env.OTTO_MCP_API_KEY)
+  .option('--port <port>', 'Port to listen on', '3001')
+  .option('--host <host>', 'Host to bind to (use 0.0.0.0 for network access)', '127.0.0.1')
+  .option('--endpoint <path>', 'MCP endpoint path', '/mcp')
+  .action(async (opts: { apiKey: string; port: string; host: string; endpoint: string }) => {
+    const port = Number.parseInt(opts.port, 10);
+    if (Number.isNaN(port) || port < 1 || port > 65535) {
+      throw new Error(`Invalid port: ${opts.port}`);
+    }
+    if (!opts.apiKey) {
+      throw new Error('--api-key is required (or set OTTO_MCP_API_KEY env var)');
+    }
+    const { startOttoMcpHttpServer } = await import('./mcp/http-server.js');
+    await startOttoMcpHttpServer({
+      port,
+      host: opts.host,
+      apiKey: opts.apiKey,
+      endpoint: opts.endpoint,
+    });
   });
 
 const agentCmd = program.command('agent').description('Manage agent framework integrations');

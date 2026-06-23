@@ -12,20 +12,24 @@ keywords:
 
 # MCP Server
 
-Otto provides a first-party MCP (Model Context Protocol) server for programmatic agent access. The server exposes Otto's full command surface as MCP tools over stdio transport.
+Otto provides a first-party MCP (Model Context Protocol) server for programmatic agent access. The server exposes Otto's full command surface as MCP tools over either stdio or Streamable HTTP transport.
 
 ## Starting the server
 
 ```bash
-otto mcp
+# stdio — for local, process-spawned agent clients
+otto mcp serve
+
+# Streamable HTTP — for remote / container / ChatGPT-style hosts
+otto mcp serve-http --api-key <key> [--port 3001] [--host 127.0.0.1] [--endpoint /mcp]
 ```
 
-The server runs on stdio transport and is intended to be spawned by an MCP client (agent framework). It does not accept interactive input.
+The `serve` subcommand runs on stdio transport and is intended to be spawned by an MCP client (agent framework); it does not accept interactive input. The `serve-http` subcommand serves the same tools over a network endpoint, with each session tracked by an `Mcp-Session-Id` header.
 
 ## Transport and scope
 
-- **Transport**: stdio (JSON-RPC messages on stdout, logs on stderr)
-- **Intended usage**: local process-spawned MCP clients
+- **`serve` (stdio)**: JSON-RPC messages on stdout, logs on stderr; for local process-spawned MCP clients.
+- **`serve-http` (Streamable HTTP)**: bearer-authenticated network endpoint (`Authorization: Bearer <api-key>`, or set `OTTO_MCP_API_KEY`) with allowed-origin validation; for remote / container / ChatGPT hosts. Binds `127.0.0.1:3001/mcp` by default — pass `--host 0.0.0.0` for network access.
 - **Protocol**: MCP 1.0 with initialize, tools/list, and tools/call
 
 ## Available tools

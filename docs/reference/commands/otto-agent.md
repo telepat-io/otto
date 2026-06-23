@@ -91,7 +91,8 @@ otto agent uninstall claude
 
 ## Related commands
 
-- `otto mcp` — start the MCP server directly
+- `otto mcp serve` — start the MCP server on stdio directly
+- `otto mcp serve-http` — start the MCP server over Streamable HTTP
 - `otto setup` — initial Otto setup
 
 ## Related pages

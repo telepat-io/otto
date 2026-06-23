@@ -1,33 +1,57 @@
 ---
 title: otto mcp
-description: Start the Otto MCP server on stdio for agent access.
+description: Start the Otto MCP server over stdio or Streamable HTTP for agent access.
 keywords:
   - mcp
   - server
   - agent
   - stdio
+  - http
 ---
 
 # otto mcp
 
-Start the Otto MCP server on stdio for agent access.
+Start the Otto MCP server. Two transports are available as subcommands:
+
+- `otto mcp serve` — stdio transport (for local, process-spawned agent clients)
+- `otto mcp serve-http` — Streamable HTTP transport (for remote / container / ChatGPT-style hosts)
 
 ## Usage
 
 ```bash
-otto mcp
+# stdio (default for local agents)
+otto mcp serve
+
+# Streamable HTTP
+otto mcp serve-http --api-key <key> [--port 3001] [--host 127.0.0.1] [--endpoint /mcp]
 ```
 
 ## What this command does
 
-Launches an MCP (Model Context Protocol) server that exposes Otto's full command surface as MCP tools over stdio transport. The server is designed to be spawned by an MCP client (agent framework) and communicates via JSON-RPC messages on stdout.
+Launches an MCP (Model Context Protocol) server that exposes Otto's full command surface as MCP tools. Both subcommands register the identical tool set; they differ only in transport:
+
+- **`serve`** communicates via JSON-RPC messages over stdio. It is designed to be spawned by an MCP client (agent framework). Logs go to stderr; stdout is reserved for protocol messages.
+- **`serve-http`** serves the MCP protocol over Streamable HTTP on a network endpoint. Each client session is tracked by an `Mcp-Session-Id` header. Requests are authenticated with a bearer token and validated against an allowed-origin list.
 
 ## Transport and scope
 
-- **Transport**: stdio
-- **Protocol**: MCP 1.0
-- **Intended usage**: local process-spawned MCP clients
-- **Logs**: stderr only (stdout is reserved for protocol messages)
+| | `otto mcp serve` | `otto mcp serve-http` |
+|---|---|---|
+| Transport | stdio | Streamable HTTP |
+| Intended usage | local process-spawned clients | remote / container / ChatGPT hosts |
+| Auth | inherited from the spawning process | `Authorization: Bearer <api-key>` |
+| Logs | stderr only | stdout |
+
+## `serve-http` options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--api-key <key>` | `OTTO_MCP_API_KEY` env var | Bearer token required on every request. Required (flag or env var). |
+| `--port <port>` | `3001` | Port to listen on. |
+| `--host <host>` | `127.0.0.1` | Host to bind to. Use `0.0.0.0` for network access. |
+| `--endpoint <path>` | `/mcp` | HTTP path the MCP protocol is served on. |
+
+The endpoint accepts `POST` (initialize a session / send requests), `GET` (SSE stream for an existing session), and `DELETE` (terminate a session). Requests without a valid `Bearer` token receive `401`/`403`; requests from a disallowed `Origin` receive `403`.
 
 ## Available tools
 
@@ -50,7 +74,7 @@ The server exposes 25 tools:
 | Exit code | Meaning |
 |-----------|---------|
 | 0 | Server exited normally |
-| 1 | Server error (check stderr for details) |
+| 1 | Server error (check logs for details) |
 
 ## Related commands
 

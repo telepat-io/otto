@@ -131,7 +131,8 @@ otto agent install vscode
 otto agent status
 
 # Start MCP server directly (for custom integrations)
-otto mcp
+otto mcp serve                              # stdio
+otto mcp serve-http --api-key <key>         # Streamable HTTP
 ```
 
 Supported frameworks: Claude Code, Claude Desktop, ChatGPT Desktop, Gemini CLI, Codex, Cursor, VS Code, OpenCode.

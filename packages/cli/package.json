@@ -39,6 +39,8 @@
     "@telepat/otto-relay": "0.20.0",
     "adm-zip": "^0.5.16",
     "commander": "^14.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
     "ink": "^6.3.0",
     "keytar": "^7.9.0",
     "nanoid": "^5.1.6",
@@ -49,6 +51,8 @@
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/react": "^19.0.0",
     "@types/ws": "^8.18.1",
     "tsx": "^4.20.3",

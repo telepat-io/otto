@@ -89,7 +89,7 @@ function installClaude(): AgentInstallResult {
   const settingsPath = join(homedir(), '.claude', 'settings.json');
   const settings = readJsonFile(settingsPath);
   const mcpServers = (settings.mcpServers as Record<string, unknown>) ?? {};
-  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp'] };
+  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp', 'serve'] };
   settings.mcpServers = mcpServers;
   writeJsonFile(settingsPath, settings);
 
@@ -133,7 +133,7 @@ function installClaudeDesktop(): AgentInstallResult {
   const configPath = getClaudeDesktopConfigPath();
   const config = readJsonFile(configPath);
   const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
-  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp'] };
+  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp', 'serve'] };
   config.mcpServers = mcpServers;
   writeJsonFile(configPath, config);
 
@@ -172,11 +172,12 @@ function isClaudeDesktopInstalled(): boolean {
 function installChatGpt(): AgentInstallResult {
   console.log('[otto] ChatGPT Desktop uses remote MCP servers via Developer Mode.');
   console.log('[otto] To register Otto with ChatGPT:');
-  console.log('  1. Open ChatGPT Desktop > Settings > Apps > Advanced settings');
-  console.log('  2. Enable Developer mode');
-  console.log('  3. Create a new MCP app pointing to Otto (requires a remote MCP proxy)');
+  console.log('  1. Start the Otto HTTP MCP server: otto mcp serve-http --api-key <key>');
+  console.log('     (binds 127.0.0.1:3001/mcp by default; pass --host 0.0.0.0 for remote access)');
+  console.log('  2. Open ChatGPT Desktop > Settings > Apps > Advanced settings');
+  console.log('  3. Enable Developer mode');
+  console.log('  4. Create a new MCP app with URL http://127.0.0.1:3001/mcp and a Bearer <key> auth header');
   console.log('[otto] Note: ChatGPT Desktop requires a remote HTTP MCP endpoint, not local stdio.');
-  console.log('[otto] For local usage, consider using a stdio-to-HTTP proxy.');
 
   return {
     runtime: 'chatgpt',
@@ -208,7 +209,7 @@ function installGemini(): AgentInstallResult {
   const settingsPath = getGeminiSettingsPath();
   const settings = readJsonFile(settingsPath);
   const mcpServers = (settings.mcpServers as Record<string, unknown>) ?? {};
-  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp'] };
+  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp', 'serve'] };
   settings.mcpServers = mcpServers;
   writeJsonFile(settingsPath, settings);
 
@@ -262,7 +263,7 @@ function installCodex(): AgentInstallResult {
     };
   }
 
-  const section = `\n${marker}\ncommand = "otto"\nargs = ["mcp"]\nenabled = true\ntool_timeout_sec = 60\n`;
+  const section = `\n${marker}\ncommand = "otto"\nargs = ["mcp", "serve"]\nenabled = true\ntool_timeout_sec = 60\n`;
   content += section;
   writeTomlFile(configPath, content);
 
@@ -322,7 +323,7 @@ function installCursor(): AgentInstallResult {
   const configPath = getCursorMcpPath();
   const config = readJsonFile(configPath);
   const mcpServers = (config.mcpServers as Record<string, unknown>) ?? {};
-  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp'] };
+  mcpServers[OTTO_MARKER] = { command: 'otto', args: ['mcp', 'serve'] };
   config.mcpServers = mcpServers;
   writeJsonFile(configPath, config);
 
@@ -369,7 +370,7 @@ function installVSCode(): AgentInstallResult {
   servers[OTTO_MARKER] = {
     type: 'stdio',
     command: 'otto',
-    args: ['mcp'],
+    args: ['mcp', 'serve'],
   };
   config.servers = servers;
   writeJsonFile(configPath, config);
@@ -416,7 +417,7 @@ function installOpenCode(): AgentInstallResult {
   const mcp = (config.mcp as Record<string, unknown>) ?? {};
   mcp[OTTO_MARKER] = {
     type: 'local',
-    command: ['otto', 'mcp'],
+    command: ['otto', 'mcp', 'serve'],
     enabled: true,
   };
   config.mcp = mcp;
@@ -459,7 +460,7 @@ function installGenericMcp(): AgentInstallResult {
     mcpServers: {
       otto: {
         command: 'otto',
-        args: ['mcp'],
+        args: ['mcp', 'serve'],
       },
     },
   };

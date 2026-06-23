@@ -142,7 +142,7 @@ Version your commands. Share them across controllers. Build a library of site au
 
 - **Non-interactive setup** — `otto setup --non-interactive` emits deterministic JSON output
 - **Machine-readable everything** — `--json` flag on commands, list, logs, and test
-- **MCP server** — `otto mcp` exposes Otto tools over stdio for Claude Code, ChatGPT, Gemini, or any MCP host
+- **MCP server** — `otto mcp serve` (stdio) and `otto mcp serve-http` (Streamable HTTP) expose Otto tools to Claude Code, ChatGPT, Gemini, or any MCP host
 - **Streaming test harness** — `otto test` with `--stream-follow-ms` for autonomous validation
 - **Agent runtime registration** — `otto agent install <runtime>` for supported platforms
 

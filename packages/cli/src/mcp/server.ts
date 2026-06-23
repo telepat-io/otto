@@ -80,27 +80,16 @@ function formatToolError(error: unknown): { content: { type: 'text'; text: strin
   };
 }
 
-function getCliVersion(): string {
+export function getCliVersion(): string {
   try {
-    const pkg = require('../package.json') as { version?: string };
+    const pkg = require('../../package.json') as { version?: string };
     return pkg.version ?? '0.0.0';
   } catch {
     return '0.0.0';
   }
 }
 
-export async function startOttoMcpServer(): Promise<void> {
-  const require2 = createRequire(import.meta.url);
-  let version = '0.0.0';
-  try {
-    const pkg = require2('../package.json') as { version?: string };
-    version = pkg.version ?? '0.0.0';
-  } catch {
-    // fallback
-  }
-
-  const server = new McpServer({ name: 'otto', version });
-
+export function registerOttoTools(server: McpServer): void {
   // --- otto_status ---
   server.registerTool('otto_status', {
     title: 'Otto Status',
@@ -1082,6 +1071,12 @@ export async function startOttoMcpServer(): Promise<void> {
       return formatToolError(error);
     }
   });
+}
+
+export async function startOttoMcpServer(): Promise<void> {
+  const server = new McpServer({ name: 'otto', version: getCliVersion() });
+
+  registerOttoTools(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

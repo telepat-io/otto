@@ -163,7 +163,9 @@ For agents using Otto via MCP instead of CLI commands:
 ### Start MCP server
 
 ```bash
-otto mcp
+otto mcp serve              # stdio (for local agent clients)
+# or, for remote/HTTP hosts:
+otto mcp serve-http --api-key <key>
 ```
 
 ### Register with agent framework
