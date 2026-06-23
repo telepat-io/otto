@@ -41,12 +41,12 @@ test('agent install cursor creates mcp.json with otto entry', async () => {
   assert.equal(raw.mcpServers.otto, undefined, 'Otto should not exist yet');
 
   // Simulate install
-  raw.mcpServers.otto = { command: 'otto', args: ['mcp'] };
+  raw.mcpServers.otto = { command: 'otto', args: ['mcp', 'serve'] };
   writeFileSync(configPath, JSON.stringify(raw, null, 2));
 
   const updated = JSON.parse(readFileSync(configPath, 'utf8'));
   assert.ok(updated.mcpServers.otto, 'Otto should be registered');
-  assert.deepEqual(updated.mcpServers.otto, { command: 'otto', args: ['mcp'] });
+  assert.deepEqual(updated.mcpServers.otto, { command: 'otto', args: ['mcp', 'serve'] });
   assert.ok(updated.mcpServers.context7, 'Existing server should still be present');
 
   process.chdir(originalCwd);
@@ -56,13 +56,13 @@ test('agent install codex creates TOML section', () => {
   const configPath = join(tmpDir, 'codex-config.toml');
 
   // Simulate install by writing TOML section
-  const section = `\n[mcp_servers.otto]\ncommand = "otto"\nargs = ["mcp"]\nenabled = true\ntool_timeout_sec = 60\n`;
+  const section = `\n[mcp_servers.otto]\ncommand = "otto"\nargs = ["mcp", "serve"]\nenabled = true\ntool_timeout_sec = 60\n`;
   writeFileSync(configPath, section.trimStart());
 
   const content = readFileSync(configPath, 'utf8');
   assert.ok(content.includes('[mcp_servers.otto]'), 'TOML section should exist');
   assert.ok(content.includes('command = "otto"'), 'Command should be otto');
-  assert.ok(content.includes('args = ["mcp"]'), 'Args should include mcp');
+  assert.ok(content.includes('args = ["mcp", "serve"]'), 'Args should include mcp');
 });
 
 test('agent install codex is idempotent', () => {
@@ -70,7 +70,7 @@ test('agent install codex is idempotent', () => {
   const marker = '[mcp_servers.otto]';
 
   // First install
-  let content = `\n${marker}\ncommand = "otto"\nargs = ["mcp"]\nenabled = true\ntool_timeout_sec = 60\n`;
+  let content = `\n${marker}\ncommand = "otto"\nargs = ["mcp", "serve"]\nenabled = true\ntool_timeout_sec = 60\n`;
   writeFileSync(configPath, content);
 
   // Check idempotency
@@ -87,7 +87,7 @@ test('agent install codex is idempotent', () => {
 
 test('agent uninstall codex removes only otto section', () => {
   const configPath = join(tmpDir, 'codex-uninstall.toml');
-  const content = `[mcp_servers.other]\ncommand = "other"\nargs = ["serve"]\nenabled = true\n\n[mcp_servers.otto]\ncommand = "otto"\nargs = ["mcp"]\nenabled = true\ntool_timeout_sec = 60\n`;
+  const content = `[mcp_servers.other]\ncommand = "other"\nargs = ["serve"]\nenabled = true\n\n[mcp_servers.otto]\ncommand = "otto"\nargs = ["mcp", "serve"]\nenabled = true\ntool_timeout_sec = 60\n`;
   writeFileSync(configPath, content);
 
   // Simulate uninstall
@@ -146,7 +146,7 @@ test('agent install opencode creates opencode.json', () => {
   const mcp: Record<string, unknown> = {};
   mcp['otto'] = {
     type: 'local',
-    command: ['otto', 'mcp'],
+    command: ['otto', 'mcp', 'serve'],
     enabled: true,
   };
   config['mcp'] = mcp;
@@ -155,7 +155,7 @@ test('agent install opencode creates opencode.json', () => {
   const result = JSON.parse(readFileSync(configPath, 'utf8'));
   assert.ok(result.mcp.otto, 'Otto should be registered');
   assert.equal(result.mcp.otto.type, 'local');
-  assert.deepEqual(result.mcp.otto.command, ['otto', 'mcp']);
+  assert.deepEqual(result.mcp.otto.command, ['otto', 'mcp', 'serve']);
 });
 
 test('agent install vscode creates mcp.json with servers.otto', () => {
@@ -165,7 +165,7 @@ test('agent install vscode creates mcp.json with servers.otto', () => {
   servers['otto'] = {
     type: 'stdio',
     command: 'otto',
-    args: ['mcp'],
+    args: ['mcp', 'serve'],
   };
   config['servers'] = servers;
   writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -174,7 +174,7 @@ test('agent install vscode creates mcp.json with servers.otto', () => {
   assert.ok(result.servers.otto, 'Otto should be registered');
   assert.equal(result.servers.otto.type, 'stdio');
   assert.equal(result.servers.otto.command, 'otto');
-  assert.deepEqual(result.servers.otto.args, ['mcp']);
+  assert.deepEqual(result.servers.otto.args, ['mcp', 'serve']);
 });
 
 test('resolveClaudeDesktopConfigPathForPlatform handles darwin/win32/linux', () => {
