@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/telepat-io/otto/compare/v0.20.0...v0.21.0) (2026-06-23)
+
+
+### Features
+
+* add Streamable HTTP transport for MCP server ([404fbb2](https://github.com/telepat-io/otto/commit/404fbb23dff20a014ab20d32870f4ca61c643330))
+
 ## [0.20.0](https://github.com/telepat-io/otto/compare/v0.19.0...v0.20.0) (2026-05-31)
 
 
